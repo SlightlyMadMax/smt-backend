@@ -2,12 +2,13 @@
 name = "smt"
 version = "0.1.0"
 description = ""
-authors = ["SlightlyMadMax <makcandreev2001@mail.ru>"]
+authors = ["SlightlyMadMax"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
 fastapi = "^0.115.8"
+uvicorn = "^0.34.0"
 
 
 [build-system]
