@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "smt"
+version = "0.1.0"
+description = ""
+authors = ["SlightlyMadMax <makcandreev2001@mail.ru>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
