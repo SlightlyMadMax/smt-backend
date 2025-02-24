@@ -63,7 +63,7 @@ venv_ubuntu/
 tmp
 static_remote
 .env
-.env.*
+.env.db
 
 # Other
 build
