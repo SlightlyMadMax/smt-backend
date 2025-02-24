@@ -1,0 +1,10 @@
+services:
+  smt:
+    build: .
+    container_name: ${PROJECT_NAME}-backend
+    ports:
+      - "${PORT}:${PORT}"
+    env_file:
+      - .env
+    command: ["python", "./app/main.py"]
+    restart: unless-stopped

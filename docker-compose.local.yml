@@ -1,0 +1,12 @@
+services:
+  smt:
+    build: .
+    volumes:
+      - ./smt:/code/app
+    container_name: ${PROJECT_NAME}-backend
+    ports:
+      - "${PORT}:${PORT}"
+    env_file:
+      - .env
+    command: ["python", "./app/main.py"]
+    restart: on-failure
