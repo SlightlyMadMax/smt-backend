@@ -20,9 +20,10 @@ ENV PYTHONDONTWRITEBYTECODE 1
 
 WORKDIR /code
 
+ENV PYTHONPATH=/code
 ENV VIRTUAL_ENV=/code/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
-COPY ./smt /code/app
+COPY ./smt /code/smt

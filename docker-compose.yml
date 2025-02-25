@@ -6,5 +6,5 @@ services:
       - "${PORT}:${PORT}"
     env_file:
       - .env
-    command: ["python", "./app/main.py"]
+    command: ["python", "/code/smt/main.py"]
     restart: unless-stopped
