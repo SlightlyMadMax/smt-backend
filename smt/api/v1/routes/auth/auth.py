@@ -1,7 +1,7 @@
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
@@ -27,9 +27,7 @@ async def steam_login():
 
 @router.get("/steam/callback")
 async def steam_callback(request: Request):
-    """Handles Steam OpenID login callback securely."""
-
-    # Extract query parameters
+    """Handles Steam OpenID login callback."""
     params = dict(request.query_params)
 
     # Validate required OpenID parameters
