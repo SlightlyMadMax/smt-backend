@@ -7,10 +7,10 @@ from starlette.responses import RedirectResponse
 
 from smt.core.config import settings
 
-router = APIRouter()
+auth_router = APIRouter()
 
 
-@router.get("/steam/login")
+@auth_router.get("/steam/login")
 async def steam_login():
     """Redirects the user to Steam OpenID login."""
     params = {
@@ -25,7 +25,7 @@ async def steam_login():
     return RedirectResponse(auth_url)
 
 
-@router.get("/steam/callback")
+@auth_router.get("/steam/callback")
 async def steam_callback(request: Request):
     """Handles Steam OpenID login callback."""
     params = dict(request.query_params)
