@@ -2,7 +2,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, Query
 
-from smt.schemes.inventory import InventoryItem, GameName, GAME_MAP
+from smt.schemes.inventory import GAME_MAP, GameName, InventoryItem
 from smt.services.steam import SteamService
 
 
