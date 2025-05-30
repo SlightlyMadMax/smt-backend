@@ -1,12 +1,11 @@
 import uvicorn
-
-from fastapi import FastAPI, APIRouter
+from api.v1.routes.auth import auth
+from api.v1.routes.frontend import home
+from fastapi import APIRouter, FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
-from api.v1.routes.auth import auth
-from api.v1.routes.frontend import home
 from smt.core.config import settings
 
 

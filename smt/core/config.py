@@ -1,4 +1,4 @@
-from pydantic import computed_field, HttpUrl
+from pydantic import HttpUrl, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

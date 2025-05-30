@@ -7,6 +7,7 @@ from starlette.responses import RedirectResponse
 
 from smt.core.config import settings
 
+
 router = APIRouter()
 
 
