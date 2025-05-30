@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from smt.core.config import settings
+from smt.main import settings
 
 
 engine = create_async_engine(settings.DATABASE_URI)
