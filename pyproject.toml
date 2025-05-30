@@ -19,7 +19,7 @@ black = "^25.1.0"
 flake8 = "^7.2.0"
 isort = "^6.0.1"
 pre-commit = "^4.2.0"
-steampy = "^1.2.0"
+steampy = {git = "https://github.com/SlightlyMadMax/steampy.git", rev = "master"}
 
 
 [build-system]
