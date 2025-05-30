@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inventory - {{ game }}</title>
+</head>
+<body>
+    <h1>{{ game }} Inventory</h1>
+    <a href="/update-inventory?game={{ game }}">Refresh Inventory</a>
+    <div>
+        {% for item in items %}
+        <div>
+            <img src="{{ item.icon_url }}" alt="{{ item.name }}" width="64" />
+            <p>{{ item.name }}</p>
+            <p>Amount: {{ item.amount }}</p>
+            <p>Tradable: {{ item.tradable }}</p>
+            <p>Marketable: {{ item.marketable }}</p>
+        </div>
+        <hr>
+        {% endfor %}
+    </div>
+</body>
+</html>
