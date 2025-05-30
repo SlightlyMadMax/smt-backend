@@ -1,6 +1,5 @@
 import uvicorn
-from api.v1.routes.auth import auth
-from api.v1.routes.frontend import home
+from api.v1.routes.frontend import frontend_router
 from fastapi import APIRouter, FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -24,9 +23,7 @@ app.mount("/static", StaticFiles(directory="/code/smt/static"), name="static")
 
 api_router = APIRouter(prefix=f"/api/{settings.API_VERSION}")
 
-api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
-app.include_router(api_router)
-app.include_router(home.router)
+app.include_router(frontend_router)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", reload=True)
