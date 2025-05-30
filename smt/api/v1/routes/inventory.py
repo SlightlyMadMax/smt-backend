@@ -6,6 +6,7 @@ from smt.schemes.inventory import GAME_MAP, GameName, InventoryItem
 from smt.services.steam import SteamService
 from smt.utils.steam import transform_inventory_item
 
+
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 

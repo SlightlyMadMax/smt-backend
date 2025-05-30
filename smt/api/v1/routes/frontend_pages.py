@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.params import Query
 from fastapi.templating import Jinja2Templates
 from starlette.responses import HTMLResponse
 
-from smt.schemes.inventory import GameName, GAME_MAP
+from smt.schemes.inventory import GAME_MAP, GameName
 from smt.services.steam import SteamService
 from smt.utils.steam import transform_inventory_item
+
 
 router = APIRouter()
 

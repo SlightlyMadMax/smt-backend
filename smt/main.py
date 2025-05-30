@@ -1,12 +1,12 @@
 import logging
 
 import uvicorn
-from smt.api.v1.routes import frontend_router, inventory_router
 from fastapi import APIRouter, FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
+from smt.api.v1.routes import frontend_router, inventory_router
 from smt.core.config import get_settings
 
 
