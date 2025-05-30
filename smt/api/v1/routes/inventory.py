@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends
-from smt.core.config import get_settings, Settings
+
+from smt.core.config import Settings, get_settings
+
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
