@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from pydantic import HttpUrl, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,12 +19,11 @@ class Settings(BaseSettings):
     DB_PORT: int = 5432
 
     STEAM_API_KEY: str
-    STEAM_OPENID_URL: HttpUrl
-
-    @computed_field
-    @property
-    def STEAM_RETURN_URL(self) -> HttpUrl:
-        return HttpUrl(f"{self.BASE_URL}api/{self.API_VERSION}/auth/steam/callback")
+    STEAM_USERNAME: str
+    STEAM_PASSWORD: str
+    STEAMID: str
+    STEAM_SHARED_SECRET: str
+    STEAM_IDENTITY_SECRET: str
 
     @computed_field
     @property
@@ -35,4 +36,6 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings()
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()
