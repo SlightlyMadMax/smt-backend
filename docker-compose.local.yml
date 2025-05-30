@@ -3,7 +3,7 @@ services:
     build: .
     volumes:
       - ./smt:/code/smt
-    container_name: smt-backend
+    container_name: ${PROJECT_NAME}-backend
     ports:
       - "${PORT}:${PORT}"
     env_file:
