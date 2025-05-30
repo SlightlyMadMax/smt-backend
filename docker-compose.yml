@@ -7,4 +7,27 @@ services:
     env_file:
       - .env
     command: ["python", "/code/smt/main.py"]
+    depends_on:
+      - db
     restart: unless-stopped
+
+  db:
+    image: postgres:16
+    container_name: ${PROJECT_NAME}-db
+    env_file:
+      - .env.db
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+
+volumes:
+  pgdata:
