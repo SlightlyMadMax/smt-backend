@@ -1,5 +1,3 @@
-import logging
-
 import uvicorn
 from fastapi import APIRouter, FastAPI
 from starlette.middleware.cors import CORSMiddleware
@@ -12,10 +10,7 @@ from smt.core.config import get_settings
 
 settings = get_settings()
 
-logging.basicConfig(
-    level=logging.DEBUG if settings.DEBUG else logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+
 app = FastAPI(title=settings.PROJECT_NAME, debug=settings.DEBUG)
 app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET_KEY)
 app.add_middleware(

@@ -1,14 +1,10 @@
 import json
-from logging import getLogger
 
 from fastapi import Depends
 from steampy.client import SteamClient
 from steampy.models import GameOptions
 
 from smt.core.config import Settings, get_settings
-
-
-logger = getLogger(__name__)
 
 
 class SteamService:

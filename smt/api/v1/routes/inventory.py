@@ -22,9 +22,7 @@ async def read_inventory(
 
 
 @router.put("/update-inventory")
-async def update_inventory(
-    game: GameName = Query(...), steam: SteamService = Depends()
-):
+async def update_inventory(game: GameName = Query(...), steam: SteamService = Depends()):
     game_option = GAME_MAP[game]
     raw_inventory = steam.get_inventory(game=game_option)
     items = [transform_inventory_item(item) for item in raw_inventory.values()]

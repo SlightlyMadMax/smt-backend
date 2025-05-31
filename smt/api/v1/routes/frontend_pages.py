@@ -19,9 +19,7 @@ async def home(request: Request):
 
 
 @router.get("/inventory", response_class=HTMLResponse)
-async def inventory_page(
-    request: Request, game: GameName = Query(...), steam: SteamService = Depends()
-):
+async def inventory_page(request: Request, game: GameName = Query(...), steam: SteamService = Depends()):
     game_option = GAME_MAP[game]
     # cached = await get_cached_inventory(game_option.app_id)
     cached = False
