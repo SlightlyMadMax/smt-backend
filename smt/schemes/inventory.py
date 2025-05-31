@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from steampy.models import GameOptions
 
 
@@ -31,3 +31,5 @@ class InventoryItem(BaseModel):
     marketable: int
     amount: str
     icon_url: str
+
+    model_config = ConfigDict(from_attributes=True)
