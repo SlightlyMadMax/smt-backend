@@ -4,8 +4,10 @@ from sqlalchemy import DateTime, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from smt.main import settings
+from smt.core.config import get_settings
 
+
+settings = get_settings()
 
 engine = create_async_engine(settings.DATABASE_URI, pool_size=20, max_overflow=10, pool_pre_ping=True)
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
