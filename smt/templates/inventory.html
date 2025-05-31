@@ -14,22 +14,21 @@
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       const game = new URLSearchParams(location.search).get("game");
-      await fetch(`/api/v1/inventory/refresh?game=${game}`, { method: "PUT" });
+      await fetch(`/inventory/refresh?game=${game}`, { method: "PUT" });
       location.reload();
     });
   </script>
 
   <div class="inventory-grid">
     {% for item in items %}
-      <div class="item-card">
+      {# Add class based on marketable status #}
+      <div class="item-card {% if item.marketable %}marketable{% else %}not-marketable{% endif %}">
         <img src="{{ item.icon_url }}" alt="{{ item.name }}" class="item-icon" />
         <h2 class="item-name">{{ item.name }}</h2>
-        <p>Amount: {{ item.amount }}</p>
-        <p>Tradable: {{ item.tradable }}</p>
-        <p>Marketable: {{ item.marketable }}</p>
+        <p>Tradable: {{ "Yes" if item.tradable else "No" }}</p>
+        <p>Marketable: {{ "Yes" if item.marketable else "No" }}</p>
       </div>
     {% endfor %}
   </div>
-
 </body>
 </html>

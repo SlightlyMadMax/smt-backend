@@ -18,11 +18,18 @@
 }
 
 .item-card {
-  background: #f9f9f9;
   padding: 0.75rem;
   border-radius: 6px;
   text-align: center;
   box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.item-card.marketable {
+  background-color: #e6ffed; /* pale green */
+}
+
+.item-card.not-marketable {
+  background-color: #ffe6e6; /* pale red */
 }
 
 .item-icon {
