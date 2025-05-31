@@ -18,6 +18,7 @@ target_metadata = Base.metadata
 
 
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URI)
+config.set_section_option("alembic", "async", "true")
 
 
 def run_migrations_offline() -> None:
@@ -47,7 +48,7 @@ def run_migrations_offline() -> None:
 async def run_migrations_online():
     """Run migrations in 'online' mode."""
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section),
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
@@ -58,6 +59,7 @@ async def run_migrations_online():
                 connection=conn,
                 target_metadata=target_metadata,
                 compare_type=True,
+                transaction_per_migration=True,
             )
         )
         async with context.begin_transaction():
