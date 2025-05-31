@@ -29,7 +29,7 @@ class InventoryItem(BaseModel):
     market_hash_name: str
     tradable: int
     marketable: int
-    amount: str
+    amount: int
     icon_url: str
 
     model_config = ConfigDict(from_attributes=True)
