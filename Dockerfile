@@ -26,4 +26,7 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
+COPY alembic.ini .
+COPY alembic ./alembic
+
 COPY ./smt /code/smt

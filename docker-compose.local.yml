@@ -3,6 +3,8 @@ services:
     build: .
     volumes:
       - ./smt:/code/smt
+      - ./alembic.ini:/code/alembic.ini
+      - ./alembic:/code/alembic
     container_name: ${PROJECT_NAME}-backend
     ports:
       - "${PORT}:${PORT}"
