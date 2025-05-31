@@ -1,22 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Inventory - {{ game }}</title>
+  <title>{{ game }} Inventory</title>
+  <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <h1>{{ game }} Inventory</h1>
-    <a href="/update-inventory?game={{ game }}">Refresh Inventory</a>
-    <div>
-        {% for item in items %}
-        <div>
-            <img src="{{ item.icon_url }}" alt="{{ item.name }}" width="64" />
-            <p>{{ item.name }}</p>
-            <p>Amount: {{ item.amount }}</p>
-            <p>Tradable: {{ item.tradable }}</p>
-            <p>Marketable: {{ item.marketable }}</p>
-        </div>
-        <hr>
-        {% endfor %}
-    </div>
+  <h1>{{ game }} Inventory</h1>
+
+  <button id="refresh-btn" class="btn">Refresh Inventory</button>
+
+  <script>
+    const btn = document.getElementById("refresh-btn");
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const game = new URLSearchParams(location.search).get("game");
+      await fetch(`/api/v1/inventory/refresh?game=${game}`, { method: "PUT" });
+      location.reload();
+    });
+  </script>
+
+  <div class="inventory-grid">
+    {% for item in items %}
+      <div class="item-card">
+        <img src="{{ item.icon_url }}" alt="{{ item.name }}" class="item-icon" />
+        <h2 class="item-name">{{ item.name }}</h2>
+        <p>Amount: {{ item.amount }}</p>
+        <p>Tradable: {{ item.tradable }}</p>
+        <p>Marketable: {{ item.marketable }}</p>
+      </div>
+    {% endfor %}
+  </div>
+
 </body>
 </html>
