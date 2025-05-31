@@ -31,6 +31,6 @@ async def inventory_page(
         {
             "request": request,
             "items": items,
-            "game": game,
+            "game": game.value,
         },
     )

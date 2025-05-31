@@ -1,6 +1,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, Query
+from starlette.responses import RedirectResponse
 
 from smt.db.models import Item as ItemORM
 from smt.repositories.dependencies import get_item_repo
@@ -23,8 +24,8 @@ async def read_inventory(
     return [InventoryItem.model_validate(i) for i in orm_items]
 
 
-@router.put("/update-inventory")
-async def update_inventory(
+@router.put("/refresh", response_class=RedirectResponse)
+async def refresh_inventory(
     game: GameName = Query(...),
     steam: SteamService = Depends(),
     repo: ItemRepo = Depends(get_item_repo),
@@ -51,4 +52,4 @@ async def update_inventory(
 
     await repo.replace_for_game(orm_items)
 
-    return {"message": "Inventory updated", "count": len(orm_items)}
+    return RedirectResponse(url=f"/inventory?game={game.value}", status_code=303)
