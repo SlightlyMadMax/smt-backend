@@ -3,8 +3,9 @@ from fastapi.params import Query
 from fastapi.templating import Jinja2Templates
 from starlette.responses import HTMLResponse
 
-from smt.repositories.dependencies import get_item_repo
+from smt.repositories.dependencies import get_item_repo, get_pool_repo
 from smt.repositories.items import ItemRepo
+from smt.repositories.pool_items import PoolRepo
 from smt.schemes.inventory import GAME_MAP, GameName
 
 
@@ -32,5 +33,20 @@ async def inventory_page(
             "request": request,
             "items": items,
             "game": game.value,
+        },
+    )
+
+
+@router.get("/pool", response_class=HTMLResponse)
+async def pool_page(
+    request: Request,
+    repo: PoolRepo = Depends(get_pool_repo),
+):
+    items = await repo.list_items()
+    return templates.TemplateResponse(
+        "pool_items.html",
+        {
+            "request": request,
+            "items": items,
         },
     )
