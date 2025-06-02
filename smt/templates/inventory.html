@@ -7,28 +7,69 @@
 <body>
   <h1>{{ game }} Inventory</h1>
 
-  <button id="refresh-btn" class="btn">Refresh Inventory</button>
+  <!-- Refresh + Batch‐Add Controls -->
+  <div class="inventory-controls">
+    <button id="refresh-btn" class="btn">Refresh Inventory</button>
+    <button id="add-selected-btn" class="btn primary" disabled>Add Selected Items</button>
+  </div>
+
+  <!-- Batch‐Add Form wraps the grid -->
+  <form
+    id="pool-form"
+    method="post"
+    action="/pool/add-multiple"
+  >
+    <div class="inventory-grid">
+      {% for item in items %}
+        <div
+          class="item-card {% if item.marketable %}marketable{% else %}not-marketable{% endif %}"
+        >
+          {% if item.marketable %}
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                name="asset_ids"
+                value="{{ item.id }}"
+              />
+              <span class="checkbox-custom"></span>
+            </label>
+          {% endif %}
+
+          <img
+            src="{{ item.icon_url }}"
+            alt="{{ item.name }}"
+            class="item-icon"
+          />
+          <h2 class="item-name">{{ item.name }}</h2>
+          <p>Tradable: {{ "Yes" if item.tradable else "No" }}</p>
+          <p>Marketable: {{ "Yes" if item.marketable else "No" }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </form>
 
   <script>
-    const btn = document.getElementById("refresh-btn");
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      const game = new URLSearchParams(location.search).get("game");
-      await fetch(`/inventory/refresh?game=${game}`, { method: "PUT" });
-      location.reload();
+    document.addEventListener("DOMContentLoaded", () => {
+      const refreshBtn = document.getElementById("refresh-btn");
+      const addSelectedBtn = document.getElementById("add-selected-btn");
+
+      refreshBtn.addEventListener("click", async () => {
+        refreshBtn.disabled = true;
+        const game = new URLSearchParams(location.search).get("game");
+        await fetch(`/inventory/refresh?game=${game}`, { method: "PUT" });
+        location.reload();
+      });
+
+      const grid = document.querySelector(".inventory-grid");
+      grid.addEventListener("change", () => {
+        const anyChecked = grid.querySelectorAll('input[name="asset_ids"]:checked').length > 0;
+        addSelectedBtn.disabled = !anyChecked;
+      });
+
+      addSelectedBtn.addEventListener("click", () => {
+        document.getElementById("pool-form").submit();
+      });
     });
   </script>
-
-  <div class="inventory-grid">
-    {% for item in items %}
-      {# Add class based on marketable status #}
-      <div class="item-card {% if item.marketable %}marketable{% else %}not-marketable{% endif %}">
-        <img src="{{ item.icon_url }}" alt="{{ item.name }}" class="item-icon" />
-        <h2 class="item-name">{{ item.name }}</h2>
-        <p>Tradable: {{ "Yes" if item.tradable else "No" }}</p>
-        <p>Marketable: {{ "Yes" if item.marketable else "No" }}</p>
-      </div>
-    {% endfor %}
-  </div>
 </body>
 </html>
