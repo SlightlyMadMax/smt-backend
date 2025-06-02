@@ -13,14 +13,14 @@ from smt.schemes.pool import PoolItem, PoolItemCreate
 router = APIRouter(prefix="/pool", tags=["pool"])
 
 
-@router.get("/pool", response_model=List[PoolItem])
+@router.get("/", response_model=List[PoolItem])
 async def read_pool(
     repo: PoolRepo = Depends(get_pool_repo),
 ):
     return await repo.list_items()
 
 
-@router.post("/pool/add")
+@router.post("/add")
 async def add_to_pool(
     asset_id: str = Form(...),
     item_repo: ItemRepo = Depends(get_item_repo),
@@ -41,7 +41,7 @@ async def add_to_pool(
     return RedirectResponse("/pool", status_code=303)
 
 
-@router.post("/pool/add-multiple")
+@router.post("/add-multiple")
 async def add_multiple_to_pool(
     asset_ids: list[str] = Form(...),
     item_repo: ItemRepo = Depends(get_item_repo),
