@@ -14,12 +14,12 @@ router = APIRouter()
 templates = Jinja2Templates(directory="/code/smt/templates")
 
 
-@router.get("/")
+@router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@router.get("/inventory", response_class=HTMLResponse)
+@router.get("/inventory", response_class=HTMLResponse, include_in_schema=False)
 async def inventory_page(
     request: Request,
     game: GameName = Query(...),
@@ -37,7 +37,7 @@ async def inventory_page(
     )
 
 
-@router.get("/pool", response_class=HTMLResponse)
+@router.get("/pool", response_class=HTMLResponse, include_in_schema=False)
 async def pool_page(
     request: Request,
     repo: PoolRepo = Depends(get_pool_repo),
