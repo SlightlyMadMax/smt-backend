@@ -30,7 +30,12 @@ def upgrade() -> None:
         sa.Column("buy_price", sa.Float(), nullable=True),
         sa.Column("sell_price", sa.Float(), nullable=True),
         sa.Column("icon_url", sa.String(length=512), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("market_hash_name"),
     )
