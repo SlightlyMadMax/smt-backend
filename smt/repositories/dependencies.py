@@ -3,9 +3,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from smt.db.dependencies import get_db
 from smt.repositories.items import ItemRepo
+from smt.repositories.pool_items import PoolRepo
 
 
 def get_item_repo(
     db: AsyncSession = Depends(get_db),
 ) -> ItemRepo:
     return ItemRepo(db)
+
+
+def get_pool_repo(
+    db: AsyncSession = Depends(get_db),
+) -> PoolRepo:
+    return PoolRepo(db)
