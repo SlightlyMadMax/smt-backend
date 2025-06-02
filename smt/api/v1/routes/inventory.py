@@ -20,8 +20,7 @@ async def read_inventory(
     repo: ItemRepo = Depends(get_item_repo),
 ):
     game_option = GAME_MAP[game]
-    orm_items = await repo.list_for_game(game_option.app_id, game_option.context_id)
-    return [InventoryItem.model_validate(i) for i in orm_items]
+    return await repo.list_for_game(game_option.app_id, game_option.context_id)
 
 
 @router.put("/refresh", response_class=RedirectResponse)
