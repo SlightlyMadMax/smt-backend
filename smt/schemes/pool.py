@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class PoolItemBase(BaseModel):
     market_hash_name: str = Field(..., description="Steam item market_hash_name")
-    display_name: str = Field(..., description="Human-readable name")
+    name: str = Field(..., description="Human-readable name")
     icon_url: str = Field(..., description="URL to item icon")
 
 

@@ -33,7 +33,7 @@ async def add_to_pool(
 
     item = PoolItemCreate(
         market_hash_name=asset.market_hash_name,
-        display_name=asset.name,
+        name=asset.name,
         icon_url=asset.icon_url,
     )
 
@@ -57,7 +57,7 @@ async def add_multiple_to_pool(
             create_payloads.append(
                 PoolItemCreate(
                     market_hash_name=asset.market_hash_name,
-                    display_name=asset.name,
+                    name=asset.name,
                     icon_url=asset.icon_url,
                 )
             )
