@@ -7,6 +7,7 @@ from steampy.client import SteamClient
 from steampy.models import GameOptions
 
 from smt.core.config import Settings, get_settings
+from smt.utils.steam import parse_steam_ts
 
 
 def requires_login(func):
@@ -57,7 +58,7 @@ class SteamService:
 
         history: list[tuple[datetime, float, int]] = []
         for ts_str, price, volume in raw:
-            t = datetime.datetime.strptime(ts_str, "%b %d %Y %H:%M")
+            t = parse_steam_ts(ts_str)
             if t >= cutoff:
                 history.append((t, float(price), int(volume)))
 

@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from fastapi.params import Query
 
-from smt.schemas.stats import ItemStat
+from smt.schemas.stats import ItemStat, ItemStatCreate
 from smt.services.dependencies import get_stats_service
 from smt.services.stats import StatService
 
@@ -18,3 +18,19 @@ async def read_stats(
     service: StatService = Depends(get_stats_service),
 ):
     return await service.list(market_hash_name, since)
+
+
+@router.post("/add")
+async def add_stat(
+    stat: ItemStatCreate,
+    service: StatService = Depends(get_stats_service),
+):
+    await service.add_one(stat)
+
+
+@router.post("/add-multiple")
+async def add_stats(
+    stats: list[ItemStatCreate],
+    service: StatService = Depends(get_stats_service),
+):
+    await service.add_many(stats)
