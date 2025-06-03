@@ -1,4 +1,15 @@
-from sqlalchemy import Boolean, Float, Integer, String
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from smt.db.database import Base, TimeStampedModel
@@ -33,3 +44,20 @@ class PoolItem(TimeStampedModel):
 
     def __repr__(self):
         return f"<Pool item {self.market_hash_name}"
+
+
+class ItemStat(Base):
+    __tablename__ = "item_stats"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    market_hash_name: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey("pool_items.market_hash_name", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    volume: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    def __repr__(self):
+        return f"<Price for {self.market_hash_name} ar {self.recorded_at}"
