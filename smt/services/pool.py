@@ -2,6 +2,7 @@ from typing import List
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import NoResultFound
+from steampy.models import GameOptions
 
 from smt.db.models import Item
 from smt.repositories.items import ItemRepo
@@ -42,7 +43,7 @@ class PoolService:
         await self.pool_repo.add_item(payload)
 
         # backfill history
-        hist = self.steam.get_price_history(asset.market_hash_name, asset.app_id)
+        hist = self.steam.get_price_history(asset.market_hash_name, GameOptions(asset.app_id, asset.context_id))
         stats = [
             ItemStatCreate(
                 market_hash_name=asset.market_hash_name,
@@ -82,7 +83,7 @@ class PoolService:
         # Backfill stats
         all_stats = []
         for asset in assets_by_hash.values():
-            hist = self.steam.get_price_history(asset.market_hash_name, asset.app_id)
+            hist = self.steam.get_price_history(asset.market_hash_name, GameOptions(asset.app_id, asset.context_id))
             stats = [
                 ItemStatCreate(
                     market_hash_name=asset.market_hash_name,

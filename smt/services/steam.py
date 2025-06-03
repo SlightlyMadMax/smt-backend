@@ -47,9 +47,9 @@ class SteamService:
 
     @requires_login
     def get_price_history(
-        self, market_hash_name: str, app_id: str, days: int = 30
+        self, market_hash_name: str, game: GameOptions, days: int = 30
     ) -> list[tuple[datetime.datetime, float, int]]:
-        resp = self.client.market.fetch_price_history(market_hash_name, app_id=app_id)
+        resp = self.client.market.fetch_price_history(market_hash_name, game=game)
         raw = resp.get("prices", [])
 
         now = datetime.datetime.now(datetime.UTC)
