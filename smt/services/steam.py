@@ -1,3 +1,4 @@
+import datetime
 import json
 
 from fastapi import Depends
@@ -24,3 +25,22 @@ class SteamService:
 
     def get_inventory(self, game: GameOptions) -> dict:
         return self.client.get_my_inventory(game=game, count=1000)
+
+    def get_price_history(
+        self, market_hash_name: str, app_id: str, days: int = 30
+    ) -> list[tuple[datetime.datetime, float, int]]:
+        resp = self.client.market.fetch_price_history(market_hash_name, app_id=app_id)
+        raw = resp.get("prices", [])
+
+        now = datetime.datetime.now(datetime.UTC)
+        cutoff = now - datetime.timedelta(days=days)
+
+        history: list[tuple[datetime, float, int]] = []
+        for ts_str, price, volume in raw:
+            t = datetime.datetime.strptime(ts_str, "%b %d %Y %H:%M")
+            if t >= cutoff:
+                history.append((t, float(price), int(volume)))
+
+        print(history)
+
+        return history
