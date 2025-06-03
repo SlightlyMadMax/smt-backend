@@ -1,11 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Trading Pool</title>
-  <link rel="stylesheet" href="/static/styles.css">
-</head>
-<body>
-  <h1>My Trading Pool</h1>
+{% extends "base.html" %}
+
+{% block title %}My Trading Pool — Steam Market Trader{% endblock %}
+
+{% block content %}
+  <h1 class="page-name">My Trading Pool</h1>
 
   <table class="pool-table">
     <thead>
@@ -65,5 +63,4 @@
     {% endfor %}
     </tbody>
   </table>
-</body>
-</html>
+{% endblock %}

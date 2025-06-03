@@ -1,14 +1,30 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: sans-serif;
+}
+
 /* inventory */
+
+.page-name {
+  text-align: center;
+  margin-top: 1rem;
+}
+
 .inventory-controls {
   display: flex;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin: 1rem 0 1rem 1rem;
 }
 
 .btn {
   display: inline-block;
   padding: 0.5em 1em;
-  margin-bottom: 1rem;
   background: #007bff;
   color: white;
   border: none;
@@ -25,9 +41,11 @@
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  padding: 1rem;
 }
 
 .item-card {
+  position: relative;
   padding: 0.75rem;
   border-radius: 6px;
   text-align: center;
@@ -54,6 +72,7 @@
 }
 
 /* Checkbox styling */
+
 .checkbox-label {
   position: absolute;
   top: 0.5rem;
@@ -71,6 +90,8 @@
   border: 2px solid #333;
   display: inline-block;
   border-radius: 3px;
+  position: relative;
+  background-color: white;
 }
 
 .checkbox-label input:checked + .checkbox-custom {
@@ -78,14 +99,39 @@
   border-color: #28a745;
 }
 
+.checkbox-label input:checked + .checkbox-custom::after {
+  content: '\2713';
+  color: white;
+  font-size: 0.75rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+}
+
 /* home menu */
 
-.main-nav ul {
+.site-header {
+  background: #333;
+  color: white;
+  padding: 0.5em 1em;
+  display: flex;
+  align-items: center;
+}
+
+.site-logo a {
+  color: white;
+  text-decoration: none;
+  font-size: 1.25em;
+  margin-right: 2em;
+}
+
+.main-nav > ul {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .main-nav li {
@@ -93,18 +139,19 @@
 }
 
 .main-nav a {
+  color: white;
   text-decoration: none;
-  color: #333;
 }
 
 .submenu {
   display: none;
+  list-style: none;
   position: absolute;
   top: 100%;
   left: 0;
-  background: white;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-  padding: 0.5rem 0;
+  background: #444;
+  padding: 0.5em 0;
+  white-space: nowrap;
 }
 
 .main-nav li:hover > .submenu {
@@ -112,5 +159,9 @@
 }
 
 .submenu li {
-  padding: 0.25rem 1rem;
+  padding: 0.25em 1em;
+}
+
+.submenu a {
+  color: white;
 }

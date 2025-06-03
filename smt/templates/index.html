@@ -1,35 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Steam Market Trader</title>
-<!--  <link rel="stylesheet" href="/static/styles.css"/>-->
-</head>
-<body>
-  <header>
-    <h1>Steam Market Trader</h1>
-    <nav class="main-nav">
-      <ul>
-        <li><a href="/">Home</a></li>
-        <li>
-          Inventory
-          <ul class="submenu">
-            <li><a href="/inventory?game=CS">CS:GO</a></li>
-            <li><a href="/inventory?game=TF2">TF2</a></li>
-            <li><a href="/inventory?game=DOTA2">Dota 2</a></li>
-            <li><a href="/inventory?game=STEAM">Steam</a></li>
-          </ul>
-        </li>
-        <li><a href="#">Trade Market</a></li>
-        <li><a href="#">Action History</a></li>
-        <li><a href="#">Settings</a></li>
-        <li><a href="#">Statistics</a></li>
-      </ul>
-    </nav>
-  </header>
-  <main>
-    <p><a href="/api/v1/auth/steam/login" class="btn">Log in with Steam</a></p>
-  </main>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Home — Steam Market Trader{% endblock %}
+
+{% block content %}
+  <p>Hello</p>
+{% endblock %}

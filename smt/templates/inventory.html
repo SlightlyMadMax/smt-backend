@@ -1,45 +1,25 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>{{ game }} Inventory</title>
-  <link rel="stylesheet" href="/static/styles.css">
-</head>
-<body>
-  <h1>{{ game }} Inventory</h1>
+{% extends "base.html" %}
 
-  <!-- Refresh + Batch‐Add Controls -->
+{% block title %}{{ game }} Inventory — Steam Market Trader{% endblock %}
+{% block content %}
+  <h1 class="page-name">{{ game }} Inventory</h1>
+
   <div class="inventory-controls">
     <button id="refresh-btn" class="btn">Refresh Inventory</button>
     <button id="add-selected-btn" class="btn primary" disabled>Add Selected Items</button>
   </div>
 
-  <!-- Batch‐Add Form wraps the grid -->
-  <form
-    id="pool-form"
-    method="post"
-    action="/pool/add-multiple"
-  >
+  <form id="pool-form" method="post" action="/pool/add-multiple">
     <div class="inventory-grid">
       {% for item in items %}
-        <div
-          class="item-card {% if item.marketable %}marketable{% else %}not-marketable{% endif %}"
-        >
+        <div class="item-card {% if item.marketable %}marketable{% else %}not-marketable{% endif %}">
           {% if item.marketable %}
             <label class="checkbox-label">
-              <input
-                type="checkbox"
-                name="asset_ids"
-                value="{{ item.id }}"
-              />
+              <input type="checkbox" name="asset_ids" value="{{ item.id }}"/>
               <span class="checkbox-custom"></span>
             </label>
           {% endif %}
-
-          <img
-            src="{{ item.icon_url }}"
-            alt="{{ item.name }}"
-            class="item-icon"
-          />
+          <img src="{{ item.icon_url }}" alt="{{ item.name }}" class="item-icon"/>
           <h2 class="item-name">{{ item.name }}</h2>
           <p>Tradable: {{ "Yes" if item.tradable else "No" }}</p>
           <p>Marketable: {{ "Yes" if item.marketable else "No" }}</p>
@@ -52,6 +32,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       const refreshBtn = document.getElementById("refresh-btn");
       const addSelectedBtn = document.getElementById("add-selected-btn");
+      const grid = document.querySelector(".inventory-grid");
 
       refreshBtn.addEventListener("click", async () => {
         refreshBtn.disabled = true;
@@ -60,7 +41,6 @@
         location.reload();
       });
 
-      const grid = document.querySelector(".inventory-grid");
       grid.addEventListener("change", () => {
         const anyChecked = grid.querySelectorAll('input[name="asset_ids"]:checked').length > 0;
         addSelectedBtn.disabled = !anyChecked;
@@ -71,5 +51,4 @@
       });
     });
   </script>
-</body>
-</html>
+{% endblock %}

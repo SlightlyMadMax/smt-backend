@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>{% block title %}Steam Market Trader{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css"/>
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="site-logo"><a href="/">Steam Market Trader</a></h1>
+    <nav class="main-nav">
+      <ul>
+        <li><a href="/">Home</a></li>
+        <li>
+          Inventory
+          <ul class="submenu">
+            <li><a href="/inventory?game=CS">CS:GO</a></li>
+            <li><a href="/inventory?game=TF2">TF2</a></li>
+            <li><a href="/inventory?game=DOTA2">Dota 2</a></li>
+            <li><a href="/inventory?game=STEAM">Steam</a></li>
+          </ul>
+        </li>
+        <li><a href="/pool">Pool</a></li>
+        <li><a href="#">Trade Market</a></li>
+        <li><a href="#">Action History</a></li>
+        <li><a href="#">Settings</a></li>
+        <li><a href="#">Statistics</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="site-content">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
