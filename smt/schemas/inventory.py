@@ -23,13 +23,20 @@ GAME_MAP = {
 }
 
 
-class InventoryItem(BaseModel):
-    id: str
+class InventoryItemBase(BaseModel):
     name: str
     market_hash_name: str
     tradable: int
     marketable: int
     amount: int
     icon_url: str
+
+
+class InventoryItemCreate(InventoryItemBase):
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryItem(InventoryItemBase):
+    id: str
 
     model_config = ConfigDict(from_attributes=True)
