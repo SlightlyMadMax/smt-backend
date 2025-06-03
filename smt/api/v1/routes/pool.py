@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, Form, HTTPException
 from sqlalchemy.exc import NoResultFound
 from starlette.responses import RedirectResponse
@@ -13,7 +11,7 @@ from smt.schemes.pool import PoolItem, PoolItemCreate
 router = APIRouter(prefix="/pool", tags=["pool"])
 
 
-@router.get("/", response_model=List[PoolItem])
+@router.get("/", response_model=list[PoolItem])
 async def read_pool(
     repo: PoolRepo = Depends(get_pool_repo),
 ):

@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, Query
 from starlette.responses import RedirectResponse
 
@@ -14,7 +12,7 @@ from smt.utils.steam import transform_inventory_item
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 
-@router.get("/", response_model=List[InventoryItem])
+@router.get("/", response_model=list[InventoryItem])
 async def read_inventory(
     game: GameName = Query(..., description="Choose a supported game"),
     repo: ItemRepo = Depends(get_item_repo),
