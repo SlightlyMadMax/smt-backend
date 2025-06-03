@@ -71,4 +71,9 @@ class PoolService:
             except NoResultFound:
                 continue
 
-        await self.pool_repo.add_items(payloads)
+        # deduplicate by market_hash_name
+        unique_payloads: dict[str, PoolItemCreate] = {}
+        for p in payloads:
+            unique_payloads.setdefault(p.market_hash_name, p)
+
+        await self.pool_repo.add_items(list(unique_payloads.values()))
