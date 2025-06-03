@@ -52,4 +52,4 @@ class ItemStat(Base):
     volume: Mapped[int] = mapped_column(Integer, nullable=False)
 
     def __repr__(self):
-        return f"<Price for {self.market_hash_name} ar {self.recorded_at}"
+        return f"<Price for {self.market_hash_name} at {self.recorded_at}"
