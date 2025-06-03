@@ -1,15 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import (
-    Boolean,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
-    func,
-)
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from smt.db.database import Base, TimeStampedModel
@@ -48,6 +39,7 @@ class PoolItem(TimeStampedModel):
 
 class ItemStat(Base):
     __tablename__ = "item_stats"
+    __table_args__ = (UniqueConstraint("market_hash_name", "recorded_at", name="uq_item_stats_item_time"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     market_hash_name: Mapped[str] = mapped_column(

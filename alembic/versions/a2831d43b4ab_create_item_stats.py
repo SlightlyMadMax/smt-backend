@@ -26,7 +26,12 @@ def upgrade() -> None:
         "item_stats",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("market_hash_name", sa.String(length=255), nullable=False),
-        sa.Column("recorded_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "recorded_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("price", sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column("volume", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["market_hash_name"], ["pool_items.market_hash_name"], ondelete="CASCADE"),
