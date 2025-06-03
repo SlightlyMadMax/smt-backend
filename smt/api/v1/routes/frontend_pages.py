@@ -6,7 +6,7 @@ from starlette.responses import HTMLResponse
 from smt.repositories.dependencies import get_item_repo, get_pool_repo
 from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
-from smt.schemes.inventory import GAME_MAP, GameName
+from smt.schemas.inventory import GAME_MAP, GameName
 
 
 router = APIRouter()

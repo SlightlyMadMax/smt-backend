@@ -4,7 +4,7 @@ from starlette.responses import RedirectResponse
 from smt.db.models import Item as ItemORM
 from smt.repositories.dependencies import get_item_repo
 from smt.repositories.items import ItemRepo
-from smt.schemes.inventory import GAME_MAP, GameName, InventoryItem
+from smt.schemas.inventory import GAME_MAP, GameName, InventoryItem
 from smt.services.steam import SteamService
 from smt.utils.steam import transform_inventory_item
 

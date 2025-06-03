@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from smt.db.models import PoolItem
-from smt.schemes.pool import PoolItemCreate
+from smt.schemas.pool import PoolItemCreate
 
 
 class PoolRepo:
