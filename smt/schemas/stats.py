@@ -16,4 +16,8 @@ class ItemStatCreate(ItemStatBase):
 
 class ItemStat(ItemStatBase):
     id: int
+    market_hash_name: str
+    recorded_at: datetime
+    price: float
+    volume: int
     model_config = ConfigDict(from_attributes=True)

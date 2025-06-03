@@ -38,5 +38,10 @@ class InventoryItemCreate(InventoryItemBase):
 
 class InventoryItem(InventoryItemBase):
     id: str
-
+    name: str
+    market_hash_name: str
+    tradable: int
+    marketable: int
+    amount: int
+    icon_url: str
     model_config = ConfigDict(from_attributes=True)
