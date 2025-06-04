@@ -2,13 +2,11 @@ from typing import List, Sequence
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import NoResultFound
-from steampy.models import GameOptions
 
 from smt.db.models import Item, PoolItem
 from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
 from smt.schemas.pool import PoolItemCreate, PoolItemUpdate
-from smt.schemas.price_history import PriceHistoryRecordCreate
 from smt.services.price_history import PriceHistoryService
 from smt.services.steam import SteamService
 from smt.tasks.price_history import backfill_price_history_batch, update_pool_item_snapshot
@@ -78,42 +76,5 @@ class PoolService:
         ]
         return await self.pool_repo.add_items(pool_items)
 
-    async def backfill_price_history_for(self, market_hash_names: List[str]):
-        records: List[PriceHistoryRecordCreate] = []
-
-        for market_hash_name in market_hash_names:
-            try:
-                pool_item = await self.pool_repo.get_by_market_hash_name(market_hash_name)
-            except NoResultFound:
-                continue
-
-            game_opt = GameOptions(pool_item.app_id, pool_item.context_id)
-            raw_hist = self.steam.get_price_history(market_hash_name, game_opt)
-            for ts, price, vol in raw_hist:
-                records.append(
-                    PriceHistoryRecordCreate(
-                        market_hash_name=market_hash_name,
-                        recorded_at=ts,
-                        price=price,
-                        volume=vol,
-                    )
-                )
-
-        if records:
-            await self.price_history_service.add_many(records)
-
-    async def update_snapshot_for(self, market_hash_name: str):
-        try:
-            pool_item = await self.pool_repo.get_by_market_hash_name(market_hash_name)
-        except NoResultFound:
-            return
-
-        game_opt = GameOptions(pool_item.app_id, pool_item.context_id)
-        snap = self.steam.get_price(market_hash_name, game_opt)
-
-        update_payload = PoolItemUpdate(
-            current_lowest=snap["lowest_price"],
-            current_median=snap["median_price"],
-            current_volume24h=snap["volume_24h"],
-        )
-        await self.pool_repo.update(market_hash_name, update_payload)
+    async def update(self, market_hash_name: str, payload: PoolItemUpdate) -> bool:
+        return await self.pool_repo.update(market_hash_name, payload)
