@@ -32,6 +32,22 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: ${PROJECT_NAME}-redis
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    restart: unless-stopped
+
+  celery:
+    build: .
+    container_name: ${PROJECT_NAME}-celery
+    command: celery -A smt.tasks.celery_app worker --loglevel=info
+    volumes:
+      - ./smt:/code/smt
+    depends_on:
+      - redis
+    restart: unless-stopped
 
 volumes:
   pgdata:

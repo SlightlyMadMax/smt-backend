@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     STEAM_SHARED_SECRET: str
     STEAM_IDENTITY_SECRET: str
 
+    REDIS_PORT: str
+
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
+
     @computed_field
     @property
     def DATABASE_URI(self) -> str:
