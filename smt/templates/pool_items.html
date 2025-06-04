@@ -28,7 +28,10 @@
         <td>{{ item.name }}</td>
 
         <td>
-          <form method="post" action="api/v1/pool/update/{{ item.market_hash_name }}">
+          <form
+            class="update-form"
+            action="/api/v1/pool/{{ item.market_hash_name }}"
+          >
             <input
               type="number"
               name="max_listed"
@@ -60,4 +63,24 @@
     {% endfor %}
     </tbody>
   </table>
+
+  <script>
+    document.querySelectorAll('.update-form').forEach(form => {
+      form.addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const field = form.querySelector('input[name="max_listed"]');
+        const payload = { max_listed: Number(field.value) };
+        const res = await fetch(form.action, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          // maybe flash a “Saved!” message, or reload the row
+        } else {
+          console.error('Failed to update max_listed', await res.text());
+        }
+      });
+    });
+  </script>
 {% endblock %}
