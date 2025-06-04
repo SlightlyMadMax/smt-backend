@@ -13,6 +13,8 @@
         <th>Max Listed</th>
         <th>Buy Price</th>
         <th>Sell Price</th>
+        <th>Current Price</th>
+        <th>Volume</th>
         <th>Added At</th>
         <th>Actions</th>
       </tr>
@@ -20,16 +22,13 @@
     <tbody>
     {% for item in items %}
       <tr>
-        <!-- Icon and display name -->
         <td>
           <img src="{{ item.icon_url }}" alt="{{ item.name }}" width="32">
         </td>
         <td>{{ item.name }}</td>
 
-        <!-- Editable max_listed -->
         <td>
-          <form method="post" action="api/v1/pool/update">
-            <input type="hidden" name="market_hash_name" value="{{ item.market_hash_name }}">
+          <form method="post" action="api/v1/pool/update/{{ item.market_hash_name }}">
             <input
               type="number"
               name="max_listed"
@@ -41,14 +40,12 @@
           </form>
         </td>
 
-        <!-- Last order prices -->
         <td>{{ item.buy_price if item.buy_price is not none else "–" }}</td>
         <td>{{ item.sell_price if item.sell_price is not none else "–" }}</td>
-
-        <!-- Timestamp -->
+        <td>{{ item.current_lowest_price if item.current_lowest_price is not none else "–" }}</td>
+        <td>{{ item.current_volume_24h if item.current_volume_24h is not none else "–" }}</td>
         <td>{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
 
-        <!-- Remove action -->
         <td>
           <form method="post" action="api/v1/pool/remove">
             <input type="hidden" name="market_hash_name" value="{{ item.market_hash_name }}">
