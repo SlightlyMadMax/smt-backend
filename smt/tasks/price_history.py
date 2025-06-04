@@ -3,7 +3,7 @@ import asyncio
 from celery import shared_task
 
 from smt.core.config import get_settings
-from smt.db.dependencies import get_db
+from smt.db.database import async_session_maker
 from smt.repositories.pool_items import PoolRepo
 from smt.repositories.price_history import PriceHistoryRepo
 from smt.services.price_history import PriceHistoryService
@@ -11,13 +11,13 @@ from smt.services.steam import SteamService
 from smt.utils.price_history import backfill_price_history_for, update_snapshot_for
 
 
-@shared_task(name="smt.backfill_price_history_batch")
+@shared_task(ack_late=True)
 def backfill_price_history_batch(market_hash_names: list[str]):
     settings = get_settings()
     steam = SteamService(settings)
 
     async def _worker():
-        async with get_db() as session:
+        async with async_session_maker() as session:
             pool_repo = PoolRepo(session)
             price_history_repo = PriceHistoryRepo(session)
             hist_service = PriceHistoryService(price_history_repo)
@@ -27,13 +27,13 @@ def backfill_price_history_batch(market_hash_names: list[str]):
     asyncio.run(_worker())
 
 
-@shared_task(name="smt.update_pool_item_snapshot")
+@shared_task(ack_late=True)
 def update_pool_item_snapshot(market_hash_name: str):
     settings = get_settings()
     steam = SteamService(settings)
 
     async def _worker():
-        async with get_db() as session:
+        async with async_session_maker() as session:
             pool_repo = PoolRepo(session)
             await update_snapshot_for(pool_repo, steam, market_hash_name)
 
