@@ -3,11 +3,7 @@ from functools import lru_cache
 from fastapi import Depends
 
 from smt.core.config import Settings, get_settings
-from smt.repositories.dependencies import (
-    get_item_repo,
-    get_pool_repo,
-    get_price_history_repo,
-)
+from smt.repositories.dependencies import get_item_repo, get_pool_repo, get_price_history_repo
 from smt.services.inventory import InventoryService
 from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService

@@ -1,16 +1,7 @@
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import (
-    Boolean,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from smt.db.database import Base, TimeStampedModel
@@ -39,9 +30,12 @@ class PoolItem(TimeStampedModel):
     market_hash_name: Mapped[str] = mapped_column(String(255), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     max_listed: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    buy_price: Mapped[float] = mapped_column(Float, nullable=True)
-    sell_price: Mapped[float] = mapped_column(Float, nullable=True)
+    buy_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
+    sell_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     icon_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    current_lowest_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
+    current_median_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
+    current_volume24h: Mapped[int] = mapped_column(Integer, nullable=True)
 
     def __repr__(self):
         return f"<Pool item {self.market_hash_name}"
