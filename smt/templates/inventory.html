@@ -56,8 +56,6 @@
           body: JSON.stringify({asset_ids})
         });
 
-        console.log("Request body:", JSON.stringify({asset_ids}));
-
         if (resp.ok) {
           window.location.href = "/pool";
         } else {
