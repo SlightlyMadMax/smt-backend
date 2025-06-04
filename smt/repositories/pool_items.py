@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Optional, Sequence
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, NoResultFound
@@ -24,25 +24,34 @@ class PoolRepo:
             raise NoResultFound(f"No PoolItem with hash {market_hash_name}")
         return item
 
-    async def add_item(self, item: PoolItemCreate) -> bool:
-        result = await self.session.execute(select(PoolItem).where(PoolItem.market_hash_name == item.market_hash_name))
+    async def add_item(self, item: PoolItemCreate) -> Optional[PoolItem]:
+        stmt = select(PoolItem).where(PoolItem.market_hash_name == item.market_hash_name)
+        result = await self.session.execute(stmt)
+        existing = result.scalar_one_or_none()
 
-        if result.scalar() is None:
-            self.session.add(PoolItem(**item.model_dump()))
-            try:
-                await self.session.commit()
-                return True
-            except IntegrityError:
-                await self.session.rollback()
-        return False
+        if existing:
+            return None
 
-    async def add_items(self, items: list[PoolItemCreate]) -> int:
+        # Create and add new item
+        new_item = PoolItem(**item.model_dump())
+        self.session.add(new_item)
+
+        try:
+            await self.session.commit()
+            await self.session.refresh(new_item)
+            return new_item
+        except IntegrityError:
+            await self.session.rollback()
+            return None
+
+    async def add_items(self, items: list[PoolItemCreate]) -> list[PoolItem]:
         names = [item.market_hash_name for item in items]
 
+        # Find existing items
         result = await self.session.execute(
             select(PoolItem.market_hash_name).where(PoolItem.market_hash_name.in_(names))
         )
-        existing = {row[0] for row in result.all()}
+        existing = {name for name, in result.all()}
 
         new_items = [PoolItem(**item.model_dump()) for item in items if item.market_hash_name not in existing]
 
@@ -50,21 +59,33 @@ class PoolRepo:
             self.session.add_all(new_items)
             try:
                 await self.session.commit()
-                return len(new_items)
+                for item in new_items:
+                    await self.session.refresh(item)
+                return new_items
             except IntegrityError:
                 await self.session.rollback()
-        return 0
+
+        return []
 
     async def update(
         self,
         market_hash_name: str,
         payload: PoolItemUpdate,
-    ) -> bool:
+    ) -> Optional[PoolItem]:
         values = payload.model_dump(exclude_none=True)
         if not values:
-            return False
+            return None
 
-        stmt = update(PoolItem).where(PoolItem.market_hash_name == market_hash_name).values(**values)
+        stmt = (
+            update(PoolItem).where(PoolItem.market_hash_name == market_hash_name).values(**values).returning(PoolItem)
+        )
+
         result = await self.session.execute(stmt)
-        await self.session.commit()
-        return result.rowcount > 0
+        updated_item = result.scalar_one_or_none()
+
+        if updated_item:
+            await self.session.commit()
+            return updated_item
+
+        await self.session.rollback()
+        return None
