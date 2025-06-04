@@ -1,9 +1,14 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.params import Query
+from starlette import status
 
-from smt.schemas.price_history import PriceHistoryRecord, PriceHistoryRecordCreate
+from smt.schemas.price_history import (
+    BulkCreateResponse,
+    PriceHistoryRecord,
+    PriceHistoryRecordCreate,
+)
 from smt.services.dependencies import get_price_history_service
 from smt.services.price_history import PriceHistoryService
 
@@ -20,17 +25,28 @@ async def read_price_records(
     return await service.list(market_hash_name, since)
 
 
-@router.post("/add")
+@router.post("/add", response_model=PriceHistoryRecord, status_code=status.HTTP_201_CREATED)
 async def add_price_record(
     price_record: PriceHistoryRecordCreate,
     service: PriceHistoryService = Depends(get_price_history_service),
 ):
-    await service.add_one(price_record)
+    created = await service.add_one(price_record)
+    if not created:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Record already exists",
+        )
+    return created
 
 
-@router.post("/add-multiple")
+@router.post(
+    "/add-multiple",
+    response_model=BulkCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_price_records(
     price_records: list[PriceHistoryRecordCreate],
     service: PriceHistoryService = Depends(get_price_history_service),
 ):
-    await service.add_many(price_records)
+    count = await service.add_many(price_records)
+    return BulkCreateResponse(created=count)

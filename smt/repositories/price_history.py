@@ -27,23 +27,25 @@ class PriceHistoryRepo:
 
         return result.scalars().all()
 
-    async def add_record(self, price_record: PriceHistoryRecordCreate) -> None:
-        self.session.add(PriceHistoryRecordORM(**price_record.model_dump()))
+    async def add_record(self, price_record: PriceHistoryRecordCreate) -> PriceHistoryRecordORM | None:
+        record = PriceHistoryRecordORM(**price_record.model_dump())
+        self.session.add(record)
         try:
             await self.session.commit()
+            await self.session.refresh(record)
+            return record
         except IntegrityError:
             await self.session.rollback()
+            return None
 
-    async def add_records(self, price_records: list[PriceHistoryRecordCreate]) -> None:
+    async def add_records(self, price_records: list[PriceHistoryRecordCreate]) -> int:
         values = [rec.model_dump() for rec in price_records]
 
-        stmt = insert(PriceHistoryRecordORM).values(values)
-
-        # On conflict, do nothing (skip duplicates)
-        stmt = stmt.on_conflict_do_nothing(index_elements=["market_hash_name", "recorded_at"])
-
-        try:
-            await self.session.execute(stmt)
-            await self.session.commit()
-        except IntegrityError:
-            await self.session.rollback()
+        stmt = (
+            insert(PriceHistoryRecordORM)
+            .values(values)
+            .on_conflict_do_nothing(index_elements=["market_hash_name", "recorded_at"])
+        )
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount()

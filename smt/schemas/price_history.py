@@ -16,4 +16,10 @@ class PriceHistoryRecordCreate(PriceHistoryRecordBase):
 
 class PriceHistoryRecord(PriceHistoryRecordBase):
     id: int
+    market_hash_name: str
     model_config = ConfigDict(from_attributes=True)
+
+
+class BulkCreateResponse(BaseModel):
+    created: int
+    message: str = "Price history records added"
