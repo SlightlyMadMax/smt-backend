@@ -27,16 +27,15 @@ class PriceHistoryRepo:
 
         return result.scalars().all()
 
-    async def add_record(self, price_record: PriceHistoryRecordCreate) -> PriceHistoryRecordORM | None:
+    async def add_record(self, price_record: PriceHistoryRecordCreate) -> bool:
         record = PriceHistoryRecordORM(**price_record.model_dump())
         self.session.add(record)
         try:
             await self.session.commit()
-            await self.session.refresh(record)
-            return record
+            return True
         except IntegrityError:
             await self.session.rollback()
-            return None
+        return False
 
     async def add_records(self, price_records: list[PriceHistoryRecordCreate]) -> int:
         values = [rec.model_dump() for rec in price_records]

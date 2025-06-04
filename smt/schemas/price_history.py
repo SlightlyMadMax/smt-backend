@@ -20,6 +20,11 @@ class PriceHistoryRecord(PriceHistoryRecordBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class BulkCreateResponse(BaseModel):
+class PriceRecordCreateResponse(BaseModel):
+    created: bool
+    message: str = "Price history record added"
+
+
+class PriceRecordBulkCreateResponse(BaseModel):
     created: int
     message: str = "Price history records added"

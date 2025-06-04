@@ -5,9 +5,10 @@ from fastapi.params import Query
 from starlette import status
 
 from smt.schemas.price_history import (
-    BulkCreateResponse,
     PriceHistoryRecord,
     PriceHistoryRecordCreate,
+    PriceRecordBulkCreateResponse,
+    PriceRecordCreateResponse,
 )
 from smt.services.dependencies import get_price_history_service
 from smt.services.price_history import PriceHistoryService
@@ -25,7 +26,11 @@ async def read_price_records(
     return await service.list(market_hash_name, since)
 
 
-@router.post("/add", response_model=PriceHistoryRecord, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/add",
+    response_model=PriceRecordCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_price_record(
     price_record: PriceHistoryRecordCreate,
     service: PriceHistoryService = Depends(get_price_history_service),
@@ -41,7 +46,7 @@ async def add_price_record(
 
 @router.post(
     "/add-multiple",
-    response_model=BulkCreateResponse,
+    response_model=PriceRecordBulkCreateResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def add_price_records(
@@ -49,4 +54,4 @@ async def add_price_records(
     service: PriceHistoryService = Depends(get_price_history_service),
 ):
     count = await service.add_many(price_records)
-    return BulkCreateResponse(created=count)
+    return PriceRecordBulkCreateResponse(created=count)
