@@ -47,4 +47,4 @@ class PriceHistoryRepo:
         )
         result = await self.session.execute(stmt)
         await self.session.commit()
-        return result.rowcount()
+        return result.rowcount
