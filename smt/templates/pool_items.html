@@ -28,7 +28,7 @@
 
         <!-- Editable max_listed -->
         <td>
-          <form method="post" action="/pool/update">
+          <form method="post" action="api/v1/pool/update">
             <input type="hidden" name="market_hash_name" value="{{ item.market_hash_name }}">
             <input
               type="number"
@@ -50,7 +50,7 @@
 
         <!-- Remove action -->
         <td>
-          <form method="post" action="/pool/remove">
+          <form method="post" action="api/v1/pool/remove">
             <input type="hidden" name="market_hash_name" value="{{ item.market_hash_name }}">
             <button type="submit" class="btn danger small">Remove</button>
           </form>

@@ -9,7 +9,7 @@
     <button id="add-selected-btn" class="btn primary" disabled>Add Selected Items</button>
   </div>
 
-  <form id="pool-form" method="post" action="/pool/add-multiple">
+  <form id="pool-form" method="post" action="api/v1/pool/add-multiple">
     <div class="inventory-grid">
       {% for item in items %}
         <div class="item-card {% if item.marketable %}marketable{% else %}not-marketable{% endif %}">
@@ -37,7 +37,7 @@
       refreshBtn.addEventListener("click", async () => {
         refreshBtn.disabled = true;
         const game = new URLSearchParams(location.search).get("game");
-        await fetch(`/inventory/refresh?game=${game}`, { method: "PUT" });
+        await fetch(`api/v1/inventory/refresh?game=${game}`, { method: "PUT" });
         location.reload();
       });
 
