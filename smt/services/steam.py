@@ -1,10 +1,13 @@
 import datetime
 import json
 from functools import wraps
+from typing import Optional
 
 from fastapi import Depends
 from steampy.client import SteamClient
+from steampy.exceptions import LoginRequired
 from steampy.models import GameOptions
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings, get_settings
 from smt.utils.steam import parse_steam_ts
@@ -22,25 +25,37 @@ def requires_login(func):
 class SteamService:
     def __init__(self, settings: Settings = Depends(get_settings)):
         self.client = SteamClient(api_key=settings.STEAM_API_KEY)
-        self._logged_in = False
-        self._username = settings.STEAM_USERNAME
-        self._password = settings.STEAM_PASSWORD
-        self._guard = json.dumps(
+        self._username: str = settings.STEAM_USERNAME
+        self._password: str = settings.STEAM_PASSWORD
+        self._guard: str = json.dumps(
             {
                 "steamid": settings.STEAMID,
                 "shared_secret": settings.STEAM_SHARED_SECRET,
                 "identity_secret": settings.STEAM_IDENTITY_SECRET,
             }
         )
+        self._last_check: Optional[datetime] = None
+        self._check_interval = datetime.timedelta(minutes=5)
 
+    def _should_check_login(self) -> bool:
+        return not self._last_check or datetime.datetime.now(datetime.UTC) - self._last_check > self._check_interval
+
+    @retry(reraise=True, stop=stop_after_attempt(3), wait=wait_fixed(3))
     def _ensure_login(self):
-        if not self._logged_in:
+        if not self._should_check_login():
+            return
+
+        try:
+            self.client.is_session_alive()
+        except LoginRequired:
             self.client.login(
                 username=self._username,
                 password=self._password,
                 steam_guard=self._guard,
             )
-            self._logged_in = True
+            assert self.client.was_login_executed
+
+        self._last_check = datetime.datetime.now(datetime.UTC)
 
     @requires_login
     def get_inventory(self, game: GameOptions) -> dict:
