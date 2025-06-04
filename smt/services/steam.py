@@ -3,13 +3,12 @@ import json
 from functools import wraps
 from typing import Optional
 
-from fastapi import Depends
 from steampy.client import SteamClient
 from steampy.exceptions import LoginRequired
 from steampy.models import GameOptions
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from smt.core.config import Settings, get_settings
+from smt.core.config import Settings
 from smt.utils.steam import parse_steam_ts
 
 
@@ -23,7 +22,7 @@ def requires_login(func):
 
 
 class SteamService:
-    def __init__(self, settings: Settings = Depends(get_settings)):
+    def __init__(self, settings: Settings):
         self.client = SteamClient(api_key=settings.STEAM_API_KEY)
         self._username: str = settings.STEAM_USERNAME
         self._password: str = settings.STEAM_PASSWORD
