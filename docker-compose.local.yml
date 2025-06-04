@@ -45,6 +45,8 @@ services:
     command: celery -A smt.tasks.celery_app worker --loglevel=info
     volumes:
       - ./smt:/code/smt
+    env_file:
+      - .env
     depends_on:
       - redis
     restart: unless-stopped
