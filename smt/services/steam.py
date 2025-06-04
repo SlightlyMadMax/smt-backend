@@ -5,7 +5,7 @@ from typing import Optional
 
 from steampy.client import SteamClient
 from steampy.exceptions import LoginRequired
-from steampy.models import GameOptions
+from steampy.models import Currency, GameOptions
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings
@@ -77,3 +77,8 @@ class SteamService:
                 history.append((t, float(price), int(volume)))
 
         return history
+
+    @requires_login
+    def get_price(self, market_hash_name: str, game: GameOptions) -> dict:
+        resp = self.client.market.fetch_price(market_hash_name, game=game, currency=Currency.RUB, country="RU")
+        return resp
