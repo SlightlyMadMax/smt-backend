@@ -29,6 +29,8 @@ class PoolItem(TimeStampedModel):
 
     market_hash_name: Mapped[str] = mapped_column(String(255), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    app_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    context_id: Mapped[str] = mapped_column(String(64), nullable=False)
     max_listed: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     buy_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     sell_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
