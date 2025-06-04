@@ -1,8 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class PoolItemBase(BaseModel):
@@ -14,7 +14,7 @@ class PoolItemBase(BaseModel):
 
 
 class PoolItemCreate(PoolItemBase):
-    model_config = ConfigDict(from_attributes=False)
+    pass
 
 
 class PoolItemUpdate(BaseModel):
@@ -25,8 +25,22 @@ class PoolItemUpdate(BaseModel):
     sell_price: Optional[Decimal] = None
     max_listed: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    @field_validator("current_lowest_price", "current_median_price", mode="before")
+    def parse_price(cls, v: Any) -> Optional[Decimal]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            price_str = v.split(" ")[0].replace(",", ".")
+            return Decimal(price_str)
+        return Decimal(v)
+
+    @field_validator("current_volume24h", mode="before")
+    def parse_volume(cls, v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return int(v.replace(",", ""))
+        return int(v)
 
 
 class PoolItem(PoolItemBase):

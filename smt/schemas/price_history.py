@@ -11,7 +11,6 @@ class PriceHistoryRecordBase(BaseModel):
 
 class PriceHistoryRecordCreate(PriceHistoryRecordBase):
     market_hash_name: str
-    model_config = ConfigDict(from_attributes=False)
 
 
 class PriceHistoryRecord(PriceHistoryRecordBase):

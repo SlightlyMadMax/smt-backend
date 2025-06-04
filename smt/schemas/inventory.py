@@ -33,7 +33,7 @@ class InventoryItemBase(BaseModel):
 
 
 class InventoryItemCreate(InventoryItemBase):
-    model_config = ConfigDict(from_attributes=True)
+    pass
 
 
 class InventoryItem(InventoryItemBase):
