@@ -42,7 +42,7 @@ services:
   celery:
     build: .
     container_name: ${PROJECT_NAME}-celery
-    command: celery -A smt.tasks.celery_app worker --loglevel=info
+    command: celery -A smt.celery_app worker --loglevel=info
     volumes:
       - ./smt:/code/smt
     env_file:
