@@ -37,8 +37,8 @@ class PoolItem(TimeStampedModel):
         return f"<Pool item {self.market_hash_name}"
 
 
-class ItemStat(Base):
-    __tablename__ = "item_stats"
+class PriceHistoryRecord(Base):
+    __tablename__ = "price_history_record"
     __table_args__ = (UniqueConstraint("market_hash_name", "recorded_at", name="uq_item_stats_item_time"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

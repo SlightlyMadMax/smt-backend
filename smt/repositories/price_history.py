@@ -6,38 +6,38 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from smt.db.models import ItemStat as ItemStatORM
-from smt.schemas.stats import ItemStatCreate
+from smt.db.models import PriceHistoryRecord as PriceHistoryRecordORM
+from smt.schemas.price_history import PriceHistoryRecordCreate
 
 
-class StatRepo:
+class PriceHistoryRepo:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_stats(self, market_hash_name: str, since: datetime) -> Sequence[ItemStatORM]:
+    async def list_records(self, market_hash_name: str, since: datetime) -> Sequence[PriceHistoryRecordORM]:
         stmt = (
-            select(ItemStatORM)
+            select(PriceHistoryRecordORM)
             .where(
-                ItemStatORM.market_hash_name == market_hash_name,
-                ItemStatORM.recorded_at >= since,
+                PriceHistoryRecordORM.market_hash_name == market_hash_name,
+                PriceHistoryRecordORM.recorded_at >= since,
             )
-            .order_by(ItemStatORM.recorded_at)
+            .order_by(PriceHistoryRecordORM.recorded_at)
         )
         result = await self.session.execute(stmt)
 
         return result.scalars().all()
 
-    async def add_stat(self, stat: ItemStatCreate) -> None:
-        self.session.add(ItemStatORM(**stat.model_dump()))
+    async def add_record(self, price_record: PriceHistoryRecordCreate) -> None:
+        self.session.add(PriceHistoryRecordORM(**price_record.model_dump()))
         try:
             await self.session.commit()
         except IntegrityError:
             await self.session.rollback()
 
-    async def add_stats(self, stats: list[ItemStatCreate]) -> None:
-        values = [stat.model_dump() for stat in stats]
+    async def add_records(self, price_records: list[PriceHistoryRecordCreate]) -> None:
+        values = [rec.model_dump() for rec in price_records]
 
-        stmt = insert(ItemStatORM).values(values)
+        stmt = insert(PriceHistoryRecordORM).values(values)
 
         # On conflict, do nothing (skip duplicates)
         stmt = stmt.on_conflict_do_nothing(index_elements=["market_hash_name", "recorded_at"])

@@ -3,10 +3,10 @@ from functools import lru_cache
 from fastapi import Depends
 
 from smt.core.config import Settings, get_settings
-from smt.repositories.dependencies import get_item_repo, get_pool_repo, get_stat_repo
+from smt.repositories.dependencies import get_item_repo, get_pool_repo, get_price_history_repo
 from smt.services.inventory import InventoryService
 from smt.services.pool import PoolService
-from smt.services.stats import StatService
+from smt.services.price_history import PriceHistoryService
 from smt.services.steam import SteamService
 
 
@@ -22,16 +22,16 @@ def get_inventory_service(
     return InventoryService(steam, item_repo)
 
 
-def get_stats_service(
-    stat_repo=Depends(get_stat_repo),
-) -> StatService:
-    return StatService(stat_repo)
+def get_price_history_service(
+    price_history_repo=Depends(get_price_history_repo),
+) -> PriceHistoryService:
+    return PriceHistoryService(price_history_repo)
 
 
 def get_pool_service(
     item_repo=Depends(get_item_repo),
     pool_repo=Depends(get_pool_repo),
-    stat_service=Depends(get_stats_service),
+    price_history_service=Depends(get_price_history_service),
     steam=Depends(get_steam_service),
 ) -> PoolService:
-    return PoolService(item_repo, pool_repo, stat_service, steam)
+    return PoolService(item_repo, pool_repo, price_history_service, steam)

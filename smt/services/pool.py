@@ -8,8 +8,8 @@ from smt.db.models import Item
 from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
 from smt.schemas.pool import PoolItemCreate
-from smt.schemas.stats import ItemStatCreate
-from smt.services.stats import StatService
+from smt.schemas.price_history import PriceHistoryRecordCreate
+from smt.services.price_history import PriceHistoryService
 from smt.services.steam import SteamService
 
 
@@ -18,12 +18,12 @@ class PoolService:
         self,
         item_repo: ItemRepo,
         pool_repo: PoolRepo,
-        stat_service: StatService,
+        price_history_service: PriceHistoryService,
         steam: SteamService,
     ):
         self.item_repo = item_repo
         self.pool_repo = pool_repo
-        self.stat_service = stat_service
+        self.price_history_service = price_history_service
         self.steam = steam
 
     async def list(self):
@@ -44,8 +44,8 @@ class PoolService:
 
         # backfill history
         hist = self.steam.get_price_history(asset.market_hash_name, GameOptions(asset.app_id, asset.context_id))
-        stats = [
-            ItemStatCreate(
+        records = [
+            PriceHistoryRecordCreate(
                 market_hash_name=asset.market_hash_name,
                 recorded_at=ts,
                 price=price,
@@ -53,7 +53,7 @@ class PoolService:
             )
             for ts, price, vol in hist
         ]
-        await self.stat_service.add_many(stats)
+        await self.price_history_service.add_many(records)
 
     async def add_many(self, asset_ids: List[str]):
         if not asset_ids:
@@ -80,12 +80,12 @@ class PoolService:
         ]
         await self.pool_repo.add_items(pool_items)
 
-        # Backfill stats
-        all_stats = []
+        # Backfill history
+        all_records = []
         for asset in assets_by_hash.values():
             hist = self.steam.get_price_history(asset.market_hash_name, GameOptions(asset.app_id, asset.context_id))
-            stats = [
-                ItemStatCreate(
+            records = [
+                PriceHistoryRecordCreate(
                     market_hash_name=asset.market_hash_name,
                     recorded_at=ts,
                     price=price,
@@ -93,6 +93,6 @@ class PoolService:
                 )
                 for ts, price, vol in hist
             ]
-            all_stats.extend(stats)
+            all_records.extend(records)
 
-        await self.stat_service.add_many(all_stats)
+        await self.price_history_service.add_many(all_records)

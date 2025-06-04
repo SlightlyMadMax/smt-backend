@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from smt.db.dependencies import get_db
 from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
-from smt.repositories.stats import StatRepo
+from smt.repositories.price_history import PriceHistoryRepo
 
 
 def get_item_repo(
@@ -19,7 +19,7 @@ def get_pool_repo(
     return PoolRepo(db)
 
 
-def get_stat_repo(
+def get_price_history_repo(
     db: AsyncSession = Depends(get_db),
-) -> StatRepo:
-    return StatRepo(db)
+) -> PriceHistoryRepo:
+    return PriceHistoryRepo(db)

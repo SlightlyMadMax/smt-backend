@@ -4,7 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
-from smt.api.v1.routes import frontend_router, inventory_router, pool_router, stats_router
+from smt.api.v1.routes import frontend_router, inventory_router, pool_router, price_history_router
 from smt.core.config import get_settings
 
 
@@ -26,7 +26,7 @@ app.mount("/static", StaticFiles(directory="/code/smt/static"), name="static")
 api_router = APIRouter(prefix=f"/api/{settings.API_VERSION}")
 api_router.include_router(inventory_router)
 api_router.include_router(pool_router)
-api_router.include_router(stats_router)
+api_router.include_router(price_history_router)
 
 app.include_router(api_router)
 app.include_router(frontend_router)
