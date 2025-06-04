@@ -18,19 +18,19 @@ class PoolItemCreate(PoolItemBase):
 
 
 class PoolItemUpdate(BaseModel):
-    current_lowest_price: Optional[Decimal]
-    current_median_price: Optional[Decimal]
-    current_volume24h: Optional[int]
-    buy_price: Optional[Decimal]
-    sell_price: Optional[Decimal]
-    max_listed: Optional[int]
+    current_lowest_price: Optional[Decimal] = None
+    current_median_price: Optional[Decimal] = None
+    current_volume24h: Optional[int] = None
+    buy_price: Optional[Decimal] = None
+    sell_price: Optional[Decimal] = None
+    max_listed: Optional[int] = None
 
     class Config:
         from_attributes = True
 
 
 class PoolItem(PoolItemBase):
-    max_listed: int
+    max_listed: int = None
     buy_price: Optional[Decimal] = None
     sell_price: Optional[Decimal] = None
     current_lowest_price: Optional[Decimal] = None
@@ -39,3 +39,26 @@ class PoolItem(PoolItemBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PoolItemCreateResponse(BaseModel):
+    created: bool
+    message: str = "Pool item added"
+
+
+class PoolItemBulkCreateResponse(BaseModel):
+    count: int
+    message: str = "Pool items added"
+
+
+class PoolItemUpdateResponse(BaseModel):
+    updated: bool
+    message: str = "Pool item updated"
+
+
+class PoolItemBulkCreateRequest(BaseModel):
+    asset_ids: list[str]
+
+
+class PoolItemCreateRequest(BaseModel):
+    asset_id: str
