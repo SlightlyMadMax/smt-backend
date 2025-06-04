@@ -17,6 +17,18 @@ class PoolItemCreate(PoolItemBase):
     model_config = ConfigDict(from_attributes=False)
 
 
+class PoolItemUpdate(BaseModel):
+    current_lowest_price: Optional[Decimal]
+    current_median_price: Optional[Decimal]
+    current_volume24h: Optional[int]
+    buy_price: Optional[Decimal]
+    sell_price: Optional[Decimal]
+    max_listed: Optional[int]
+
+    class Config:
+        from_attributes = True
+
+
 class PoolItem(PoolItemBase):
     max_listed: int
     buy_price: Optional[Decimal] = None

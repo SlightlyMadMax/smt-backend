@@ -1,11 +1,11 @@
 from typing import Sequence
 
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from smt.db.models import PoolItem
-from smt.schemas.pool import PoolItemCreate
+from smt.schemas.pool import PoolItemCreate, PoolItemUpdate
 
 
 class PoolRepo:
@@ -15,6 +15,14 @@ class PoolRepo:
     async def list_items(self) -> Sequence[PoolItem]:
         result = await self.session.execute(select(PoolItem))
         return result.scalars().all()
+
+    async def get_by_market_hash_name(self, market_hash_name: str) -> PoolItem:
+        stmt = select(PoolItem).where(PoolItem.market_hash_name == market_hash_name)
+        result = await self.session.execute(stmt)
+        item = result.scalar_one_or_none()
+        if item is None:
+            raise NoResultFound(f"No PoolItem with hash {market_hash_name}")
+        return item
 
     async def add_item(self, item: PoolItemCreate) -> bool:
         result = await self.session.execute(select(PoolItem).where(PoolItem.market_hash_name == item.market_hash_name))
@@ -46,3 +54,17 @@ class PoolRepo:
             except IntegrityError:
                 await self.session.rollback()
         return 0
+
+    async def update(
+        self,
+        market_hash_name: str,
+        payload: PoolItemUpdate,
+    ) -> bool:
+        values = payload.model_dump(exclude_none=True)
+        if not values:
+            return False
+
+        stmt = update(PoolItem).where(PoolItem.market_hash_name == market_hash_name).values(**values)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount() > 0
