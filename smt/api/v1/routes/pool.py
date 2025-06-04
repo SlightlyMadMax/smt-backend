@@ -1,7 +1,14 @@
-from fastapi import APIRouter, Depends, Form
-from starlette.responses import RedirectResponse
+from fastapi import APIRouter, Depends
 
-from smt.schemas.pool import PoolItem
+from smt.schemas.pool import (
+    PoolItem,
+    PoolItemBulkCreateRequest,
+    PoolItemBulkCreateResponse,
+    PoolItemCreateRequest,
+    PoolItemCreateResponse,
+    PoolItemUpdate,
+    PoolItemUpdateResponse,
+)
 from smt.services.dependencies import get_pool_service
 from smt.services.pool import PoolService
 
@@ -14,19 +21,29 @@ async def read_pool(service: PoolService = Depends(get_pool_service)):
     return await service.list()
 
 
-@router.post("/add")
+@router.post("/add", response_model=PoolItemCreateResponse)
 async def add_to_pool(
-    asset_id: str = Form(...),
+    payload: PoolItemCreateRequest,
     service: PoolService = Depends(get_pool_service),
 ):
-    await service.add_one(asset_id)
-    return RedirectResponse("/pool", status_code=303)
+    created = await service.add_one(payload.asset_id)
+    return PoolItemCreateResponse(created=created)
 
 
-@router.post("/add-multiple")
+@router.post("/add-multiple", response_model=PoolItemBulkCreateResponse)
 async def add_multiple_to_pool(
-    asset_ids: list[str] = Form(...),
+    payload: PoolItemBulkCreateRequest,
     service: PoolService = Depends(get_pool_service),
 ):
-    await service.add_many(asset_ids)
-    return RedirectResponse("/pool", status_code=303)
+    count = await service.add_many(payload.asset_ids)
+    return PoolItemBulkCreateResponse(count=count)
+
+
+@router.patch("/{market_hash_name}", response_model=PoolItemUpdateResponse)
+async def update(
+    market_hash_name: str,
+    payload: PoolItemUpdate,
+    service: PoolService = Depends(get_pool_service),
+):
+    updated = await service.update(market_hash_name, payload)
+    return PoolItemUpdateResponse(updated=updated)
