@@ -46,10 +46,9 @@ async def update_snapshot_for(pool_repo: PoolRepo, steam: SteamService, market_h
 
     game_opt = GameOptions(pool_item.app_id, pool_item.context_id)
     snap = steam.get_price(market_hash_name, game_opt)
-
     update_payload = PoolItemUpdate(
         current_lowest=snap["lowest_price"],
         current_median=snap["median_price"],
-        current_volume24h=snap["volume_24h"],
+        current_volume24h=snap["volume"],
     )
     await pool_repo.update(market_hash_name, update_payload)
