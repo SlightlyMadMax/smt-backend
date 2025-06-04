@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Sequence
+from typing import Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -27,24 +27,28 @@ class PriceHistoryRepo:
 
         return result.scalars().all()
 
-    async def add_record(self, price_record: PriceHistoryRecordCreate) -> bool:
+    async def add_record(self, price_record: PriceHistoryRecordCreate) -> Optional[PriceHistoryRecordORM]:
         record = PriceHistoryRecordORM(**price_record.model_dump())
         self.session.add(record)
         try:
             await self.session.commit()
-            return True
+            # Refresh to load defaults or generated fields
+            await self.session.refresh(record)
+            return record
         except IntegrityError:
             await self.session.rollback()
-        return False
+            return None
 
-    async def add_records(self, price_records: list[PriceHistoryRecordCreate]) -> int:
+    async def add_records(self, price_records: list[PriceHistoryRecordCreate]) -> list[PriceHistoryRecordORM]:
         values = [rec.model_dump() for rec in price_records]
 
         stmt = (
             insert(PriceHistoryRecordORM)
             .values(values)
             .on_conflict_do_nothing(index_elements=["market_hash_name", "recorded_at"])
+            .returning(PriceHistoryRecordORM)
         )
         result = await self.session.execute(stmt)
         await self.session.commit()
-        return result.rowcount
+        created = result.scalars().all()
+        return created or []

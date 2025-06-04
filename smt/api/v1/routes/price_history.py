@@ -8,7 +8,6 @@ from smt.schemas.price_history import (
     PriceHistoryRecord,
     PriceHistoryRecordCreate,
     PriceRecordBulkCreateResponse,
-    PriceRecordCreateResponse,
 )
 from smt.services.dependencies import get_price_history_service
 from smt.services.price_history import PriceHistoryService
@@ -28,7 +27,7 @@ async def read_price_records(
 
 @router.post(
     "/add",
-    response_model=PriceRecordCreateResponse,
+    response_model=PriceHistoryRecord,
     status_code=status.HTTP_201_CREATED,
 )
 async def add_price_record(
@@ -41,7 +40,7 @@ async def add_price_record(
             status.HTTP_409_CONFLICT,
             "Record already exists",
         )
-    return PriceRecordCreateResponse(created=created)
+    return created
 
 
 @router.post(
@@ -53,5 +52,5 @@ async def add_price_records(
     price_records: list[PriceHistoryRecordCreate],
     service: PriceHistoryService = Depends(get_price_history_service),
 ):
-    count = await service.add_many(price_records)
-    return PriceRecordBulkCreateResponse(count=count)
+    records = await service.add_many(price_records)
+    return PriceRecordBulkCreateResponse(count=len(records))
