@@ -41,7 +41,7 @@ async def add_price_record(
             status.HTTP_409_CONFLICT,
             "Record already exists",
         )
-    return created
+    return PriceRecordCreateResponse(created=created)
 
 
 @router.post(
@@ -54,4 +54,4 @@ async def add_price_records(
     service: PriceHistoryService = Depends(get_price_history_service),
 ):
     count = await service.add_many(price_records)
-    return PriceRecordBulkCreateResponse(created=count)
+    return PriceRecordBulkCreateResponse(count=count)
