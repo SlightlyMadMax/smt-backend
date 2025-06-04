@@ -16,16 +16,19 @@ class PoolRepo:
         result = await self.session.execute(select(PoolItem))
         return result.scalars().all()
 
-    async def add_item(self, item: PoolItemCreate) -> None:
+    async def add_item(self, item: PoolItemCreate) -> bool:
         result = await self.session.execute(select(PoolItem).where(PoolItem.market_hash_name == item.market_hash_name))
+
         if result.scalar() is None:
             self.session.add(PoolItem(**item.model_dump()))
             try:
                 await self.session.commit()
+                return True
             except IntegrityError:
                 await self.session.rollback()
+        return False
 
-    async def add_items(self, items: list[PoolItemCreate]) -> None:
+    async def add_items(self, items: list[PoolItemCreate]) -> int:
         names = [item.market_hash_name for item in items]
 
         result = await self.session.execute(
@@ -39,5 +42,7 @@ class PoolRepo:
             self.session.add_all(new_items)
             try:
                 await self.session.commit()
+                return len(new_items)
             except IntegrityError:
                 await self.session.rollback()
+        return 0
