@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, Query
-from starlette.responses import RedirectResponse
 
 from smt.schemas.inventory import GAME_MAP, GameName, InventoryItem
 from smt.services.dependencies import get_inventory_service
@@ -25,4 +24,3 @@ async def refresh_inventory(
 ):
     game_option = GAME_MAP[game]
     await service.refresh(game_option)
-    return RedirectResponse(f"/inventory?game={game.value}", status_code=303)
