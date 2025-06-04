@@ -26,5 +26,5 @@ class PriceRecordCreateResponse(BaseModel):
 
 
 class PriceRecordBulkCreateResponse(BaseModel):
-    created: int
+    count: int
     message: str = "Price history records added"
