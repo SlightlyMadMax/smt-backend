@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, HttpUrl
+from pydantic import BaseModel, ConfigDict
 from steampy.models import GameOptions
 
 
@@ -29,7 +29,7 @@ class InventoryItemBase(BaseModel):
     tradable: int
     marketable: int
     amount: int
-    icon_url: HttpUrl
+    icon_url: str
 
 
 class InventoryItemCreate(InventoryItemBase):

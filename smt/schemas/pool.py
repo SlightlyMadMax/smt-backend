@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PoolItemBase(BaseModel):
@@ -10,7 +10,7 @@ class PoolItemBase(BaseModel):
     name: str = Field(..., description="Human-readable name")
     app_id: str
     context_id: str
-    icon_url: HttpUrl = Field(..., description="URL to item icon")
+    icon_url: str = Field(..., description="URL to item icon")
 
 
 class PoolItemCreate(PoolItemBase):
