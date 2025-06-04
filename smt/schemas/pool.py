@@ -55,19 +55,9 @@ class PoolItem(PoolItemBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PoolItemCreateResponse(BaseModel):
-    created: bool
-    message: str = "Pool item added"
-
-
 class PoolItemBulkCreateResponse(BaseModel):
     count: int
     message: str = "Pool items added"
-
-
-class PoolItemUpdateResponse(BaseModel):
-    updated: bool
-    message: str = "Pool item updated"
 
 
 class PoolItemBulkCreateRequest(BaseModel):
