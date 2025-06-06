@@ -37,6 +37,13 @@ html, body {
   color: white;
 }
 
+button:disabled, .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+
 .inventory-grid {
   display: grid;
   gap: 1rem;
