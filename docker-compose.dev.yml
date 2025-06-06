@@ -1,6 +1,9 @@
 services:
   smt:
-    build: .
+    build:
+      context: .
+      args:
+        INSTALL_DEV: "true"
     volumes:
       - ./smt:/code/smt
       - ./alembic.ini:/code/alembic.ini
