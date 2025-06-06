@@ -3,6 +3,24 @@ const MAX_ATTEMPTS = 10;
 let attemptCount = 0;
 let pollHandle;
 
+document.querySelectorAll('.update-form').forEach(form => {
+  form.addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const field = form.querySelector('input[name="max_listed"]');
+    const payload = { max_listed: Number(field.value) };
+    const res = await fetch(form.action, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      location.reload();
+    } else {
+      console.error('Failed to update max_listed', await res.text());
+    }
+  });
+});
+
 async function fetchStatuses(hashes) {
     const qs = hashes.map(encodeURIComponent).join(',');
     const res = await fetch(`/api/v1/pool/status?market_name_hashes=${qs}`);
