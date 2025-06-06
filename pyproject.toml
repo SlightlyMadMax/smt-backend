@@ -23,8 +23,14 @@ steampy = {git = "https://github.com/SlightlyMadMax/steampy.git", rev = "master"
 alembic = "^1.16.1"
 python-multipart = "^0.0.20"
 tenacity = "^9.1.2"
+pytest = "^8.4.0"
+pytest-asyncio = "^1.0.0"
+aiosqlite = "^0.21.0"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
