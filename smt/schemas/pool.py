@@ -51,8 +51,16 @@ class PoolItem(PoolItemBase):
     current_median_price: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
     created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PoolItemStatus(BaseModel):
+    market_hash_name: str
+    current_lowest_price: Optional[Decimal] = None
+    current_volume24h: Optional[int] = None
+    updated_at: Optional[datetime] = None
 
 
 class PoolItemBulkCreateResponse(BaseModel):

@@ -71,6 +71,9 @@ class PoolService:
         ]
         return await self.pool_repo.add_items(pool_items)
 
+    async def get_many(self, names: List[str]) -> Sequence[PoolItem]:
+        return await self.pool_repo.get_many(names)
+
     async def update(self, market_hash_name: str, payload: PoolItemUpdate) -> PoolItem:
         return await self.pool_repo.update(market_hash_name, payload)
 
@@ -120,3 +123,6 @@ class PoolService:
             current_volume24h=snap["volume"],
         )
         await self.pool_repo.update(market_hash_name, update_payload)
+
+    def get_multiple(self, names):
+        pass

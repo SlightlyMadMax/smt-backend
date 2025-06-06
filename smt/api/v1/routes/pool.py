@@ -5,6 +5,7 @@ from smt.schemas.pool import (
     PoolItemBulkCreateRequest,
     PoolItemBulkCreateResponse,
     PoolItemCreateRequest,
+    PoolItemStatus,
     PoolItemUpdate,
 )
 from smt.services.dependencies import get_pool_service
@@ -17,6 +18,23 @@ router = APIRouter(prefix="/pool", tags=["pool"])
 @router.get("/", response_model=list[PoolItem])
 async def read_pool(service: PoolService = Depends(get_pool_service)):
     return await service.list()
+
+
+@router.get("/status", response_model=list[PoolItemStatus])
+async def status(market_name_hashes: str, service: PoolService = Depends(get_pool_service)):
+    names = market_name_hashes.split(",")
+    items = await service.get_many(names)
+    statuses = []
+    for item in items:
+        statuses.append(
+            PoolItemStatus(
+                market_hash_name=item.market_hash_name,
+                current_lowest_price=item.current_lowest_price,
+                current_volume24h=item.current_volume24h,
+                updated_at=item.updated_at if item.updated_at else None,
+            )
+        )
+    return statuses
 
 
 @router.post("/add", response_model=PoolItem)

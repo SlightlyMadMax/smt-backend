@@ -24,6 +24,13 @@ class PoolRepo:
             raise NoResultFound(f"No PoolItem with hash {market_hash_name}")
         return item
 
+    async def get_many(self, market_hash_names: list[str]) -> Sequence[PoolItem]:
+        if not market_hash_names:
+            return []
+        stmt = select(PoolItem).where(PoolItem.market_hash_name.in_(market_hash_names))
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
     async def add_item(self, item: PoolItemCreate) -> Optional[PoolItem]:
         stmt = select(PoolItem).where(PoolItem.market_hash_name == item.market_hash_name)
         result = await self.session.execute(stmt)
