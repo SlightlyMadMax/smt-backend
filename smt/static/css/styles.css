@@ -172,3 +172,59 @@ button:disabled, .btn:disabled {
 .submenu a {
   color: white;
 }
+
+/* Pool items table */
+
+.pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}
+
+.pool-table th, .pool-table td {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #ddd;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.pool-table th {
+  background-color: #f5f5f5;
+  font-weight: 600;
+}
+
+.pool-table img {
+  display: block;
+  margin: 0 auto;
+}
+
+.pool-table .input-small {
+  width: 60px;
+  padding: 2px 6px;
+  font-size: 0.9rem;
+}
+
+.pool-table .btn {
+  margin-top: 4px;
+}
+
+.pool-table .empty {
+  text-align: center;
+  padding: 1rem;
+  font-style: italic;
+  color: #666;
+}
+
+.btn.small {
+  font-size: 0.85rem;
+  padding: 2px 6px;
+}
+
+.btn.danger {
+  background-color: #d9534f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
