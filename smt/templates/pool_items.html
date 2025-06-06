@@ -15,7 +15,7 @@
         <th>Sell Price</th>
         <th>Current Price</th>
         <th>Volume</th>
-        <th>Added At</th>
+        <th>Updated At</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -30,7 +30,7 @@
         <td>
           <form
             class="update-form"
-            action="/api/v1/pool/{{ item.market_hash_name }}"
+            action="/api/v1/pool/{{ item.market_hash_name | urlencode }}"
           >
             <input
               type="number"
@@ -47,10 +47,10 @@
         <td>{{ item.sell_price if item.sell_price is not none else "–" }}</td>
         <td>{{ item.current_lowest_price if item.current_lowest_price is not none else "–" }}</td>
         <td>{{ item.current_volume24h if item.current_volume24h is not none else "–" }}</td>
-        <td>{{ item.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{{ item.updated_at.strftime("%Y-%m-%d %H:%M") }}</td>
 
         <td>
-          <form method="post" action="api/v1/pool/remove">
+          <form method="post" action="/api/v1/pool/remove">
             <input type="hidden" name="market_hash_name" value="{{ item.market_hash_name }}">
             <button type="submit" class="btn danger small">Remove</button>
           </form>
