@@ -34,5 +34,8 @@ class InventoryService:
                     icon_url=data["icon_url"],
                 )
             )
-        # replace all items for this game in the DB
-        await self.item_repo.replace_for_game(orm_items)
+        await self.item_repo.replace_for_game(
+            app_id=game_option.app_id,
+            context_id=game_option.context_id,
+            items=orm_items,
+        )
