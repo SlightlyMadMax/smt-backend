@@ -35,3 +35,8 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+extend-exclude = '''(venv|alembic|docker|\.git|__pycache__)'''
