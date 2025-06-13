@@ -24,7 +24,6 @@ class PriceHistoryRepo:
             .order_by(PriceHistoryRecordORM.recorded_at)
         )
         result = await self.session.execute(stmt)
-
         return result.scalars().all()
 
     async def add_record(self, price_record: PriceHistoryRecordCreate) -> Optional[PriceHistoryRecordORM]:
@@ -32,7 +31,6 @@ class PriceHistoryRepo:
         self.session.add(record)
         try:
             await self.session.commit()
-            # Refresh to load defaults or generated fields
             await self.session.refresh(record)
             return record
         except IntegrityError:
@@ -40,8 +38,10 @@ class PriceHistoryRepo:
             return None
 
     async def add_records(self, price_records: list[PriceHistoryRecordCreate]) -> list[PriceHistoryRecordORM]:
-        values = [rec.model_dump() for rec in price_records]
+        if not price_records:
+            return []
 
+        values = [rec.model_dump() for rec in price_records]
         stmt = (
             insert(PriceHistoryRecordORM)
             .values(values)
@@ -50,5 +50,4 @@ class PriceHistoryRepo:
         )
         result = await self.session.execute(stmt)
         await self.session.commit()
-        created = result.scalars().all()
-        return created or []
+        return result.scalars().all() or []
