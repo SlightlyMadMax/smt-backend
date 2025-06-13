@@ -75,7 +75,7 @@ class PoolRepo:
         return []
 
     async def update(self, market_hash_name: str, payload: PoolItemUpdate) -> Optional[PoolItem]:
-        update_data = payload.dict(exclude_unset=True)
+        update_data = payload.model_dump(exclude_unset=True)
         if not update_data:
             return None
 
