@@ -11,27 +11,39 @@ from smt.repositories.price_history import PriceHistoryRepo
 from smt.schemas.price_history import PriceHistoryRecordCreate
 
 
+@pytest_asyncio.fixture
+def price_history_repo(db_session) -> PriceHistoryRepo:
+    return PriceHistoryRepo(db_session)
+
+
+@pytest.fixture
+def base_time() -> datetime.datetime:
+    return datetime.datetime(2025, 6, 13, 12, 0, 0)
+
+
 @pytest_asyncio.fixture(autouse=True)
-async def setup_price_history(db_session):
+async def setup_price_history(db_session, base_time):
     await db_session.execute(delete(PriceHistoryRecord))
     await db_session.commit()
 
-    base_time = datetime.datetime.now(datetime.UTC)
     records = [
         PriceHistoryRecord(
             market_hash_name="item1",
             recorded_at=base_time - timedelta(hours=2),
             price=Decimal(100.0),
+            volume=10,
         ),
         PriceHistoryRecord(
             market_hash_name="item1",
             recorded_at=base_time - timedelta(hours=1),
             price=Decimal(110.0),
+            volume=15,
         ),
         PriceHistoryRecord(
             market_hash_name="item2",
             recorded_at=base_time - timedelta(hours=1),
             price=Decimal(200.0),
+            volume=5,
         ),
     ]
     db_session.add_all(records)
@@ -41,31 +53,31 @@ async def setup_price_history(db_session):
 
 @pytest.mark.asyncio
 class TestPriceHistoryRepo:
-    async def test_list_records_filters_and_orders(self, db_session):
-        repo = PriceHistoryRepo(db_session)
-        since = datetime.datetime.now(datetime.UTC) - timedelta(hours=1, minutes=30)
-        results = await repo.list_records("item1", since)
+    async def test_list_records_filters_and_orders(self, price_history_repo, base_time):
+        since = base_time - timedelta(hours=1, minutes=30)
+        results = await price_history_repo.list_records("item1", since)
         # Should return only the record from 1 hour ago, not the 2-hour-old one
         assert len(results) == 1
-        assert results[0].price == 110.0
+        assert results[0].price == Decimal(110.0)
         # Ensure ordering by recorded_at
-        since2 = datetime.datetime.now(datetime.UTC) - timedelta(hours=3)
-        all_records = await repo.list_records("item1", since2)
+        since2 = base_time - timedelta(hours=3)
+        all_records = await price_history_repo.list_records("item1", since2)
         times = [r.recorded_at for r in all_records]
         assert times == sorted(times)
 
-    async def test_add_record_success(self, db_session):
-        repo = PriceHistoryRepo(db_session)
+    async def test_add_record_success(self, price_history_repo, db_session):
         new_time = datetime.datetime.now(datetime.UTC)
         payload = PriceHistoryRecordCreate(
             market_hash_name="item3",
             recorded_at=new_time,
-            price=300.0,
+            price=Decimal(300.0),
+            volume=2,
         )
-        created = await repo.add_record(payload)
+        created = await price_history_repo.add_record(payload)
         assert created is not None
         assert created.market_hash_name == payload.market_hash_name
         assert created.price == payload.price
+
         # verify in DB
         stmt = select(PriceHistoryRecord).where(
             PriceHistoryRecord.market_hash_name == "item3",
@@ -74,51 +86,51 @@ class TestPriceHistoryRepo:
         row = (await db_session.execute(stmt)).scalar_one()
         assert row.price == 300.0
 
-    async def test_add_record_duplicate(self, db_session):
-        repo = PriceHistoryRepo(db_session)
+    async def test_add_record_duplicate(self, price_history_repo, db_session):
         # Use market_hash_name and recorded_at matching an existing record
         existing = (await db_session.execute(select(PriceHistoryRecord).limit(1))).scalar_one()
         payload = PriceHistoryRecordCreate(
             market_hash_name=existing.market_hash_name,
             recorded_at=existing.recorded_at,
-            price=999.0,
+            price=Decimal(999.0),
+            volume=2,
         )
-        result = await repo.add_record(payload)
+        result = await price_history_repo.add_record(payload)
         assert result is None
 
-    async def test_add_records_bulk(self, db_session):
-        repo = PriceHistoryRepo(db_session)
-        now = datetime.datetime.now(datetime.UTC)
+    async def test_add_records_bulk(self, price_history_repo, db_session, base_time):
         batch = [
             PriceHistoryRecordCreate(
                 market_hash_name="item1",
-                recorded_at=now - timedelta(minutes=30),  # new
-                price=115.0,
+                recorded_at=base_time - timedelta(minutes=30),  # new
+                price=Decimal(115.0),
+                volume=10,
             ),
             PriceHistoryRecordCreate(
                 market_hash_name="item2",
-                recorded_at=now - timedelta(hours=1),  # duplicate existing
-                price=210.0,
+                recorded_at=base_time - timedelta(hours=1),  # duplicate existing
+                price=Decimal(210.0),
+                volume=20,
             ),
             PriceHistoryRecordCreate(
                 market_hash_name="item4",
-                recorded_at=now,
-                price=400.0,
+                recorded_at=base_time,
+                price=Decimal(400.0),
+                volume=30,
             ),
         ]
-        created = await repo.add_records(batch)
+        created = await price_history_repo.add_records(batch)
         # Should only include the two new unique records
         names_times = {(r.market_hash_name, r.recorded_at) for r in created}
         expected = {
-            ("item1", now - timedelta(minutes=30)),
-            ("item4", now),
+            ("item1", base_time - timedelta(minutes=30)),
+            ("item4", base_time),
         }
         assert names_times == expected
         # verify in DB total count: seeded 3 + 2 new = 5
         total = await db_session.execute(select(PriceHistoryRecord))
         assert len(total.scalars().all()) == 5
 
-    async def test_add_records_empty(self, db_session):
-        repo = PriceHistoryRepo(db_session)
-        created = await repo.add_records([])
+    async def test_add_records_empty(self, price_history_repo):
+        created = await price_history_repo.add_records([])
         assert created == []
