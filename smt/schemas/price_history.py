@@ -1,11 +1,12 @@
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
 
 class PriceHistoryRecordBase(BaseModel):
     recorded_at: datetime
-    price: float
+    price: Decimal
     volume: int
 
 
