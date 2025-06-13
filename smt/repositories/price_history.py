@@ -1,8 +1,7 @@
 from datetime import datetime
 from typing import Optional, Sequence
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,13 +40,31 @@ class PriceHistoryRepo:
         if not price_records:
             return []
 
-        values = [rec.model_dump() for rec in price_records]
-        stmt = (
-            insert(PriceHistoryRecordORM)
-            .values(values)
-            .on_conflict_do_nothing(index_elements=["market_hash_name", "recorded_at"])
-            .returning(PriceHistoryRecordORM)
-        )
-        result = await self.session.execute(stmt)
+        dumps = [rec.model_dump() for rec in price_records]
+
+        clauses = [
+            and_(
+                PriceHistoryRecordORM.market_hash_name == d["market_hash_name"],
+                PriceHistoryRecordORM.recorded_at == d["recorded_at"],
+            )
+            for d in dumps
+        ]
+        existing = []
+        if clauses:
+            stmt = select(PriceHistoryRecordORM).where(or_(*clauses))
+            existing = (await self.session.execute(stmt)).scalars().all()
+
+        existing_keys = {(e.market_hash_name, e.recorded_at) for e in existing}
+
+        new_dicts = [d for d in dumps if (d["market_hash_name"], d["recorded_at"]) not in existing_keys]
+        if not new_dicts:
+            return []
+
+        new_objs = [PriceHistoryRecordORM(**d) for d in new_dicts]
+        self.session.add_all(new_objs)
         await self.session.commit()
-        return result.scalars().all() or []
+
+        for obj in new_objs:
+            await self.session.refresh(obj)
+
+        return new_objs
