@@ -74,25 +74,16 @@ class PoolRepo:
 
         return []
 
-    async def update(
-        self,
-        market_hash_name: str,
-        payload: PoolItemUpdate,
-    ) -> Optional[PoolItem]:
-        values = payload.model_dump(exclude_none=True)
-        if not values:
+    async def update(self, market_hash_name: str, payload: PoolItemUpdate) -> Optional[PoolItem]:
+        update_data = payload.dict(exclude_unset=True)
+        if not update_data:
             return None
 
-        stmt = (
-            update(PoolItem).where(PoolItem.market_hash_name == market_hash_name).values(**values).returning(PoolItem)
-        )
+        stmt = update(PoolItem).where(PoolItem.market_hash_name == market_hash_name).values(**update_data)
+        await self.session.execute(stmt)
+        await self.session.commit()
 
-        result = await self.session.execute(stmt)
-        updated_item = result.scalar_one_or_none()
-
-        if updated_item:
-            await self.session.commit()
-            return updated_item
-
-        await self.session.rollback()
-        return None
+        try:
+            return await self.get_by_market_hash_name(market_hash_name)
+        except NoResultFound:
+            return None
