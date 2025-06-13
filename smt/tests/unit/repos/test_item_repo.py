@@ -7,6 +7,11 @@ from smt.db.models import Item
 from smt.repositories.items import ItemRepo
 
 
+@pytest_asyncio.fixture
+def item_repo(db_session) -> ItemRepo:
+    return ItemRepo(db_session)
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def setup_items(db_session):
     await db_session.execute(delete(Item))
@@ -55,16 +60,14 @@ class TestItemRepo:
             ("b2", "Item B2"),
         ],
     )
-    async def test_get_by_id_success(self, db_session, item_id, expected):
-        repo = ItemRepo(db_session)
-        item = await repo.get_by_id(item_id)
+    async def test_get_by_id_success(self, item_repo, item_id, expected):
+        item = await item_repo.get_by_id(item_id)
         assert item.name == expected
         assert item.id == item_id
 
-    async def test_get_by_id_not_found(self, db_session):
-        repo = ItemRepo(db_session)
+    async def test_get_by_id_not_found(self, item_repo):
         with pytest.raises(NoResultFound):
-            await repo.get_by_id("nonexistent")
+            await item_repo.get_by_id("nonexistent")
 
     @pytest.mark.parametrize(
         "app_id,context_id,expected_ids",
@@ -74,14 +77,12 @@ class TestItemRepo:
             ("999", "9", []),
         ],
     )
-    async def test_list_for_game(self, db_session, app_id, context_id, expected_ids):
-        repo = ItemRepo(db_session)
-        results = await repo.list_for_game(app_id, context_id)
+    async def test_list_for_game(self, item_repo, app_id, context_id, expected_ids):
+        results = await item_repo.list_for_game(app_id, context_id)
         ids = [item.id for item in results]
         assert set(ids) == set(expected_ids)
 
-    async def test_replace_for_game_overwrites(self, db_session):
-        repo = ItemRepo(db_session)
+    async def test_replace_for_game_overwrites(self, db_session, item_repo):
         # Replace items for game (100,1) with a new list
         new_items = [
             Item(
@@ -94,16 +95,15 @@ class TestItemRepo:
                 marketable=True,
             )
         ]
-        await repo.replace_for_game(app_id="100", context_id="1", items=new_items)
+        await item_repo.replace_for_game(app_id="100", context_id="1", items=new_items)
         # After replace, only 'd4' should exist for (100,1)
         remaining = (
             (await db_session.execute(select(Item).where(Item.app_id == "100", Item.context_id == "1"))).scalars().all()
         )
         assert [i.id for i in remaining] == ["d4"]
 
-    async def test_replace_for_game_empty_list(self, db_session):
-        repo = ItemRepo(db_session)
-        await repo.replace_for_game(app_id="100", context_id="1", items=[])
+    async def test_replace_for_game_empty_list(self, db_session, item_repo):
+        await item_repo.replace_for_game(app_id="100", context_id="1", items=[])
         remaining = (await db_session.execute(select(Item))).scalars().all()
         ids = [i.id for i in remaining]
         assert set(ids) == {"c3"}
