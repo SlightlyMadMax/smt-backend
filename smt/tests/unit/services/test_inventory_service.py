@@ -47,7 +47,6 @@ def sample_orm_items():
             market_hash_name="AK-47 | Redline (Field-Tested)",
             tradable=True,
             marketable=True,
-            amount=1,
             icon_url="https://cdn.steam.com/item1.png",
         ),
         ItemORM(
@@ -58,7 +57,6 @@ def sample_orm_items():
             market_hash_name="AWP | Dragon Lore (Factory New)",
             tradable=False,
             marketable=True,
-            amount=1,
             icon_url="https://cdn.steam.com/item2.png",
         ),
     ]
@@ -108,7 +106,6 @@ class TestInventoryService:
                 "market_hash_name": "AK-47 | Redline (Field-Tested)",
                 "tradable": True,
                 "marketable": True,
-                "amount": 1,
                 "icon_url": "https://cdn.steam.com/item1.png",
             },
             {
@@ -117,7 +114,6 @@ class TestInventoryService:
                 "market_hash_name": "AWP | Dragon Lore (Factory New)",
                 "tradable": False,
                 "marketable": True,
-                "amount": 1,
                 "icon_url": "https://cdn.steam.com/item2.png",
             },
         ]
@@ -149,7 +145,6 @@ class TestInventoryService:
         assert orm_items[0].market_hash_name == "AK-47 | Redline (Field-Tested)"
         assert orm_items[0].tradable is True
         assert orm_items[0].marketable is True
-        assert orm_items[0].amount == 1
         assert orm_items[0].icon_url == "https://cdn.steam.com/item1.png"
 
         # Check second item
@@ -160,7 +155,6 @@ class TestInventoryService:
         assert orm_items[1].market_hash_name == "AWP | Dragon Lore (Factory New)"
         assert orm_items[1].tradable is False
         assert orm_items[1].marketable is True
-        assert orm_items[1].amount == 1
         assert orm_items[1].icon_url == "https://cdn.steam.com/item2.png"
 
     @patch("smt.services.inventory.transform_inventory_item")
@@ -192,7 +186,6 @@ class TestInventoryService:
             "market_hash_name": "Test Item Name",
             "tradable": True,
             "marketable": False,
-            "amount": 5,
             "icon_url": "https://cdn.steam.com/test.png",
         }
 
@@ -206,7 +199,6 @@ class TestInventoryService:
         orm_items = call_args.kwargs["items"]
         assert len(orm_items) == 1
         assert orm_items[0].id == "item1"
-        assert orm_items[0].amount == 5
         assert orm_items[0].marketable is False
 
     @patch("smt.services.inventory.transform_inventory_item")
@@ -224,7 +216,6 @@ class TestInventoryService:
             "market_hash_name": "TF2 Item Hash",
             "tradable": True,
             "marketable": True,
-            "amount": 1,
             "icon_url": "https://cdn.steam.com/tf2.png",
         }
 
@@ -276,7 +267,6 @@ class TestInventoryService:
             "market_hash_name": "Test",
             "tradable": True,
             "marketable": True,
-            "amount": 1,
             "icon_url": "https://test.com/icon.png",
         }
         mock_item_repo.replace_for_game.side_effect = Exception("Database error")

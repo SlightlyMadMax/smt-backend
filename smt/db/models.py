@@ -26,7 +26,6 @@ class Item(Base):
     market_hash_name: Mapped[str] = mapped_column(String(255), nullable=False)
     tradable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     marketable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     icon_url: Mapped[str] = mapped_column(String(512), nullable=False)
 
     def __repr__(self):

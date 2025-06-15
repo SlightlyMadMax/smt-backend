@@ -28,7 +28,6 @@ class InventoryItemBase(BaseModel):
     market_hash_name: str
     tradable: int
     marketable: int
-    amount: int
     icon_url: str
 
 

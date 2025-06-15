@@ -30,7 +30,6 @@ class InventoryService:
                     market_hash_name=data["market_hash_name"],
                     tradable=data["tradable"],
                     marketable=data["marketable"],
-                    amount=data["amount"],
                     icon_url=data["icon_url"],
                 )
             )
