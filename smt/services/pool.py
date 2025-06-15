@@ -123,6 +123,3 @@ class PoolService:
             current_volume24h=snap["volume"],
         )
         await self.pool_repo.update(market_hash_name, update_payload)
-
-    def get_multiple(self, names):
-        pass
