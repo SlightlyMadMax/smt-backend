@@ -22,3 +22,6 @@ class PriceHistoryService:
 
     async def add_many(self, price_records: List[PriceHistoryRecordCreate]) -> List[PriceHistoryRecord]:
         return await self.price_history_repo.add_records(price_records)
+
+    async def delete_before(self, market_hash_name: str, before_date: datetime) -> int:
+        return await self.price_history_repo.delete_records_before(market_hash_name, before_date)
