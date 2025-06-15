@@ -11,6 +11,7 @@ class PoolItemBase(BaseModel):
     app_id: str
     context_id: str
     icon_url: str = Field(..., description="URL to item icon")
+    max_listed: int = Field(default=1)
 
 
 class PoolItemCreate(PoolItemBase):
@@ -21,11 +22,26 @@ class PoolItemUpdate(BaseModel):
     current_lowest_price: Optional[Decimal] = None
     current_median_price: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
-    buy_price: Optional[Decimal] = None
-    sell_price: Optional[Decimal] = None
+    optimal_buy_price: Optional[Decimal] = None
+    optimal_sell_price: Optional[Decimal] = None
+    manual_buy_price: Optional[Decimal] = None
+    manual_sell_price: Optional[Decimal] = None
+    volatility: Optional[Decimal] = None
+    potential_profit: Optional[Decimal] = None
+    use_for_trading: Optional[bool] = None
     max_listed: Optional[int] = None
 
-    @field_validator("current_lowest_price", "current_median_price", mode="before")
+    @field_validator(
+        "current_lowest_price",
+        "current_median_price",
+        "optimal_buy_price",
+        "optimal_sell_price",
+        "manual_buy_price",
+        "manual_sell_price",
+        "volatility",
+        "potential_profit",
+        mode="before",
+    )
     def parse_price(cls, v: Any) -> Optional[Decimal]:
         if v is None:
             return None
@@ -44,12 +60,18 @@ class PoolItemUpdate(BaseModel):
 
 
 class PoolItem(PoolItemBase):
-    max_listed: int = None
     buy_price: Optional[Decimal] = None
     sell_price: Optional[Decimal] = None
     current_lowest_price: Optional[Decimal] = None
     current_median_price: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
+    optimal_buy_price: Optional[Decimal] = None
+    optimal_sell_price: Optional[Decimal] = None
+    manual_buy_price: Optional[Decimal] = None
+    manual_sell_price: Optional[Decimal] = None
+    volatility: Optional[Decimal] = None
+    potential_profit: Optional[Decimal] = None
+    use_for_trading: bool = False
     created_at: datetime
     updated_at: datetime
 

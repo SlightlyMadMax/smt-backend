@@ -38,8 +38,8 @@
           </form>
         </td>
 
-        <td>{{ item.buy_price if item.buy_price is not none else "–" }}</td>
-        <td>{{ item.sell_price if item.sell_price is not none else "–" }}</td>
+        <td>{{ item.effective_buy_price if item.buy_price is not none else "–" }}</td>
+        <td>{{ item.effective_sell_price if item.sell_price is not none else "–" }}</td>
 
         <td>
           <span class="poll-current-price" data-hash="{{ item.market_hash_name }}">
