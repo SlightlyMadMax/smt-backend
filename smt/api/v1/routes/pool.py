@@ -8,8 +8,9 @@ from smt.schemas.pool import (
     PoolItemStatus,
     PoolItemUpdate,
 )
-from smt.services.dependencies import get_pool_service
+from smt.services.dependencies import get_pool_service, get_stats_refresh_service
 from smt.services.pool import PoolService
+from smt.services.stats_refresh import StatsRefreshService
 
 
 router = APIRouter(prefix="/pool", tags=["pool"])
@@ -41,11 +42,13 @@ async def status(market_name_hashes: str, service: PoolService = Depends(get_poo
 async def add_to_pool(
     payload: PoolItemCreateRequest,
     background_tasks: BackgroundTasks,
-    service: PoolService = Depends(get_pool_service),
+    pool_service: PoolService = Depends(get_pool_service),
+    refresh_stats_service: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
-    created = await service.add_one(payload.asset_id)
-    background_tasks.add_task(service.backfill_price_history_for, [created.market_hash_name])
-    background_tasks.add_task(service.update_snapshot_for, created.market_hash_name)
+    created = await pool_service.add_one(payload.asset_id)
+    background_tasks.add_task(refresh_stats_service.refresh_price_history, [created.market_hash_name], 30)
+    background_tasks.add_task(refresh_stats_service.refresh_current_stats, created.market_hash_name)
+    background_tasks.add_task(refresh_stats_service.refresh_indicators, [created.market_hash_name])
     return created
 
 
@@ -53,12 +56,16 @@ async def add_to_pool(
 async def add_multiple_to_pool(
     payload: PoolItemBulkCreateRequest,
     background_tasks: BackgroundTasks,
-    service: PoolService = Depends(get_pool_service),
+    pool_service: PoolService = Depends(get_pool_service),
+    refresh_stats_service: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
-    pool_items = await service.add_many(payload.asset_ids)
-    background_tasks.add_task(service.backfill_price_history_for, [i.market_hash_name for i in pool_items])
+    pool_items = await pool_service.add_many(payload.asset_ids)
+    names = [i.market_hash_name for i in pool_items]
+    background_tasks.add_task(refresh_stats_service.refresh_price_history, names, 30)
+    background_tasks.add_task(refresh_stats_service.refresh_indicators, names)
     for item in pool_items:
-        background_tasks.add_task(service.update_snapshot_for, item.market_hash_name)
+        background_tasks.add_task(refresh_stats_service.refresh_current_stats, item.market_hash_name)
+
     return PoolItemBulkCreateResponse(count=len(pool_items))
 
 

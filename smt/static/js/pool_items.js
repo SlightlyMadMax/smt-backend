@@ -33,21 +33,24 @@ async function fetchStatuses(hashes) {
 
 function formatDatetime(dateString) {
     const date = new Date(dateString);
-    return date.getUTCFullYear() + "-" + String(date.getUTCMonth() + 1).padStart(2, '0') + "-" +
-    String(date.getUTCDate()).padStart(2, '0') + " " + String(date.getUTCHours()).padStart(2, '0') + ":" +
-    String(date.getUTCMinutes()).padStart(2, '0');
+    return date.getUTCFullYear() + "-"
+        + String(date.getUTCMonth() + 1).padStart(2, '0') + "-"
+        + String(date.getUTCDate()).padStart(2, '0') + " "
+        + String(date.getUTCHours()).padStart(2, '0') + ":"
+        + String(date.getUTCMinutes()).padStart(2, '0');
 }
 
 async function pollUpdates() {
     attemptCount++;
 
-    const priceEls = [...document.querySelectorAll('.poll-current-price')]
+    const pendingEls = [...document.querySelectorAll('.poll-current-price')]
       .filter(el => el.textContent.trim() === 'Loading…');
-    if (priceEls.length === 0 || attemptCount > MAX_ATTEMPTS) {
+    if (pendingEls.length === 0 || attemptCount > MAX_ATTEMPTS) {
       clearInterval(pollHandle);
 
       if (attemptCount > MAX_ATTEMPTS) {
-        priceEls.forEach(el  => el.textContent = '–');
+        document.querySelectorAll('.poll-current-price')
+                .forEach(el => { if (el.textContent.trim()==='Loading…') el.textContent='–'; });
         document.querySelectorAll('.poll-volume')
                 .forEach(el => { if (el.textContent.trim()==='Loading…') el.textContent='–'; });
         document.querySelectorAll('.poll-updated-at')
@@ -56,18 +59,37 @@ async function pollUpdates() {
       return;
     }
 
-    const hashes = priceEls.map(el => el.dataset.hash);
+    const hashes = pendingEls.map(el => el.dataset.hash);
     const statuses = await fetchStatuses(hashes);
     if (!statuses) return;
 
-    statuses.forEach(({ market_hash_name, current_lowest_price, current_volume24h, updated_at }) => {
+    statuses.forEach(({
+        market_hash_name,
+        current_lowest_price,
+        current_volume24h,
+        updated_at,
+        volatility,
+        potential_profit,
+        use_for_trading
+    }) => {
       const priceEl = document.querySelector(`.poll-current-price[data-hash="${market_hash_name}"]`);
-      const volEl = document.querySelector(`.poll-volume[data-hash="${market_hash_name}"]`);
-      const timeEl = document.querySelector(`.poll-updated-at[data-hash="${market_hash_name}"]`);
+      const volEl   = document.querySelector(`.poll-volume[data-hash="${market_hash_name}"]`);
+      const timeEl  = document.querySelector(`.poll-updated-at[data-hash="${market_hash_name}"]`);
+      const volatEl = document.querySelector(`td[data-hash-volatility="${market_hash_name}"]`);
+      const profitEl= document.querySelector(`td[data-hash-profit="${market_hash_name}"]`);
+      const statusEl= document.querySelector(`td[data-hash-status="${market_hash_name}"]`);
 
       if (priceEl && current_lowest_price != null) priceEl.textContent = current_lowest_price;
-      if (volEl && current_volume24h != null) volEl.textContent = current_volume24h;
-      if (timeEl && updated_at) timeEl.textContent = formatDatetime(updated_at);
+      if (volEl   && current_volume24h  != null) volEl.textContent   = current_volume24h;
+      if (timeEl  && updated_at) timeEl.textContent = formatDatetime(updated_at);
+
+      if (volatEl)  volatEl.textContent  = volatility ?? '–';
+      if (profitEl) profitEl.textContent = potential_profit ?? '–';
+      if (statusEl) {
+        statusEl.innerHTML = use_for_trading
+          ? '<span class="badge success">Ready</span>'
+          : '<span class="badge muted">—</span>';
+      }
     });
 }
 

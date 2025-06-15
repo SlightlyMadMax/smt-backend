@@ -11,6 +11,7 @@ from smt.repositories.dependencies import (
 from smt.services.inventory import InventoryService
 from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService
+from smt.services.stats_refresh import StatsRefreshService
 from smt.services.steam import SteamService
 
 
@@ -35,7 +36,13 @@ def get_price_history_service(
 def get_pool_service(
     item_repo=Depends(get_item_repo),
     pool_repo=Depends(get_pool_repo),
+) -> PoolService:
+    return PoolService(item_repo, pool_repo)
+
+
+def get_stats_refresh_service(
+    pool_repo=Depends(get_pool_repo),
     price_history_service=Depends(get_price_history_service),
     steam=Depends(get_steam_service),
-) -> PoolService:
-    return PoolService(item_repo, pool_repo, price_history_service, steam)
+) -> StatsRefreshService:
+    return StatsRefreshService(price_history_service, pool_repo, steam)

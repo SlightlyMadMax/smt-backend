@@ -1,17 +1,12 @@
 from typing import List, Sequence
 
-from anyio import to_thread
 from fastapi import HTTPException, status
 from sqlalchemy.exc import NoResultFound
-from steampy.models import GameOptions
 
 from smt.db.models import Item, PoolItem
 from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
 from smt.schemas.pool import PoolItemCreate, PoolItemUpdate
-from smt.schemas.price_history import PriceHistoryRecordCreate
-from smt.services.price_history import PriceHistoryService
-from smt.services.steam import SteamService
 
 
 class PoolService:
@@ -19,13 +14,9 @@ class PoolService:
         self,
         item_repo: ItemRepo,
         pool_repo: PoolRepo,
-        price_history_service: PriceHistoryService,
-        steam: SteamService,
     ):
         self.item_repo = item_repo
         self.pool_repo = pool_repo
-        self.price_history_service = price_history_service
-        self.steam = steam
 
     async def list(self) -> Sequence[PoolItem]:
         return await self.pool_repo.list_items()
@@ -76,50 +67,3 @@ class PoolService:
 
     async def update(self, market_hash_name: str, payload: PoolItemUpdate) -> PoolItem:
         return await self.pool_repo.update(market_hash_name, payload)
-
-    async def backfill_price_history_for(self, market_hash_names: List[str]) -> None:
-        records: list[PriceHistoryRecordCreate] = []
-
-        for market_hash_name in market_hash_names:
-            try:
-                pool_item = await self.pool_repo.get_by_market_hash_name(market_hash_name)
-            except NoResultFound:
-                continue
-
-            game_opt = GameOptions(pool_item.app_id, pool_item.context_id)
-            raw_hist = await to_thread.run_sync(
-                self.steam.get_price_history,
-                market_hash_name,
-                game_opt,
-            )
-            for ts, price, vol in raw_hist:
-                records.append(
-                    PriceHistoryRecordCreate(
-                        market_hash_name=market_hash_name,
-                        recorded_at=ts,
-                        price=price,
-                        volume=vol,
-                    )
-                )
-
-        if records:
-            await self.price_history_service.add_many(records)
-
-    async def update_snapshot_for(self, market_hash_name: str) -> None:
-        try:
-            pool_item = await self.pool_repo.get_by_market_hash_name(market_hash_name)
-        except NoResultFound:
-            return
-
-        game_opt = GameOptions(pool_item.app_id, pool_item.context_id)
-        snap = await to_thread.run_sync(
-            self.steam.get_price,
-            market_hash_name,
-            game_opt,
-        )
-        update_payload = PoolItemUpdate(
-            current_lowest_price=snap["lowest_price"],
-            current_median_price=snap["median_price"],
-            current_volume24h=snap["volume"],
-        )
-        await self.pool_repo.update(market_hash_name, update_payload)

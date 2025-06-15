@@ -15,8 +15,10 @@
         <th>Sell Price</th>
         <th>Current Price</th>
         <th>Volume</th>
+        <th>Volatility</th>
+        <th>Profit</th>
+        <th>Status</th>
         <th>Updated At</th>
-        <th>Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -38,8 +40,8 @@
           </form>
         </td>
 
-        <td>{{ item.effective_buy_price if item.buy_price is not none else "–" }}</td>
-        <td>{{ item.effective_sell_price if item.sell_price is not none else "–" }}</td>
+        <td>{{ item.effective_buy_price or '–' }}</td>
+        <td>{{ item.effective_sell_price or '–' }}</td>
 
         <td>
           <span class="poll-current-price" data-hash="{{ item.market_hash_name }}">
@@ -61,6 +63,16 @@
           </span>
         </td>
 
+        <td>{{ item.volatility or '–' }}</td>
+        <td>{{ item.potential_profit or '–' }}</td>
+        <td>
+          {% if item.use_for_trading %}
+            <span class="badge success">Ready</span>
+          {% else %}
+            <span class="badge muted">–</span>
+          {% endif %}
+        </td>
+
         <td>
           <span class="poll-updated-at" data-hash="{{ item.market_hash_name }}">
             {% if item.updated_at is not none %}
@@ -70,17 +82,10 @@
             {% endif %}
           </span>
         </td>
-
-        <td>
-          <form method="post" action="/api/v1/pool/remove">
-            <input type="hidden" name="market_hash_name" value="{{ item.market_hash_name }}">
-            <button type="submit" class="btn danger small">Remove</button>
-          </form>
-        </td>
       </tr>
     {% else %}
       <tr>
-        <td colspan="9" class="empty">Your pool is empty. Go add some items!</td>
+        <td colspan="12" class="empty">Your pool is empty. Go add some items!</td>
       </tr>
     {% endfor %}
     </tbody>

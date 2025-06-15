@@ -19,6 +19,7 @@ steampy = {git = "https://github.com/SlightlyMadMax/steampy.git", rev = "master"
 alembic = "^1.16.1"
 python-multipart = "^0.0.20"
 tenacity = "^9.1.2"
+numpy = "^2.3.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
