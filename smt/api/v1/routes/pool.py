@@ -62,10 +62,9 @@ async def add_multiple_to_pool(
     pool_items = await pool_service.add_many(payload.asset_ids)
     names = [i.market_hash_name for i in pool_items]
     background_tasks.add_task(refresh_stats_service.refresh_price_history, names, 30)
-    background_tasks.add_task(refresh_stats_service.refresh_indicators, names)
     for item in pool_items:
         background_tasks.add_task(refresh_stats_service.refresh_current_stats, item.market_hash_name)
-
+    background_tasks.add_task(refresh_stats_service.refresh_indicators, names)
     return PoolItemBulkCreateResponse(count=len(pool_items))
 
 
