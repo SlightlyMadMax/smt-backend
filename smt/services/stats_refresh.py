@@ -1,7 +1,7 @@
 import math
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 from anyio import to_thread
@@ -82,43 +82,60 @@ class StatsRefreshService:
             ),
         )
 
-    async def refresh_indicators(self, market_hash_names: List[str]) -> None:
-        items = await self.pool_repo.get_many(market_hash_names)
+    async def refresh_indicators(self, names: List[str]) -> None:
+        items = await self.pool_repo.get_many(names)
+        since = datetime.now(UTC) - timedelta(days=7)
 
         for item in items:
-            since = datetime.now(UTC) - timedelta(days=7)
-            history = await self.price_history_service.list(
-                market_hash_name=item.market_hash_name,
-                since=since,
-            )
-            prices = [float(r.price) for r in history]
+            prices = await self._fetch_prices(item.market_hash_name, since)
             if len(prices) < 2:
                 continue
 
-            buy_pct = 20
-            sell_pct = 80
-            opt_buy = Decimal(np.percentile(prices, buy_pct)).quantize(Decimal("0.01"))
-            opt_sell = Decimal(np.percentile(prices, sell_pct)).quantize(Decimal("0.01"))
+            opt_buy, opt_sell = self._compute_percentile_targets(prices, buy_pct=20, sell_pct=80)
+            sigma = self._compute_volatility(prices)
+            net_sell, profit = self._compute_net_and_profit(opt_sell, opt_buy)
+            is_good = self._decide_trade_flag(profit, item.current_volume24h)
 
-            returns = [math.log(prices[i] / prices[i - 1]) for i in range(1, len(prices))]
-            sigma = Decimal(
-                (sum((r - sum(returns) / len(returns)) ** 2 for r in returns) / (len(returns) - 1)) ** 0.5
-            ).quantize(Decimal("0.0001"))
+            await self._persist_indicators(item.market_hash_name, opt_buy, opt_sell, sigma, profit, is_good)
 
-            gross_kopeks = int((opt_sell * 100).to_integral_value())
-            fees = calculate_fees(gross_kopeks)
-            net_sell = Decimal(fees["net_received"]) / 100
-            profit = net_sell - opt_buy
+    async def _fetch_prices(self, name: str, since: datetime) -> list[float]:
+        history = await self.price_history_service.list(market_hash_name=name, since=since)
+        return [float(r.price) for r in history]
 
-            is_good = profit > Decimal("0.10") and item.current_volume24h is not None and item.current_volume24h > 10
+    @staticmethod
+    def _compute_percentile_targets(prices: list[float], buy_pct: int, sell_pct: int) -> tuple[Decimal, Decimal]:
+        buy = Decimal(np.percentile(prices, buy_pct)).quantize(Decimal("0.01"))
+        sell = Decimal(np.percentile(prices, sell_pct)).quantize(Decimal("0.01"))
+        return buy, sell
 
-            await self.pool_repo.update(
-                item.market_hash_name,
-                PoolItemUpdate(
-                    optimal_buy_price=opt_buy,
-                    optimal_sell_price=opt_sell,
-                    volatility=sigma,
-                    potential_profit=profit,
-                    use_for_trading=is_good,
-                ),
-            )
+    @staticmethod
+    def _compute_volatility(prices: list[float]) -> Decimal:
+        returns = [math.log(prices[i] / prices[i - 1]) for i in range(1, len(prices))]
+        sigma = (sum((r - sum(returns) / len(returns)) ** 2 for r in returns) / (len(returns) - 1)) ** 0.5
+        return Decimal(sigma).quantize(Decimal("0.0001"))
+
+    @staticmethod
+    def _compute_net_and_profit(opt_sell: Decimal, opt_buy: Decimal) -> tuple[Decimal, Decimal]:
+        gross = int((opt_sell * 100).to_integral_value())
+        fees = calculate_fees(gross)
+        net = Decimal(fees["net_received"]) / 100
+        profit = (net - opt_buy).quantize(Decimal("0.01"))
+        return net, profit
+
+    @staticmethod
+    def _decide_trade_flag(profit: Decimal, volume24h: Optional[int]) -> bool:
+        return bool(profit > Decimal("0.10") and volume24h is not None and volume24h > 10)
+
+    async def _persist_indicators(
+        self, name: str, opt_buy: Decimal, opt_sell: Decimal, sigma: Decimal, profit: Decimal, flag: bool
+    ) -> None:
+        await self.pool_repo.update(
+            name,
+            PoolItemUpdate(
+                optimal_buy_price=opt_buy,
+                optimal_sell_price=opt_sell,
+                volatility=sigma,
+                potential_profit=profit,
+                use_for_trading=flag,
+            ),
+        )
