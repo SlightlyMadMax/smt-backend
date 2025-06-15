@@ -13,6 +13,7 @@ from smt.schemas.pool import PoolItemUpdate
 from smt.schemas.price_history import PriceHistoryRecordCreate
 from smt.services.price_history import PriceHistoryService
 from smt.services.steam import SteamService
+from smt.utils.steam import calculate_fees
 
 
 class StatsRefreshService:
@@ -104,9 +105,10 @@ class StatsRefreshService:
                 (sum((r - sum(returns) / len(returns)) ** 2 for r in returns) / (len(returns) - 1)) ** 0.5
             ).quantize(Decimal("0.0001"))
 
-            fee_rate = Decimal("0.13043478261")
-            net_sell = opt_sell * (1 - fee_rate)
-            profit = (net_sell - opt_buy).quantize(Decimal("0.01"))
+            gross_kopeks = int((opt_sell * 100).to_integral_value())
+            fees = calculate_fees(gross_kopeks)
+            net_sell = Decimal(fees["net_received"]) / 100
+            profit = net_sell - opt_buy
 
             is_good = profit > Decimal("0.10") and item.current_volume24h is not None and item.current_volume24h > 10
 
