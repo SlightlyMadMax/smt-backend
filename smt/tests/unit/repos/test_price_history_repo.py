@@ -134,3 +134,32 @@ class TestPriceHistoryRepo:
     async def test_add_records_empty(self, price_history_repo):
         created = await price_history_repo.add_records([])
         assert created == []
+
+    async def test_delete_records_before_success(self, price_history_repo, db_session, base_time):
+        # Delete item1 records older than 1.5 hours ago
+        cutoff_time = base_time - timedelta(hours=1, minutes=30)
+        deleted_count = await price_history_repo.delete_records_before("item1", cutoff_time)
+
+        # Should delete the 2-hour-old record but keep the 1-hour-old record
+        assert deleted_count == 1
+
+        # Verify the remaining records
+        remaining = await price_history_repo.list_records("item1", base_time - timedelta(hours=3))
+        assert len(remaining) == 1
+        assert remaining[0].price == Decimal(110.0)  # Only the 1-hour-old record remains
+
+        # Verify item2 records are unaffected
+        item2_records = await price_history_repo.list_records("item2", base_time - timedelta(hours=3))
+        assert len(item2_records) == 1
+        assert item2_records[0].price == Decimal(200.0)
+
+    async def test_delete_records_before_no_matches(self, price_history_repo, base_time):
+        # Try to delete records older than 3 hours ago (no records exist that old)
+        cutoff_time = base_time - timedelta(hours=3)
+        deleted_count = await price_history_repo.delete_records_before("item1", cutoff_time)
+
+        assert deleted_count == 0
+
+        # Also test with non-existent market_hash_name
+        deleted_count = await price_history_repo.delete_records_before("nonexistent_item", base_time)
+        assert deleted_count == 0

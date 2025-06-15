@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Sequence
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,3 +68,12 @@ class PriceHistoryRepo:
             await self.session.refresh(obj)
 
         return new_objs
+
+    async def delete_records_before(self, market_hash_name: str, before_date: datetime) -> int:
+        stmt = delete(PriceHistoryRecordORM).where(
+            PriceHistoryRecordORM.market_hash_name == market_hash_name, PriceHistoryRecordORM.recorded_at < before_date
+        )
+
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount
