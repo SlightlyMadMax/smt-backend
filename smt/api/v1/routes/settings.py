@@ -6,6 +6,7 @@ from smt.schemas.settings import SettingsResponse, SettingsUpdate
 from smt.services.dependencies import get_pool_service, get_settings_service, get_stats_refresh_service
 from smt.services.pool import PoolService
 from smt.services.settings import SettingsService
+from smt.services.stats_refresh import StatsRefreshService
 
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -22,6 +23,7 @@ async def update_settings(
     background_tasks: BackgroundTasks,
     service: SettingsService = Depends(get_settings_service),
     pool_service: PoolService = Depends(get_pool_service),
+    refresh_service: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
     updated_settings = await service.update_settings(update)
 
@@ -40,7 +42,6 @@ async def update_settings(
         item_names = [item.market_hash_name for item in pool_items]
 
         # Recalculate indicators for all items
-        refresh_service = get_stats_refresh_service()
         background_tasks.add_task(refresh_service.refresh_indicators, item_names)
 
     return updated_settings
