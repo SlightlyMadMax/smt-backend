@@ -82,6 +82,11 @@ class PoolItemStatus(BaseModel):
     market_hash_name: str
     current_lowest_price: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
+    optimal_buy_price: Optional[Decimal] = None
+    optimal_sell_price: Optional[Decimal] = None
+    volatility: Optional[Decimal] = None
+    potential_profit: Optional[Decimal] = None
+    use_for_trading: bool = False
     updated_at: Optional[datetime] = None
 
 

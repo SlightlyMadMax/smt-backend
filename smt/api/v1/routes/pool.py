@@ -22,8 +22,8 @@ async def read_pool(service: PoolService = Depends(get_pool_service)):
 
 
 @router.get("/status", response_model=list[PoolItemStatus])
-async def status(market_name_hashes: str, service: PoolService = Depends(get_pool_service)):
-    names = market_name_hashes.split(",")
+async def status(market_hash_names: str, service: PoolService = Depends(get_pool_service)):
+    names = market_hash_names.split(",")
     items = await service.get_many(names)
     statuses = []
     for item in items:
@@ -33,6 +33,11 @@ async def status(market_name_hashes: str, service: PoolService = Depends(get_poo
                 current_lowest_price=item.current_lowest_price,
                 current_volume24h=item.current_volume24h,
                 updated_at=item.updated_at if item.updated_at else None,
+                optimal_buy_price=item.optimal_buy_price,
+                optimal_sell_price=item.optimal_sell_price,
+                volatility=item.volatility,
+                potential_profit=item.potential_profit,
+                use_for_trading=item.use_for_trading,
             )
         )
     return statuses

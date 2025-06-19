@@ -19,6 +19,7 @@
         <th>Profit</th>
         <th>Status</th>
         <th>Updated At</th>
+        <th>Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -40,8 +41,25 @@
           </form>
         </td>
 
-        <td>{{ item.effective_buy_price or '–' }}</td>
-        <td>{{ item.effective_sell_price or '–' }}</td>
+        <td>
+          <span class="poll-buy-price" data-hash-buy="{{ item.market_hash_name }}">
+            {% if item.effective_buy_price is not none %}
+              {{ item.effective_buy_price }}
+            {% else %}
+              <em>Loading…</em>
+            {% endif %}
+          </span>
+        </td>
+
+        <td>
+          <span class="poll-sell-price" data-hash-sell="{{ item.market_hash_name }}">
+            {% if item.effective_sell_price is not none %}
+              {{ item.effective_sell_price }}
+            {% else %}
+              <em>Loading…</em>
+            {% endif %}
+          </span>
+        </td>
 
         <td>
           <span class="poll-current-price" data-hash="{{ item.market_hash_name }}">
@@ -52,7 +70,6 @@
             {% endif %}
           </span>
         </td>
-
         <td>
           <span class="poll-volume" data-hash="{{ item.market_hash_name }}">
             {% if item.current_volume24h is not none %}
@@ -62,17 +79,33 @@
             {% endif %}
           </span>
         </td>
-
-        <td>{{ item.volatility or '–' }}</td>
-        <td>{{ item.potential_profit or '–' }}</td>
         <td>
-          {% if item.use_for_trading %}
-            <span class="badge success">Ready</span>
-          {% else %}
-            <span class="badge muted">–</span>
-          {% endif %}
+          <span class="poll-volatility" data-hash-volatility="{{ item.market_hash_name }}">
+            {% if item.volatility is not none %}
+              {{ item.volatility }}
+            {% else %}
+              <em>Loading…</em>
+            {% endif %}
+          </span>
         </td>
-
+        <td>
+          <span class="poll-profit" data-hash-profit="{{ item.market_hash_name }}">
+            {% if item.potential_profit is not none %}
+              {{ item.potential_profit }}
+            {% else %}
+              <em>Loading…</em>
+            {% endif %}
+          </span>
+        </td>
+        <td>
+          <span class="poll-status" data-hash-status="{{ item.market_hash_name }}">
+            {% if item.use_for_trading %}
+              <span class="badge success">Ready</span>
+            {% else %}
+              <span class="badge muted">–</span>
+            {% endif %}
+          </span>
+        </td>
         <td>
           <span class="poll-updated-at" data-hash="{{ item.market_hash_name }}">
             {% if item.updated_at is not none %}
@@ -81,6 +114,13 @@
               <em>Loading…</em>
             {% endif %}
           </span>
+        </td>
+
+        <td>
+          <form method="post" action="/api/v1/pool/remove">
+            <input type="hidden" name="market_hash_name" value="{{ item.market_hash_name }}">
+            <button type="submit" class="btn danger small">Remove</button>
+          </form>
         </td>
       </tr>
     {% else %}
