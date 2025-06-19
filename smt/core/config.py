@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import HttpUrl, computed_field
+from pydantic import AnyHttpUrl, HttpUrl, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     STEAMID: str
     STEAM_SHARED_SECRET: str
     STEAM_IDENTITY_SECRET: str
+    STEAM_MARKET_BASE_URL: AnyHttpUrl
 
     REDIS_PORT: str
 

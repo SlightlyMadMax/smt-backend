@@ -29,7 +29,7 @@
     {% for item in items %}
       <tr class="{% if item.use_for_trading %}ready{% else %}not-ready{% endif %}" data-hash="{{ item.market_hash_name }}">
         <td><img src="{{ item.icon_url }}" alt="{{ item.name }}" width="32"></td>
-        <td>{{ item.name }}</td>
+        <td><a href="{{ item.listing_url }}" target="_blank" class="item-link" >{{ item.name }}</a></td>
 
         <td>
           <form class="update-form" action="/api/v1/pool/{{ item.market_hash_name | urlencode }}">

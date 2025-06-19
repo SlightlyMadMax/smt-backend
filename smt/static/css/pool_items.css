@@ -59,3 +59,30 @@
   border-radius: 4px;
   cursor: pointer;
 }
+
+/* Link base style */
+.item-link {
+  color: #2d8cf0;
+  text-decoration: none;
+  border-bottom: 1px dashed #2d8cf0;
+  padding-bottom: 2px;
+  transition: color 0.2s ease, border-bottom-color 0.2s ease;
+}
+
+/* Hover/Focus state */
+.item-link:hover,
+.item-link:focus {
+  color: #1a6fb3;
+  border-bottom-color: transparent;
+}
+
+/* Active/clicked state */
+.item-link:active {
+  color: #174f85;
+}
+
+/* Optional: visited state */
+.item-link:visited {
+  color: #636f83;
+  border-bottom-color: #636f83;
+}

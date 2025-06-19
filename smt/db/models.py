@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from urllib.parse import quote
 
 from sqlalchemy import (
     Boolean,
@@ -70,6 +71,12 @@ class PoolItem(TimeStampedModel, Base):
         Return manual override if set, else optimal sell price.
         """
         return self.manual_sell_price or self.optimal_sell_price
+
+    @property
+    def listing_url(self) -> str:
+        base = "https://steamcommunity.com/market/listings/"
+        encoded_name = quote(self.market_hash_name, safe="")
+        return f"{base}/{self.app_id}/{encoded_name}"
 
 
 class PriceHistoryRecord(Base):
