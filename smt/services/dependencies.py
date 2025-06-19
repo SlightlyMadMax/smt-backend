@@ -9,6 +9,7 @@ from smt.repositories.dependencies import (
     get_price_history_repo,
 )
 from smt.services.inventory import InventoryService
+from smt.services.market_analytics import MarketAnalyticsService
 from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService
 from smt.services.stats_refresh import StatsRefreshService
@@ -44,5 +45,6 @@ def get_stats_refresh_service(
     pool_repo=Depends(get_pool_repo),
     price_history_service=Depends(get_price_history_service),
     steam=Depends(get_steam_service),
+    analytics_service=MarketAnalyticsService(),
 ) -> StatsRefreshService:
-    return StatsRefreshService(price_history_service, pool_repo, steam)
+    return StatsRefreshService(price_history_service, pool_repo, steam, analytics_service)
