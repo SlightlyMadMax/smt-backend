@@ -3,15 +3,20 @@ from decimal import Decimal
 from typing import List, Optional, Tuple
 
 from smt.db.models import PriceHistoryRecord
+from smt.services.settings import SettingsService
 from smt.utils.math import weighted_percentile
 from smt.utils.steam import calculate_fees
 
 
 class MarketAnalyticsService:
-    @staticmethod
-    def compute_weighted_percentile_targets(
-        records: List[PriceHistoryRecord], buy_pct: int, sell_pct: int
-    ) -> Tuple[Decimal, Decimal]:
+    def __init__(self, settings_service: SettingsService):
+        self.settings_service = settings_service
+
+    async def compute_weighted_percentile_targets(self, records: List[PriceHistoryRecord]) -> Tuple[Decimal, Decimal]:
+        settings = await self.settings_service.get_settings()
+        buy_pct = settings.buy_percentile
+        sell_pct = settings.sell_percentile
+
         prices = [float(r.price) for r in records]
         vols = [r.volume for r in records]
         buy = weighted_percentile(prices, vols, buy_pct)
@@ -42,6 +47,19 @@ class MarketAnalyticsService:
         profit = (Decimal(profit_cents) / 100).quantize(Decimal("0.01"))
         return net, profit
 
-    @staticmethod
-    def decide_trade_flag(profit: Decimal, volume24h: Optional[int]) -> bool:
-        return bool(profit > Decimal("0.10") and volume24h is not None and volume24h > 10)
+    async def decide_trade_flag(self, profit: Decimal, volume24h: Optional[int], volatility: Decimal) -> bool:
+        settings = await self.settings_service.get_settings()
+
+        if settings.emergency_stop:
+            return False
+
+        if profit < settings.min_profit_threshold:
+            return False
+
+        if volume24h is None or volume24h < settings.min_volume_24h:
+            return False
+
+        if volatility < settings.min_volatility_threshold or volatility > settings.max_volatility_threshold:
+            return False
+
+        return True

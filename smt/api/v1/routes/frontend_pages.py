@@ -3,10 +3,11 @@ from fastapi.params import Query
 from fastapi.templating import Jinja2Templates
 from starlette.responses import HTMLResponse
 
-from smt.repositories.dependencies import get_item_repo, get_pool_repo
-from smt.repositories.items import ItemRepo
-from smt.repositories.pool_items import PoolRepo
 from smt.schemas.inventory import GAME_MAP, GameName
+from smt.services.dependencies import get_inventory_service, get_pool_service, get_settings_service
+from smt.services.inventory import InventoryService
+from smt.services.pool import PoolService
+from smt.services.settings import SettingsService
 
 
 router = APIRouter()
@@ -23,10 +24,10 @@ async def home(request: Request):
 async def inventory_page(
     request: Request,
     game: GameName = Query(...),
-    repo: ItemRepo = Depends(get_item_repo),
+    service: InventoryService = Depends(get_inventory_service),
 ):
     game_option = GAME_MAP[game]
-    items = await repo.list_for_game(game_option.app_id, game_option.context_id)
+    items = await service.list(game_option)
     return templates.TemplateResponse(
         "inventory.html",
         {
@@ -40,13 +41,28 @@ async def inventory_page(
 @router.get("/pool", response_class=HTMLResponse, include_in_schema=False)
 async def pool_page(
     request: Request,
-    repo: PoolRepo = Depends(get_pool_repo),
+    service: PoolService = Depends(get_pool_service),
 ):
-    items = await repo.list_items()
+    items = await service.list()
     return templates.TemplateResponse(
         "pool_items.html",
         {
             "request": request,
             "items": items,
+        },
+    )
+
+
+@router.get("/settings", response_class=HTMLResponse, include_in_schema=False)
+async def settings_page(
+    request: Request,
+    service: SettingsService = Depends(get_settings_service),
+):
+    settings = await service.get_settings()
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "settings": settings,
         },
     )

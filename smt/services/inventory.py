@@ -1,3 +1,5 @@
+from steampy.models import GameOptions
+
 from smt.db.models import Item as ItemORM
 from smt.repositories.items import ItemRepo
 from smt.services.steam import SteamService
@@ -13,10 +15,10 @@ class InventoryService:
         self.steam = steam
         self.item_repo = item_repo
 
-    async def list(self, game_option):
+    async def list(self, game_option: GameOptions):
         return await self.item_repo.list_for_game(game_option.app_id, game_option.context_id)
 
-    async def refresh(self, game_option):
+    async def refresh(self, game_option: GameOptions):
         raw_inventory = self.steam.get_inventory(game=game_option)
         orm_items: list[ItemORM] = []
         for raw in raw_inventory.values():

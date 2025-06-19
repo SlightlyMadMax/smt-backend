@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Trading Settings — Steam Market Trader{% endblock %}
+
+{% block content %}
+    <h1 class="page-name">Trading Settings</h1>
+
+    <form id="settings-form" class="settings-form">
+        <div class="settings-section">
+            <h2>Profit & Risk Settings</h2>
+
+            <div class="form-group">
+                <label for="min_profit_threshold">Minimum Profit Threshold ($)</label>
+                <input type="number" step="0.01" min="0" name="min_profit_threshold" value="{{ settings.min_profit_threshold }}" required>
+                <small>Minimum absolute profit required to consider trading an item</small>
+            </div>
+
+            <div class="form-group">
+                <label for="min_profit_percentage">Minimum Profit Percentage (%)</label>
+                <input type="number" step="0.1" min="0" name="min_profit_percentage" value="{{ settings.min_profit_percentage }}" required>
+                <small>Minimum profit as percentage of buy price</small>
+            </div>
+
+            <div class="form-group">
+                <label for="max_investment_per_item">Max Investment Per Item ($)</label>
+                <input type="number" step="0.01" min="0" name="max_investment_per_item" value="{{ settings.max_investment_per_item }}" required>
+                <small>Maximum amount to invest in a single item</small>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>Price Calculation</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="buy_percentile">Buy Percentile</label>
+                    <input type="number" min="1" max="99" name="buy_percentile" value="{{ settings.buy_percentile }}" required>
+                    <small>Percentile for buy price calculation</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="sell_percentile">Sell Percentile</label>
+                    <input type="number" min="1" max="99" name="sell_percentile" value="{{ settings.sell_percentile }}" required>
+                    <small>Percentile for sell price calculation</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>Volume & Liquidity</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="min_volume_24h">Min 24h Volume</label>
+                    <input type="number" min="0" name="min_volume_24h" value="{{ settings.min_volume_24h }}" required>
+                    <small>Minimum daily volume for trading</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="min_volume_7d">Min 7d Volume</label>
+                    <input type="number" min="0" name="min_volume_7d" value="{{ settings.min_volume_7d }}" required>
+                    <small>Minimum weekly volume for trading</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>Volatility Filters</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="min_volatility_threshold">Min Volatility</label>
+                    <input type="number" step="0.0001" min="0" name="min_volatility_threshold" value="{{ settings.min_volatility_threshold }}" required>
+                    <small>Minimum volatility to consider trading</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="max_volatility_threshold">Max Volatility</label>
+                    <input type="number" step="0.0001" min="0" name="max_volatility_threshold" value="{{ settings.max_volatility_threshold }}" required>
+                    <small>Maximum volatility (avoid overly risky items)</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>Emergency Controls</h2>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="emergency_stop" {% if settings.emergency_stop %}checked{% endif %}>
+                    Emergency Stop - Disable All Trading
+                </label>
+                <small>Immediately stop all trading activities</small>
+            </div>
+
+            <div class="form-group">
+                <label for="max_daily_loss">Max Daily Loss ($)</label>
+                <input type="number" step="0.01" min="0" name="max_daily_loss" value="{{ settings.max_daily_loss }}" required>
+                <small>Stop trading if daily losses exceed this amount</small>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn primary">Save Settings</button>
+            <button type="button" id="reset-btn" class="btn secondary">Reset to Defaults</button>
+            <button type="button" id="test-settings-btn" class="btn">Test Settings</button>
+        </div>
+    </form>
+
+    <div id="settings-status" class="status-message" style="display: none;"></div>
+
+    <script src="/static/js/settings.js"></script>
+{% endblock %}

@@ -88,3 +88,29 @@ class PriceHistoryRecord(Base):
 
     def __repr__(self):
         return f"<Price for {self.market_hash_name} at {self.recorded_at}"
+
+
+class TradingSettings(TimeStampedModel, Base):
+    __tablename__ = "trading_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    min_profit_threshold: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.10"))
+    min_profit_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("5.00"))
+    max_investment_per_item: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("50.00"))
+    buy_percentile: Mapped[int] = mapped_column(Integer, default=20)
+    sell_percentile: Mapped[int] = mapped_column(Integer, default=80)
+    min_volume_24h: Mapped[int] = mapped_column(Integer, default=10)
+    min_volume_7d: Mapped[int] = mapped_column(Integer, default=50)
+    max_volatility_threshold: Mapped[Decimal] = mapped_column(Numeric(10, 4), default=Decimal("0.5000"))
+    min_volatility_threshold: Mapped[Decimal] = mapped_column(Numeric(10, 4), default=Decimal("0.0100"))
+    price_history_days: Mapped[int] = mapped_column(Integer, default=30)
+    analysis_window_days: Mapped[int] = mapped_column(Integer, default=7)
+    max_concurrent_trades: Mapped[int] = mapped_column(Integer, default=10)
+    cooldown_after_loss_hours: Mapped[int] = mapped_column(Integer, default=24)
+    price_refresh_interval_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    stats_refresh_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    emergency_stop: Mapped[bool] = mapped_column(Boolean, default=False)
+    max_daily_loss: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("100.00"))
+
+    def __repr__(self):
+        return f"<TradingSettings {self.id}>"
