@@ -194,6 +194,14 @@ button:disabled, .btn:disabled {
   font-weight: 600;
 }
 
+.pool-table tr.ready {
+  background-color: #e6ffed;
+}
+
+.pool-table tr.not-ready {
+  background-color: #ffe6e6;
+}
+
 .pool-table img {
   display: block;
   margin: 0 auto;

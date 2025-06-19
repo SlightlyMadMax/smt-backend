@@ -17,14 +17,13 @@
         <th>Volume</th>
         <th>Volatility</th>
         <th>Profit</th>
-        <th>Status</th>
         <th>Updated At</th>
         <th>Actions</th>
       </tr>
     </thead>
     <tbody>
     {% for item in items %}
-      <tr>
+      <tr class="{% if item.use_for_trading %}ready{% else %}not-ready{% endif %}" data-hash="{{ item.market_hash_name }}">
         <td><img src="{{ item.icon_url }}" alt="{{ item.name }}" width="32"></td>
         <td>{{ item.name }}</td>
 
@@ -42,7 +41,7 @@
         </td>
 
         <td>
-          <span class="poll-buy-price" data-hash-buy="{{ item.market_hash_name }}">
+          <span class="poll-buy-price" data-hash="{{ item.market_hash_name }}">
             {% if item.effective_buy_price is not none %}
               {{ item.effective_buy_price }}
             {% else %}
@@ -52,7 +51,7 @@
         </td>
 
         <td>
-          <span class="poll-sell-price" data-hash-sell="{{ item.market_hash_name }}">
+          <span class="poll-sell-price" data-hash="{{ item.market_hash_name }}">
             {% if item.effective_sell_price is not none %}
               {{ item.effective_sell_price }}
             {% else %}
@@ -80,7 +79,7 @@
           </span>
         </td>
         <td>
-          <span class="poll-volatility" data-hash-volatility="{{ item.market_hash_name }}">
+          <span class="poll-volatility" data-hash="{{ item.market_hash_name }}">
             {% if item.volatility is not none %}
               {{ item.volatility }}
             {% else %}
@@ -89,20 +88,11 @@
           </span>
         </td>
         <td>
-          <span class="poll-profit" data-hash-profit="{{ item.market_hash_name }}">
+          <span class="poll-profit" data-hash="{{ item.market_hash_name }}">
             {% if item.potential_profit is not none %}
               {{ item.potential_profit }}
             {% else %}
               <em>Loading…</em>
-            {% endif %}
-          </span>
-        </td>
-        <td>
-          <span class="poll-status" data-hash-status="{{ item.market_hash_name }}">
-            {% if item.use_for_trading %}
-              <span class="badge success">Ready</span>
-            {% else %}
-              <span class="badge muted">–</span>
             {% endif %}
           </span>
         </td>

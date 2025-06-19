@@ -50,7 +50,6 @@ async function pollUpdates() {
     '.poll-volume',
     '.poll-volatility',
     '.poll-profit',
-    '.poll-status',
     '.poll-updated-at'
   ];
   const pendingEls = selectors
@@ -73,16 +72,7 @@ async function pollUpdates() {
     return;
   }
 
-  const hashes = Array.from(new Set(
-    pendingEls.map(el =>
-      el.dataset.hash
-      || el.dataset.hashBuy
-      || el.dataset.hashSell
-      || el.dataset.hashVolatility
-      || el.dataset.hashProfit
-      || el.dataset.hashStatus
-    )
-  ));
+  const hashes = Array.from(new Set(pendingEls.map(el => el.dataset.hash)));
   const statuses = await fetchStatuses(hashes);
   if (!statuses) return;
 
@@ -106,24 +96,26 @@ async function pollUpdates() {
     }
 
     maybeSet('.poll-current-price', 'data-hash', curr);
-    maybeSet('.poll-buy-price', 'data-hash-buy', buy);
-    maybeSet('.poll-sell-price', 'data-hash-sell', sell);
+    maybeSet('.poll-buy-price', 'data-hash', buy);
+    maybeSet('.poll-sell-price', 'data-hash', sell);
     maybeSet('.poll-volume', 'data-hash', vol);
-    maybeSet('.poll-volatility', 'data-hash-volatility', sigma);
-    maybeSet('.poll-profit', 'data-hash-profit', prof);
-
-    if (flag != null) {
-      const statEl = document.querySelector(`.poll-status[data-hash-status="${name}"]`);
-      if (statEl) {
-        statEl.innerHTML = flag
-          ? '<span class="badge success">Ready</span>'
-          : '<span class="badge muted">—</span>';
-      }
-    }
+    maybeSet('.poll-volatility', 'data-hash', sigma);
+    maybeSet('.poll-profit', 'data-hash', prof);
 
     if (ts) {
       const timeEl = document.querySelector(`.poll-updated-at[data-hash="${name}"]`);
       if (timeEl) timeEl.textContent = formatDatetime(ts);
+    }
+
+    if (flag === true) {
+      const row = document.querySelector(`tr[data-hash="${name}"]`);
+      if (row) {
+        if (flag === true) {
+          row.classList.replace('not-ready', 'ready');
+        } else {
+          row.classList.replace('ready', 'not-ready');
+        }
+      }
     }
   });
 }
