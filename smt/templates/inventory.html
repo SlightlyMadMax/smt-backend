@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+  <link rel="stylesheet" href="/static/css/inventory.css">
+{% endblock %}
+
 {% block title %}{{ game }} Inventory — Steam Market Trader{% endblock %}
 {% block content %}
   <h1 class="page-name">{{ game }} Inventory</h1>

@@ -1,0 +1,99 @@
+.inventory-controls {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0 1rem 1rem;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.5em 1em;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background-color: #28a745;
+  color: white;
+}
+
+button:disabled, .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+
+.inventory-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  padding: 1rem;
+}
+
+.item-card {
+  position: relative;
+  padding: 0.75rem;
+  border-radius: 6px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.item-card.marketable {
+  background-color: #e6ffed; /* pale green */
+}
+
+.item-card.not-marketable {
+  background-color: #ffe6e6; /* pale red */
+}
+
+.item-icon {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.item-name {
+  font-size: 1rem;
+  margin: 0.5rem 0;
+}
+
+/* Checkbox styling */
+
+.checkbox-label {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  display: none;
+}
+
+.checkbox-custom {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #333;
+  display: inline-block;
+  border-radius: 3px;
+  position: relative;
+  background-color: white;
+}
+
+.checkbox-label input:checked + .checkbox-custom {
+  background-color: #28a745;
+  border-color: #28a745;
+}
+
+.checkbox-label input:checked + .checkbox-custom::after {
+  content: '\2713';
+  color: white;
+  font-size: 0.75rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+}

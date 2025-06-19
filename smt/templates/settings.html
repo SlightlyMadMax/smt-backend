@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+  <link rel="stylesheet" href="/static/css/settings.css">
+{% endblock %}
+
 {% block title %}Trading Settings — Steam Market Trader{% endblock %}
 
 {% block content %}
@@ -10,19 +14,19 @@
             <h2>Profit & Risk Settings</h2>
 
             <div class="form-group">
-                <label for="min_profit_threshold">Minimum Profit Threshold ($)</label>
+                <label for="min_profit_threshold">Minimum Profit Threshold (₽)</label>
                 <input type="number" step="0.01" min="0" name="min_profit_threshold" value="{{ settings.min_profit_threshold }}" required>
                 <small>Minimum absolute profit required to consider trading an item</small>
             </div>
 
             <div class="form-group">
-                <label for="min_profit_percentage">Minimum Profit Percentage (%)</label>
+                <label for="min_profit_percentage">Minimum Profit Percentage (₽)</label>
                 <input type="number" step="0.1" min="0" name="min_profit_percentage" value="{{ settings.min_profit_percentage }}" required>
                 <small>Minimum profit as percentage of buy price</small>
             </div>
 
             <div class="form-group">
-                <label for="max_investment_per_item">Max Investment Per Item ($)</label>
+                <label for="max_investment_per_item">Max Investment Per Item (₽)</label>
                 <input type="number" step="0.01" min="0" name="max_investment_per_item" value="{{ settings.max_investment_per_item }}" required>
                 <small>Maximum amount to invest in a single item</small>
             </div>
@@ -94,7 +98,7 @@
             </div>
 
             <div class="form-group">
-                <label for="max_daily_loss">Max Daily Loss ($)</label>
+                <label for="max_daily_loss">Max Daily Loss (₽)</label>
                 <input type="number" step="0.01" min="0" name="max_daily_loss" value="{{ settings.max_daily_loss }}" required>
                 <small>Stop trading if daily losses exceed this amount</small>
             </div>
@@ -103,7 +107,6 @@
         <div class="form-actions">
             <button type="submit" class="btn primary">Save Settings</button>
             <button type="button" id="reset-btn" class="btn secondary">Reset to Defaults</button>
-            <button type="button" id="test-settings-btn" class="btn">Test Settings</button>
         </div>
     </form>
 
