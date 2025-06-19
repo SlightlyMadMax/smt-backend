@@ -92,12 +92,10 @@ class StatsRefreshService:
             if len(records) < 2:
                 continue
 
-            opt_buy, opt_sell = self.analytics_service.compute_weighted_percentile_targets(
-                records, buy_pct=20, sell_pct=80
-            )
-            sigma = self.analytics_service.compute_volume_weighted_volatility(records)
-            net_sell, profit = self.analytics_service.compute_net_and_profit(opt_sell, opt_buy)
-            flag = self.analytics_service.decide_trade_flag(profit, item.current_volume24h)
+            opt_buy, opt_sell = await self.analytics_service.compute_weighted_percentile_targets(records)
+            sigma = await self.analytics_service.compute_volume_weighted_volatility(records)
+            net_sell, profit = await self.analytics_service.compute_net_and_profit(opt_sell, opt_buy)
+            flag = await self.analytics_service.decide_trade_flag(profit, item.current_volume24h, sigma)
 
             await self._persist_indicators(item.market_hash_name, opt_buy, opt_sell, sigma, profit, flag)
 

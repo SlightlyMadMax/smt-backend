@@ -24,7 +24,7 @@ class MarketAnalyticsService:
         return buy, sell
 
     @staticmethod
-    def compute_volume_weighted_volatility(records: List[PriceHistoryRecord]) -> Decimal:
+    async def compute_volume_weighted_volatility(records: List[PriceHistoryRecord]) -> Decimal:
         prices = [float(r.price) for r in records]
         vols = [r.volume for r in records]
         returns = [math.log(prices[i] / prices[i - 1]) for i in range(1, len(prices))]
@@ -38,7 +38,7 @@ class MarketAnalyticsService:
         return Decimal(sigma).quantize(Decimal("0.0001"))
 
     @staticmethod
-    def compute_net_and_profit(opt_sell: Decimal, opt_buy: Decimal) -> Tuple[Decimal, Decimal]:
+    async def compute_net_and_profit(opt_sell: Decimal, opt_buy: Decimal) -> Tuple[Decimal, Decimal]:
         gross = int((opt_sell * 100).to_integral_value())
         fees = calculate_fees(gross)
         net_cents = fees["net_received"]
