@@ -9,6 +9,7 @@ from steampy.models import Currency, GameOptions
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings
+from smt.logger import logger
 from smt.utils.steam import parse_steam_ts
 
 
@@ -47,6 +48,7 @@ class SteamService:
         try:
             self.client.is_session_alive()
         except LoginRequired:
+            logger.info("Trying to login into Steam.")
             self.client.login(
                 username=self._username,
                 password=self._password,
