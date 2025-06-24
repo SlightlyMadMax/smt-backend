@@ -86,3 +86,67 @@
   color: #636f83;
   border-bottom-color: #636f83;
 }
+
+/* Style the bulk-actions bar */
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  margin-left: 1rem;
+}
+
+.bulk-actions select,
+.bulk-actions button {
+  font-size: 0.95rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+.bulk-actions button {
+  background-color: #2d8cf0;
+  color: #fff;
+  border-color: #2d8cf0;
+  cursor: pointer;
+}
+
+.bulk-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Tighter checkbox column */
+.pool-table th:first-child,
+.pool-table td:first-child {
+  width: 40px;
+  text-align: center;
+}
+
+/* “Select all” cursor */
+#select-all {
+  cursor: pointer;
+}
+
+/* Hover highlight on rows */
+.pool-table tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* Sticky table header */
+.pool-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: #f5f5f5;  /* re-declare to cover content scrolling underneath */
+}
+
+/* Responsive font-size adjustment */
+@media (max-width: 768px) {
+  .pool-table {
+    font-size: 0.85rem;
+  }
+  .bulk-actions {
+    flex-wrap: wrap;
+  }
+}

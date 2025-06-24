@@ -1,7 +1,24 @@
 const POLL_INTERVAL = 3000;
 const MAX_ATTEMPTS = 10;
+const applyBtn = document.querySelector('.bulk-actions button');
+const checkboxes = Array.from(document.querySelectorAll('.row-checkbox'));
+const selectAll = document.getElementById('select-all');
 let attemptCount = 0;
 let pollHandle;
+
+function updateApplyState() {
+  applyBtn.disabled = !checkboxes.some(cb => cb.checked);
+}
+
+checkboxes.forEach(cb => cb.addEventListener('change', updateApplyState));
+
+selectAll.addEventListener('change', ev => {
+  const checked = ev.target.checked;
+  checkboxes.forEach(cb => cb.checked = checked);
+  updateApplyState();
+});
+
+updateApplyState();
 
 document.querySelectorAll('.update-form').forEach(form => {
   form.addEventListener('submit', async ev => {

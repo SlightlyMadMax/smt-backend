@@ -1,128 +1,152 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-  <link rel="stylesheet" href="/static/css/pool_items.css">
+<link rel="stylesheet" href="/static/css/pool_items.css">
 {% endblock %}
 
 {% block title %}My Trading Pool — Steam Market Trader{% endblock %}
 
 {% block content %}
-  <h1 class="page-name">My Trading Pool</h1>
+<h1 class="page-name">My Trading Pool</h1>
 
-  <table class="pool-table">
-    <thead>
-      <tr>
-        <th>Icon</th>
-        <th>Name</th>
-        <th>Max Listed</th>
-        <th>Buy Price</th>
-        <th>Sell Price</th>
-        <th>Current Price</th>
-        <th>Volume</th>
-        <th>Volatility</th>
-        <th>Profit</th>
-        <th>Updated At</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for item in items %}
-      <tr class="{% if item.use_for_trading %}ready{% else %}not-ready{% endif %}" data-hash="{{ item.market_hash_name }}">
-        <td><img src="{{ item.icon_url }}" alt="{{ item.name }}" width="32"></td>
-        <td><a href="{{ item.listing_url }}" target="_blank" class="item-link" >{{ item.name }}</a></td>
+<form id="bulk-action-form">
+    <div class="bulk-actions">
+        <select name="action" id="bulk-action-select" required>
+            <option value="" disabled selected>— Select action —</option>
+            <option value="remove">Remove</option>
+            <option value="refresh">Refresh</option>
+            <!-- add more actions here -->
+        </select>
+        <button type="submit" class="btn">Apply</button>
+    </div>
 
-        <td>
-          <form class="update-form" action="/api/v1/pool/{{ item.market_hash_name | urlencode }}">
-            <input
-              type="number"
-              name="max_listed"
-              value="{{ item.max_listed }}"
-              min="1"
-              class="input-small"
-            />
-            <button type="submit" class="btn small">Save</button>
-          </form>
-        </td>
+    <table class="pool-table">
+        <thead>
+        <tr>
+            <th>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="select-all"/>
+                    <span class="checkbox-custom"></span>
+                </label>
+            </th>
+            <th>Icon</th>
+            <th>Name</th>
+            <th>Max Listed</th>
+            <th>Buy Price</th>
+            <th>Sell Price</th>
+            <th>Current Price</th>
+            <th>Volume</th>
+            <th>Volatility</th>
+            <th>Profit</th>
+            <th>Updated At</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in items %}
+        <tr class="{% if item.use_for_trading %}ready{% else %}not-ready{% endif %}"
+            data-hash="{{ item.market_hash_name }}">
 
-        <td>
-          <span class="poll-buy-price" data-hash="{{ item.market_hash_name }}">
-            {% if item.effective_buy_price is not none %}
-              {{ item.effective_buy_price }}
-            {% else %}
-              <em>Loading…</em>
-            {% endif %}
-          </span>
-        </td>
+            <td>
+                <label class="checkbox-label">
+                    <input type="checkbox" class="row-checkbox" value="{{ item.market_hash_name }}"/>
+                    <span class="checkbox-custom"></span>
+                </label>
+            </td>
 
-        <td>
-          <span class="poll-sell-price" data-hash="{{ item.market_hash_name }}">
-            {% if item.effective_sell_price is not none %}
-              {{ item.effective_sell_price }}
-            {% else %}
-              <em>Loading…</em>
-            {% endif %}
-          </span>
-        </td>
+            <td><img src="{{ item.icon_url }}" alt="{{ item.name }}" width="32"></td>
 
-        <td>
-          <span class="poll-current-price" data-hash="{{ item.market_hash_name }}">
-            {% if item.current_lowest_price is not none %}
-              {{ item.current_lowest_price }}
-            {% else %}
-              <em>Loading…</em>
-            {% endif %}
-          </span>
-        </td>
-        <td>
-          <span class="poll-volume" data-hash="{{ item.market_hash_name }}">
-            {% if item.current_volume24h is not none %}
-              {{ item.current_volume24h }}
-            {% else %}
-              <em>Loading…</em>
-            {% endif %}
-          </span>
-        </td>
-        <td>
-          <span class="poll-volatility" data-hash="{{ item.market_hash_name }}">
-            {% if item.volatility is not none %}
-              {{ item.volatility }}
-            {% else %}
-              <em>Loading…</em>
-            {% endif %}
-          </span>
-        </td>
-        <td>
-          <span class="poll-profit" data-hash="{{ item.market_hash_name }}">
-            {% if item.potential_profit is not none %}
-              {{ item.potential_profit }}
-            {% else %}
-              <em>Loading…</em>
-            {% endif %}
-          </span>
-        </td>
-        <td>
-          <span class="poll-updated-at" data-hash="{{ item.market_hash_name }}">
-            {% if item.updated_at is not none %}
-              {{ item.updated_at.strftime("%Y-%m-%d %H:%M") }}
-            {% else %}
-              <em>Loading…</em>
-            {% endif %}
-          </span>
-        </td>
+            <td><a href="{{ item.listing_url }}" target="_blank" class="item-link">{{ item.name }}</a></td>
 
-        <td>
-          <form method="post" action="/api/v1/pool/remove">
-            <input type="hidden" name="market_hash_name" value="{{ item.market_hash_name }}">
-            <button type="submit" class="btn danger small">Remove</button>
-          </form>
-        </td>
-      </tr>
-    {% else %}
-      <tr>
-        <td colspan="12" class="empty">Your pool is empty. Go add some items!</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  <script src="/static/js/pool_items.js"></script>
+            <td>
+                <form class="update-form" action="/api/v1/pool/{{ item.market_hash_name | urlencode }}">
+                    <input
+                            type="number"
+                            name="max_listed"
+                            value="{{ item.max_listed }}"
+                            min="1"
+                            class="input-small"
+                    />
+                    <button type="submit" class="btn small">Save</button>
+                </form>
+            </td>
+
+            <td>
+            <span class="poll-buy-price" data-hash="{{ item.market_hash_name }}">
+              {% if item.effective_buy_price is not none %}
+                {{ item.effective_buy_price }}
+              {% else %}
+                <em>Loading…</em>
+              {% endif %}
+            </span>
+            </td>
+
+            <td>
+            <span class="poll-sell-price" data-hash="{{ item.market_hash_name }}">
+              {% if item.effective_sell_price is not none %}
+                {{ item.effective_sell_price }}
+              {% else %}
+                <em>Loading…</em>
+              {% endif %}
+            </span>
+            </td>
+
+            <td>
+            <span class="poll-current-price" data-hash="{{ item.market_hash_name }}">
+              {% if item.current_lowest_price is not none %}
+                {{ item.current_lowest_price }}
+              {% else %}
+                <em>Loading…</em>
+              {% endif %}
+            </span>
+            </td>
+
+            <td>
+            <span class="poll-volume" data-hash="{{ item.market_hash_name }}">
+              {% if item.current_volume24h is not none %}
+                {{ item.current_volume24h }}
+              {% else %}
+                <em>Loading…</em>
+              {% endif %}
+            </span>
+            </td>
+
+            <td>
+            <span class="poll-volatility" data-hash="{{ item.market_hash_name }}">
+              {% if item.volatility is not none %}
+                {{ item.volatility }}
+              {% else %}
+                <em>Loading…</em>
+              {% endif %}
+            </span>
+            </td>
+
+            <td>
+            <span class="poll-profit" data-hash="{{ item.market_hash_name }}">
+              {% if item.potential_profit is not none %}
+                {{ item.potential_profit }}
+              {% else %}
+                <em>Loading…</em>
+              {% endif %}
+            </span>
+            </td>
+
+            <td>
+            <span class="poll-updated-at" data-hash="{{ item.market_hash_name }}">
+              {% if item.updated_at is not none %}
+                {{ item.updated_at.strftime("%Y-%m-%d %H:%M") }}
+              {% else %}
+                <em>Loading…</em>
+              {% endif %}
+            </span>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="12" class="empty">Your pool is empty. Go add some items!</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</form>
+<script src="/static/js/pool_items.js"></script>
 {% endblock %}
