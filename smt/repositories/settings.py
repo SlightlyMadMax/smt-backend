@@ -25,7 +25,7 @@ class SettingsRepo:
     async def update(self, settings_update: SettingsUpdate) -> TradingSettings:
         current = await self.get_current()
 
-        for field, value in settings_update.dict(exclude_unset=True).items():
+        for field, value in settings_update.model_dump(exclude_unset=True).items():
             setattr(current, field, value)
 
         await self.session.commit()
