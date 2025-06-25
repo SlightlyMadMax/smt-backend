@@ -62,8 +62,14 @@ class PoolService:
         ]
         return await self.pool_repo.add_items(pool_items)
 
-    async def get_many(self, names: List[str]) -> Sequence[PoolItem]:
-        return await self.pool_repo.get_many(names)
+    async def get_many(self, market_hash_names: List[str]) -> Sequence[PoolItem]:
+        return await self.pool_repo.get_many(market_hash_names)
 
     async def update(self, market_hash_name: str, payload: PoolItemUpdate) -> PoolItem:
         return await self.pool_repo.update(market_hash_name, payload)
+
+    async def remove(self, market_hash_name: str) -> bool:
+        return await self.pool_repo.remove(market_hash_name)
+
+    async def remove_many(self, market_hash_names: List[str]) -> int:
+        return await self.pool_repo.remove_many(market_hash_names)
