@@ -13,7 +13,7 @@ class PoolRepo:
         self.session = session
 
     async def list_items(self) -> Sequence[PoolItem]:
-        result = await self.session.execute(select(PoolItem))
+        result = await self.session.execute(select(PoolItem).order_by(PoolItem.created_at.desc()))
         return result.scalars().all()
 
     async def get_by_market_hash_name(self, market_hash_name: str) -> PoolItem:
