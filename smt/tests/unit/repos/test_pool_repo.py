@@ -182,3 +182,45 @@ class TestPoolItemsRepo:
         assert updated_item is not None
         assert updated_item.market_hash_name == "a1"
         assert updated_item.max_listed == 10
+
+    async def test_remove_success(self, pool_repo, db_session):
+        all_items = await pool_repo.list_items()
+        hash_names_before = {p.market_hash_name for p in all_items}
+        assert "a1" in hash_names_before
+
+        result = await pool_repo.remove("a1")
+        assert result is True
+
+        all_items_after = await pool_repo.list_items()
+        hash_names_after = {p.market_hash_name for p in all_items_after}
+        assert "a1" not in hash_names_after
+        assert len(hash_names_after) == len(hash_names_before) - 1
+
+    async def test_remove_nonexistent(self, pool_repo):
+        result = await pool_repo.remove("nonexistent")
+        assert result is False
+
+    @pytest.mark.parametrize(
+        "market_hash_names,expected_removed_count,expected_remaining",
+        [
+            (["a1", "b2"], 2, {"c3"}),  # Remove two existing items
+            (["a1", "nonexistent", "c3"], 2, {"b2"}),  # Mix of existing and non-existing
+            (["nonexistent", "also_fake"], 0, {"a1", "b2", "c3"}),  # Remove only non-existing
+            ([], 0, {"a1", "b2", "c3"}),  # Empty list
+            (["a1", "b2", "c3"], 3, set()),  # Remove all items
+        ],
+    )
+    async def test_remove_many(self, pool_repo, market_hash_names, expected_removed_count, expected_remaining):
+        removed_count = await pool_repo.remove_many(market_hash_names)
+        assert removed_count == expected_removed_count
+
+        remaining_items = await pool_repo.list_items()
+        remaining_hash_names = {p.market_hash_name for p in remaining_items}
+        assert remaining_hash_names == expected_remaining
+
+    async def test_remove_many_empty_list(self, pool_repo):
+        result = await pool_repo.remove_many([])
+        assert result == 0
+
+        all_items = await pool_repo.list_items()
+        assert len(all_items) == 3

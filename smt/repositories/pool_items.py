@@ -1,6 +1,6 @@
 from typing import Optional, Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -87,3 +87,20 @@ class PoolRepo:
             return await self.get_by_market_hash_name(market_hash_name)
         except NoResultFound:
             return None
+
+    async def remove(self, market_hash_name: str) -> bool:
+        stmt = delete(PoolItem).where(PoolItem.market_hash_name == market_hash_name)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+
+        return result.rowcount > 0
+
+    async def remove_many(self, market_hash_names: list[str]) -> int:
+        if not market_hash_names:
+            return 0
+
+        stmt = delete(PoolItem).where(PoolItem.market_hash_name.in_(market_hash_names))
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+
+        return result.rowcount
