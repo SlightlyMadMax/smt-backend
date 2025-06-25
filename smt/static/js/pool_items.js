@@ -127,11 +127,7 @@ async function pollUpdates() {
     if (flag === true) {
       const row = document.querySelector(`tr[data-hash="${name}"]`);
       if (row) {
-        if (flag === true) {
-          row.classList.replace('not-ready', 'ready');
-        } else {
-          row.classList.replace('ready', 'not-ready');
-        }
+        row.classList.replace('not-ready', 'ready');
       }
     }
   });
