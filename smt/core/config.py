@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     STEAM_MARKET_BASE_URL: AnyHttpUrl
 
     REDIS_PORT: str
+    REDIS_HOST: str
 
     @computed_field
     @property
