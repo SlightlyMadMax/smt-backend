@@ -86,7 +86,7 @@ bulkForm.addEventListener('submit', async ev => {
         .poll-profit[data-hash="${h}"],
         .poll-updated-at[data-hash="${h}"]
       `;
-      document.querySelectorAll(selector).forEach(el => el.innerHTML = '<em>Loading</em>');
+      document.querySelectorAll(selector).forEach(el => el.innerHTML = '<em>Loading…</em>');
     });
 
     attemptCount = 0;
