@@ -1,9 +1,11 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from starlette.responses import Response
 
 from smt.schemas.pool import (
     PoolItem,
     PoolItemBulkCreateRequest,
     PoolItemBulkCreateResponse,
+    PoolItemBulkRefreshRequest,
     PoolItemCreateRequest,
     PoolItemStatus,
     PoolItemUpdate,
@@ -125,3 +127,23 @@ async def remove_many_pool_items(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to remove pool items: {str(e)}"
         )
+
+
+@router.post("/refresh/{market_hash_name}", status_code=204)
+async def refresh(
+    market_hash_name: str,
+    background_tasks: BackgroundTasks,
+    stats: StatsRefreshService = Depends(get_stats_refresh_service),
+):
+    background_tasks.add_task(stats.refresh_all, [market_hash_name])
+    return Response(status_code=204)
+
+
+@router.post("/refresh-many", status_code=204)
+async def refresh_many(
+    payload: PoolItemBulkRefreshRequest,
+    background_tasks: BackgroundTasks,
+    stats: StatsRefreshService = Depends(get_stats_refresh_service),
+):
+    background_tasks.add_task(stats.refresh_all, payload.market_hash_names)
+    return Response(status_code=204)

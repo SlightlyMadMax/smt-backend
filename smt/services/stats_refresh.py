@@ -123,3 +123,11 @@ class StatsRefreshService:
                 use_for_trading=flag,
             ),
         )
+
+    async def refresh_all(self, market_hash_names: list[str]) -> None:
+        await self.refresh_price_history(market_hash_names)
+
+        for name in market_hash_names:
+            await self.refresh_current_stats(name)
+
+        await self.refresh_indicators(market_hash_names)

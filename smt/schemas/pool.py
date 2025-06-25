@@ -116,3 +116,7 @@ class RemoveResponse(BaseModel):
 class RemoveManyResponse(BaseModel):
     removed_count: int
     message: str
+
+
+class PoolItemBulkRefreshRequest(BaseModel):
+    market_hash_names: list[str]
