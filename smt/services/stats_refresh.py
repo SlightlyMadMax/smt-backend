@@ -11,6 +11,7 @@ from smt.schemas.pool import PoolItemUpdate
 from smt.schemas.price_history import PriceHistoryRecordCreate
 from smt.services.market_analytics import MarketAnalyticsService
 from smt.services.price_history import PriceHistoryService
+from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
 
 
@@ -21,13 +22,17 @@ class StatsRefreshService:
         pool_repo: PoolRepo,
         steam_service: SteamService,
         analytics_service: MarketAnalyticsService,
+        settings_service: SettingsService,
     ):
         self.price_history_service = price_history_service
         self.pool_repo = pool_repo
         self.steam = steam_service
         self.analytics_service = analytics_service
+        self.settings_service = settings_service
 
-    async def refresh_price_history(self, market_hash_names: List[str], days: int = 30) -> None:
+    async def refresh_price_history(self, market_hash_names: List[str]) -> None:
+        settings = await self.settings_service.get_settings()
+        days = settings.price_history_days
         cutoff = datetime.now(UTC) - timedelta(days=days)
         all_records: List[PriceHistoryRecordCreate] = []
 
@@ -83,8 +88,10 @@ class StatsRefreshService:
         )
 
     async def refresh_indicators(self, names: List[str]) -> None:
+        settings = await self.settings_service.get_settings()
+        days = settings.analysis_window_days
         items = await self.pool_repo.get_many(names)
-        since = datetime.now(UTC) - timedelta(days=7)
+        since = datetime.now(UTC) - timedelta(days=days)
 
         for item in items:
             records = await self.price_history_service.list(item.market_hash_name, since=since)

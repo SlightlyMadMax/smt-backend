@@ -56,5 +56,6 @@ def get_stats_refresh_service(
     price_history_service=Depends(get_price_history_service),
     steam=Depends(get_steam_service),
     analytics_service=Depends(get_market_analytics_service),
+    settings_service=Depends(get_settings_service),
 ) -> StatsRefreshService:
-    return StatsRefreshService(price_history_service, pool_repo, steam, analytics_service)
+    return StatsRefreshService(price_history_service, pool_repo, steam, analytics_service, settings_service)
