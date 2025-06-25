@@ -6,10 +6,10 @@ from anyio import to_thread
 from sqlalchemy.exc import NoResultFound
 from steampy.models import GameOptions
 
-from smt.repositories.pool_items import PoolRepo
 from smt.schemas.pool import PoolItemUpdate
 from smt.schemas.price_history import PriceHistoryRecordCreate
 from smt.services.market_analytics import MarketAnalyticsService
+from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService
 from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
@@ -19,13 +19,13 @@ class StatsRefreshService:
     def __init__(
         self,
         price_history_service: PriceHistoryService,
-        pool_repo: PoolRepo,
+        pool_service: PoolService,
         steam_service: SteamService,
         analytics_service: MarketAnalyticsService,
         settings_service: SettingsService,
     ):
         self.price_history_service = price_history_service
-        self.pool_repo = pool_repo
+        self.pool_service = pool_service
         self.steam = steam_service
         self.analytics_service = analytics_service
         self.settings_service = settings_service
@@ -38,7 +38,7 @@ class StatsRefreshService:
 
         for name in market_hash_names:
             try:
-                item = await self.pool_repo.get_by_market_hash_name(name)
+                item = await self.pool_service.get_by_market_hash_name(name)
             except NoResultFound:
                 continue
 
@@ -67,7 +67,7 @@ class StatsRefreshService:
 
     async def refresh_current_stats(self, market_hash_name: str) -> None:
         try:
-            item = await self.pool_repo.get_by_market_hash_name(market_hash_name)
+            item = await self.pool_service.get_by_market_hash_name(market_hash_name)
         except NoResultFound:
             return
 
@@ -78,7 +78,7 @@ class StatsRefreshService:
             game_opt,
         )
 
-        await self.pool_repo.update(
+        await self.pool_service.update(
             market_hash_name,
             PoolItemUpdate(
                 current_lowest_price=snap["lowest_price"],
@@ -90,7 +90,7 @@ class StatsRefreshService:
     async def refresh_indicators(self, names: List[str]) -> None:
         settings = await self.settings_service.get_settings()
         days = settings.analysis_window_days
-        items = await self.pool_repo.get_many(names)
+        items = await self.pool_service.get_many(names)
         since = datetime.now(UTC) - timedelta(days=days)
 
         for item in items:
@@ -113,7 +113,7 @@ class StatsRefreshService:
     async def _persist_indicators(
         self, name: str, opt_buy: Decimal, opt_sell: Decimal, sigma: Decimal, profit: Decimal, flag: bool
     ) -> None:
-        await self.pool_repo.update(
+        await self.pool_service.update(
             name,
             PoolItemUpdate(
                 optimal_buy_price=opt_buy,

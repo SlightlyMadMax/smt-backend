@@ -21,6 +21,9 @@ class PoolService:
     async def list(self) -> Sequence[PoolItem]:
         return await self.pool_repo.list_items()
 
+    async def get_by_market_hash_name(self, market_hash_name: str) -> PoolItem:
+        return await self.pool_repo.get_by_market_hash_name(market_hash_name)
+
     async def add_one(self, asset_id: str) -> PoolItem:
         try:
             asset = await self.item_repo.get_by_id(asset_id)
