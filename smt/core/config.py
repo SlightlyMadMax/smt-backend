@@ -28,9 +28,6 @@ class Settings(BaseSettings):
 
     REDIS_PORT: str
 
-    CELERY_BROKER_URL: str
-    CELERY_RESULT_BACKEND: str
-
     @computed_field
     @property
     def DATABASE_URI(self) -> str:
