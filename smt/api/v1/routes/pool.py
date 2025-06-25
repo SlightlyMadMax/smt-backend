@@ -13,9 +13,9 @@ from smt.schemas.pool import (
     RemoveManyResponse,
     RemoveResponse,
 )
-from smt.services.dependencies import get_pool_service, get_stats_refresh_service
+from smt.services.dependencies import get_pool_service
 from smt.services.pool import PoolService
-from smt.services.stats_refresh import StatsRefreshService
+from smt.tasks.refresh_pool_item import background_refresh_task
 
 
 router = APIRouter(prefix="/pool", tags=["pool"])
@@ -53,12 +53,9 @@ async def add_to_pool(
     payload: PoolItemCreateRequest,
     background_tasks: BackgroundTasks,
     pool_service: PoolService = Depends(get_pool_service),
-    refresh_stats_service: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
     created = await pool_service.add_one(payload.asset_id)
-    background_tasks.add_task(refresh_stats_service.refresh_price_history, [created.market_hash_name])
-    background_tasks.add_task(refresh_stats_service.refresh_current_stats, created.market_hash_name)
-    background_tasks.add_task(refresh_stats_service.refresh_indicators, [created.market_hash_name])
+    background_tasks.add_task(background_refresh_task, [created.market_hash_name])
     return created
 
 
@@ -67,14 +64,10 @@ async def add_multiple_to_pool(
     payload: PoolItemBulkCreateRequest,
     background_tasks: BackgroundTasks,
     pool_service: PoolService = Depends(get_pool_service),
-    refresh_stats_service: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
     pool_items = await pool_service.add_many(payload.asset_ids)
     names = [i.market_hash_name for i in pool_items]
-    background_tasks.add_task(refresh_stats_service.refresh_price_history, names)
-    for item in pool_items:
-        background_tasks.add_task(refresh_stats_service.refresh_current_stats, item.market_hash_name)
-    background_tasks.add_task(refresh_stats_service.refresh_indicators, names)
+    background_tasks.add_task(background_refresh_task, names)
     return PoolItemBulkCreateResponse(count=len(pool_items))
 
 
@@ -133,9 +126,8 @@ async def remove_many_pool_items(
 async def refresh(
     market_hash_name: str,
     background_tasks: BackgroundTasks,
-    stats: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
-    background_tasks.add_task(stats.refresh_all, [market_hash_name])
+    background_tasks.add_task(background_refresh_task, [market_hash_name])
     return Response(status_code=204)
 
 
@@ -143,7 +135,6 @@ async def refresh(
 async def refresh_many(
     payload: PoolItemBulkRefreshRequest,
     background_tasks: BackgroundTasks,
-    stats: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
-    background_tasks.add_task(stats.refresh_all, payload.market_hash_names)
+    background_tasks.add_task(background_refresh_task, payload.market_hash_names)
     return Response(status_code=204)
