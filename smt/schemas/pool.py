@@ -72,6 +72,7 @@ class PoolItem(PoolItemBase):
     volatility: Optional[Decimal] = None
     potential_profit: Optional[Decimal] = None
     use_for_trading: bool = False
+    listing_url: str
     created_at: datetime
     updated_at: datetime
 
@@ -101,3 +102,17 @@ class PoolItemBulkCreateRequest(BaseModel):
 
 class PoolItemCreateRequest(BaseModel):
     asset_id: str
+
+
+class RemoveManyRequest(BaseModel):
+    market_hash_names: list[str]
+
+
+class RemoveResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class RemoveManyResponse(BaseModel):
+    removed_count: int
+    message: str

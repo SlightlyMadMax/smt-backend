@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from smt.schemas.pool import (
     PoolItem,
@@ -7,6 +7,9 @@ from smt.schemas.pool import (
     PoolItemCreateRequest,
     PoolItemStatus,
     PoolItemUpdate,
+    RemoveManyRequest,
+    RemoveManyResponse,
+    RemoveResponse,
 )
 from smt.services.dependencies import get_pool_service, get_stats_refresh_service
 from smt.services.pool import PoolService
@@ -81,3 +84,44 @@ async def update(
 ):
     updated = await service.update(market_hash_name, payload)
     return updated
+
+
+@router.delete("/{market_hash_name}", response_model=RemoveResponse)
+async def remove_pool_item(market_hash_name: str, service: PoolService = Depends(get_pool_service)) -> RemoveResponse:
+    try:
+        success = await service.remove(market_hash_name)
+
+        if success:
+            return RemoveResponse(success=True, message=f"Pool item '{market_hash_name}' removed successfully")
+        else:
+            return RemoveResponse(success=False, message=f"Pool item '{market_hash_name}' not found")
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to remove pool item: {str(e)}"
+        )
+
+
+@router.delete("/", response_model=RemoveManyResponse)
+async def remove_many_pool_items(
+    request: RemoveManyRequest, service: PoolService = Depends(get_pool_service)
+) -> RemoveManyResponse:
+    try:
+        if not request.market_hash_names:
+            return RemoveManyResponse(removed_count=0, message="No items specified for removal")
+
+        removed_count = await service.remove_many(request.market_hash_names)
+
+        total_requested = len(request.market_hash_names)
+
+        if removed_count == 0:
+            message = "No items were removed (none found)"
+        elif removed_count == total_requested:
+            message = f"All {removed_count} items removed successfully"
+        else:
+            message = f"{removed_count} out of {total_requested} items removed successfully"
+
+        return RemoveManyResponse(removed_count=removed_count, message=message)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to remove pool items: {str(e)}"
+        )
