@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     REDIS_PORT: str
     REDIS_HOST: str
 
+    LOG_LEVEL: str
+    LOG_TO_FILE: bool
+    LOG_FILE_MAX_SIZE: int
+    LOG_BACKUP_COUNT: int
+
     @computed_field
     @property
     def DATABASE_URI(self) -> str:

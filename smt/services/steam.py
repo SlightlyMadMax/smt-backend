@@ -9,8 +9,11 @@ from steampy.models import Currency, GameOptions
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings
-from smt.logger import logger
+from smt.logger import get_logger
 from smt.utils.steam import parse_steam_ts
+
+
+logger = get_logger("services.steam")
 
 
 def requires_login(func):
@@ -24,6 +27,7 @@ def requires_login(func):
 
 class SteamService:
     def __init__(self, settings: Settings):
+        logger.info("Logging into STEAM.")
         self.client = SteamClient(api_key=settings.STEAM_API_KEY)
         self._username: str = settings.STEAM_USERNAME
         self._password: str = settings.STEAM_PASSWORD
