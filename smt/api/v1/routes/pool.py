@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from starlette.responses import Response
 
 from smt.schemas.pool import (
@@ -15,7 +15,7 @@ from smt.schemas.pool import (
 )
 from smt.services.dependencies import get_pool_service
 from smt.services.pool import PoolService
-from smt.tasks.refresh_pool_item import background_refresh_task
+from smt.worker.arq import ARQService, get_arq_service
 
 
 router = APIRouter(prefix="/pool", tags=["pool"])
@@ -51,23 +51,23 @@ async def status(market_hash_names: str, service: PoolService = Depends(get_pool
 @router.post("/add", response_model=PoolItem)
 async def add_to_pool(
     payload: PoolItemCreateRequest,
-    background_tasks: BackgroundTasks,
     pool_service: PoolService = Depends(get_pool_service),
+    arq_service: ARQService = Depends(get_arq_service),
 ):
     created = await pool_service.add_one(payload.asset_id)
-    background_tasks.add_task(background_refresh_task, [created.market_hash_name])
+    await arq_service.enqueue("refresh_task", [created.market_hash_name])
     return created
 
 
 @router.post("/add-multiple", response_model=PoolItemBulkCreateResponse)
 async def add_multiple_to_pool(
     payload: PoolItemBulkCreateRequest,
-    background_tasks: BackgroundTasks,
     pool_service: PoolService = Depends(get_pool_service),
+    arq_service: ARQService = Depends(get_arq_service),
 ):
     pool_items = await pool_service.add_many(payload.asset_ids)
     names = [i.market_hash_name for i in pool_items]
-    background_tasks.add_task(background_refresh_task, names)
+    await arq_service.enqueue("refresh_task", names)
     return PoolItemBulkCreateResponse(count=len(pool_items))
 
 
@@ -125,16 +125,16 @@ async def remove_many_pool_items(
 @router.post("/refresh/{market_hash_name}", status_code=204)
 async def refresh(
     market_hash_name: str,
-    background_tasks: BackgroundTasks,
+    arq_service: ARQService = Depends(get_arq_service),
 ):
-    background_tasks.add_task(background_refresh_task, [market_hash_name])
+    await arq_service.enqueue("refresh_task", [market_hash_name])
     return Response(status_code=204)
 
 
 @router.post("/refresh-many", status_code=204)
 async def refresh_many(
     payload: PoolItemBulkRefreshRequest,
-    background_tasks: BackgroundTasks,
+    arq_service: ARQService = Depends(get_arq_service),
 ):
-    background_tasks.add_task(background_refresh_task, payload.market_hash_names)
+    await arq_service.enqueue("refresh_task", payload.market_hash_names)
     return Response(status_code=204)
