@@ -7,12 +7,12 @@ from smt.services.steam import SteamService
 from smt.worker.tasks.refresh_pool_item import refresh_periodic_task, refresh_task
 
 
-setup_all_loggers()
 settings = get_settings()
 logger = get_logger("worker")
 
 
 async def startup(ctx) -> None:
+    setup_all_loggers()
     ctx["steam_service"] = SteamService(settings)
     logger.info("Worker started")
 
