@@ -1,6 +1,9 @@
 services:
   smt:
-    build: .
+    build:
+      context: .
+      args:
+        INSTALL_DEV: "false"
     container_name: ${PROJECT_NAME}-backend
     ports:
       - "${PORT}:${PORT}"
@@ -9,6 +12,21 @@ services:
     command: ["python", "/code/smt/main.py"]
     depends_on:
       - db
+      - redis
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      args:
+        INSTALL_DEV: "false"
+    container_name: ${PROJECT_NAME}-worker
+    env_file:
+      - .env
+    command: arq smt.worker.settings.WorkerSettings
+    depends_on:
+      - db
+      - redis
     restart: unless-stopped
 
   db:
@@ -19,7 +37,7 @@ services:
     ports:
       - "${DB_PORT}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
@@ -28,6 +46,15 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  redis:
+    image: redis:alpine
+    container_name: ${PROJECT_NAME}-redis
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    restart: unless-stopped
 
 volumes:
-  pgdata:
+  postgres-data:
+  redis-data:
