@@ -27,7 +27,6 @@ def requires_login(func):
 
 class SteamService:
     def __init__(self, settings: Settings):
-        logger.info("Logging into STEAM.")
         self.client = SteamClient(api_key=settings.STEAM_API_KEY)
         self._username: str = settings.STEAM_USERNAME
         self._password: str = settings.STEAM_PASSWORD
@@ -52,7 +51,7 @@ class SteamService:
         try:
             self.client.is_session_alive()
         except LoginRequired:
-            logger.info("Trying to login into Steam.")
+            logger.info("Logging into Steam.")
             self.client.login(
                 username=self._username,
                 password=self._password,
@@ -64,12 +63,14 @@ class SteamService:
 
     @requires_login
     def get_inventory(self, game: GameOptions) -> dict:
+        logger.debug(f"Fetching inventory for app_id = {game.app_id}.")
         return self.client.get_my_inventory(game=game, count=1000)
 
     @requires_login
     def get_price_history(
         self, market_hash_name: str, game: GameOptions, days: int = 30
     ) -> list[tuple[datetime.datetime, float, int]]:
+        logger.debug(f"Fetching price history for {market_hash_name} (last {days}).")
         resp = self.client.market.fetch_price_history(market_hash_name, game=game)
         raw = resp.get("prices", [])
 
@@ -86,5 +87,6 @@ class SteamService:
 
     @requires_login
     def get_price(self, market_hash_name: str, game: GameOptions) -> dict:
+        logger.debug(f"Fetching current price and volume for {market_hash_name}.")
         resp = self.client.market.fetch_price(market_hash_name, game=game, currency=Currency.RUB, country="RU")
         return resp
