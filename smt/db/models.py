@@ -17,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from smt.db.database import Base, TimeStampedModel
+from smt.schemas.position import PositionStatus
 
 
 class Item(Base):
@@ -138,13 +139,13 @@ class Position(TimeStampedModel, Base):
     sell_order_id: Mapped[str] = mapped_column(String(64), nullable=True)
     sell_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=True)
     sold_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
-    status: Mapped[str] = mapped_column(
-        Enum("OPEN", "LISTED", "CLOSED", name="position_status"), default="OPEN", nullable=False
+    status: Mapped[PositionStatus] = mapped_column(
+        Enum(PositionStatus, name="position_status"), default=PositionStatus.OPEN, nullable=False
     )
 
     def __repr__(self) -> str:
         return (
             f"<Position id={self.id} item={self.pool_item_hash} "
-            f"status={self.status} qty={self.quantity} buy={self.buy_price}"
+            f"status={self.status.value} qty={self.quantity} buy={self.buy_price}"
             f" sell={self.sell_price}>"
         )

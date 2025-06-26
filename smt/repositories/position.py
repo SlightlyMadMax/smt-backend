@@ -5,7 +5,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from smt.db.models import Position
-from smt.schemas.position import PositionCreate, PositionUpdate
+from smt.schemas.position import PositionCreate, PositionStatus, PositionUpdate
 
 
 class PositionRepo:
@@ -20,19 +20,19 @@ class PositionRepo:
             raise NoResultFound(f"Position with id {position_id} not found")
         return pos
 
-    async def list_by_status(self, status: str) -> Sequence[Position]:
+    async def list_by_status(self, status: PositionStatus) -> Sequence[Position]:
         stmt = select(Position).where(Position.status == status)
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
     async def list_open(self) -> Sequence[Position]:
-        return await self.list_by_status("OPEN")
+        return await self.list_by_status(PositionStatus.OPEN)
 
     async def list_listed(self) -> Sequence[Position]:
-        return await self.list_by_status("LISTED")
+        return await self.list_by_status(PositionStatus.LISTED)
 
     async def list_closed(self) -> Sequence[Position]:
-        return await self.list_by_status("CLOSED")
+        return await self.list_by_status(PositionStatus.CLOSED)
 
     async def add(self, data: PositionCreate) -> Position:
         pos = Position(
@@ -40,7 +40,7 @@ class PositionRepo:
             buy_order_id=data.buy_order_id,
             buy_price=data.buy_price,
             quantity=data.quantity,
-            status="OPEN",
+            status=PositionStatus.OPEN,
         )
         self.session.add(pos)
         await self.session.commit()

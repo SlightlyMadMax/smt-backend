@@ -1,7 +1,14 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
+
+
+class PositionStatus(Enum):
+    OPEN = "OPEN"
+    LISTED = "LISTED"
+    CLOSED = "CLOSED"
 
 
 class PositionBase(BaseModel):
@@ -17,7 +24,7 @@ class PositionCreate(PositionBase):
 class PositionUpdate(BaseModel):
     sell_order_id: Optional[str]
     sell_price: Optional[float]
-    status: Optional[str]
+    status: Optional[PositionStatus]
     sold_at: Optional[datetime]
 
 
@@ -28,7 +35,7 @@ class Position(PositionBase):
     sell_order_id: Optional[str]
     sell_price: Optional[float]
     sold_at: Optional[datetime]
-    status: str
+    status: PositionStatus
     created_at: datetime
     updated_at: datetime
 
