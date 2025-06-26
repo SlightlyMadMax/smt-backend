@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import APIRouter, FastAPI
 from starlette.middleware.cors import CORSMiddleware
@@ -6,12 +8,25 @@ from starlette.staticfiles import StaticFiles
 
 from smt.api.v1.routes import frontend_router, inventory_router, pool_router, price_history_router, settings_router
 from smt.core.config import get_settings
+from smt.worker.arq import get_arq_service
 
 
 settings = get_settings()
 
 
-app = FastAPI(title=settings.PROJECT_NAME, debug=settings.DEBUG)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    arq_service = get_arq_service()
+    # set up connection
+    _ = await arq_service.get_pool()
+
+    yield
+
+    arq_service = get_arq_service()
+    await arq_service.close()
+
+
+app = FastAPI(title=settings.PROJECT_NAME, debug=settings.DEBUG, lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET_KEY)
 app.add_middleware(
     CORSMiddleware,
