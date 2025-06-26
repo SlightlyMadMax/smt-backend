@@ -5,6 +5,7 @@ from urllib.parse import quote
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -13,7 +14,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from smt.db.database import Base, TimeStampedModel
 
@@ -55,9 +56,6 @@ class PoolItem(TimeStampedModel, Base):
     potential_profit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     use_for_trading: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    def __repr__(self):
-        return f"<PoolItem {self.market_hash_name}>"
-
     @property
     def effective_buy_price(self) -> Decimal | None:
         """
@@ -77,6 +75,9 @@ class PoolItem(TimeStampedModel, Base):
         base = "https://steamcommunity.com/market/listings/"
         encoded_name = quote(self.market_hash_name, safe="")
         return f"{base}/{self.app_id}/{encoded_name}"
+
+    def __repr__(self):
+        return f"<PoolItem {self.market_hash_name}>"
 
 
 class PriceHistoryRecord(Base):
@@ -121,3 +122,29 @@ class TradingSettings(TimeStampedModel, Base):
 
     def __repr__(self):
         return f"<TradingSettings {self.id}>"
+
+
+class Position(TimeStampedModel, Base):
+    __tablename__ = "positions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pool_item_hash: Mapped[str] = mapped_column(
+        String(255), ForeignKey("pool_items.market_hash_name", ondelete="CASCADE"), nullable=False
+    )
+    pool_item = relationship("PoolItem", back_populates="positions")
+    buy_order_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    buy_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    sell_order_id: Mapped[str] = mapped_column(String(64), nullable=True)
+    sell_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=True)
+    sold_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(
+        Enum("OPEN", "LISTED", "CLOSED", name="position_status"), default="OPEN", nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Position id={self.id} item={self.pool_item_hash} "
+            f"status={self.status} qty={self.quantity} buy={self.buy_price}"
+            f" sell={self.sell_price}>"
+        )
