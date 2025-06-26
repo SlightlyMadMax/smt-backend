@@ -9,6 +9,7 @@ services:
       - ./smt:/code/smt
       - ./alembic.ini:/code/alembic.ini
       - ./alembic:/code/alembic
+      - ./logs/web:/code/logs
     ports:
       - "${PORT}:${PORT}"
     env_file:
@@ -27,6 +28,7 @@ services:
     container_name: ${PROJECT_NAME}-worker
     volumes:
       - ./smt:/code/smt
+      - ./logs/worker:/code/logs
     env_file:
       - .env
     command: ["arq", "smt.worker.settings.WorkerSettings"]
