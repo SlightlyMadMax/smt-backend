@@ -68,20 +68,10 @@ def get_logger(name: str = None) -> logging.Logger:
     return logging.getLogger(full_name)
 
 
-def setup_all_loggers():
+def setup_all_loggers() -> None:
     """Setup all application loggers"""
-
-    # Main application logger
     setup_logger("smt", "app.log", level=settings.LOG_LEVEL)
-
-    # Worker logger
     setup_logger("smt.worker", "worker.log", level=settings.LOG_LEVEL)
-
-    # Services logger
     setup_logger("smt.services", "services.log", level=settings.LOG_LEVEL)
-
-    # Repositories logger
     setup_logger("smt.repositories", "repositories.log", level=settings.LOG_LEVEL)
-
-    # API logger
     setup_logger("smt.api", "api.log", level=settings.LOG_LEVEL)
