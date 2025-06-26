@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     REDIS_PORT: str
     REDIS_HOST: str
 
+    LOG_DIR: str
     LOG_LEVEL: str
     LOG_TO_FILE: bool
     LOG_FILE_MAX_SIZE: int

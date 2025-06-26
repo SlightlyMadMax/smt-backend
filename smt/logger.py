@@ -7,7 +7,7 @@ from smt.core.config import get_settings
 
 settings = get_settings()
 
-LOGS_DIR = Path("logs")
+LOGS_DIR = Path(settings.LOG_DIR)
 LOGS_DIR.mkdir(exist_ok=True)
 
 
