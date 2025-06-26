@@ -85,13 +85,3 @@ def setup_all_loggers():
 
     # API logger
     setup_logger("smt.api", "api.log", level=settings.LOG_LEVEL)
-
-    # Database logger (SQLAlchemy)
-    # setup_logger("sqlalchemy.engine", "database.log", level="INFO")
-
-    # ARQ logger
-    setup_logger("arq", "arq.log", level="INFO")
-
-
-# Initialize all loggers
-setup_all_loggers()

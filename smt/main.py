@@ -8,6 +8,7 @@ from starlette.staticfiles import StaticFiles
 
 from smt.api.v1.routes import frontend_router, inventory_router, pool_router, price_history_router, settings_router
 from smt.core.config import get_settings
+from smt.logger import setup_all_loggers
 from smt.worker.arq import get_arq_service
 
 
@@ -16,13 +17,12 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_all_loggers()
     arq_service = get_arq_service()
-    # set up connection
-    _ = await arq_service.get_pool()
+    await arq_service.get_pool()
 
     yield
 
-    arq_service = get_arq_service()
     await arq_service.close()
 
 

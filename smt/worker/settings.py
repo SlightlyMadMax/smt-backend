@@ -2,11 +2,12 @@ from arq import cron
 from arq.connections import RedisSettings
 
 from smt.core.config import get_settings
-from smt.logger import get_logger
+from smt.logger import get_logger, setup_all_loggers
 from smt.services.steam import SteamService
 from smt.worker.tasks.refresh_pool_item import refresh_periodic_task, refresh_task
 
 
+setup_all_loggers()
 settings = get_settings()
 logger = get_logger("worker")
 
