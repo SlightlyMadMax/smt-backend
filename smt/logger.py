@@ -52,6 +52,8 @@ def setup_logger(name: str = "smt", log_file: str = None, level: str = "INFO") -
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
+    logger.propagate = False
+
     return logger
 
 
@@ -85,7 +87,7 @@ def setup_all_loggers():
     setup_logger("smt.api", "api.log", level=settings.LOG_LEVEL)
 
     # Database logger (SQLAlchemy)
-    setup_logger("sqlalchemy.engine", "database.log", level="INFO")
+    # setup_logger("sqlalchemy.engine", "database.log", level="INFO")
 
     # ARQ logger
     setup_logger("arq", "arq.log", level="INFO")
