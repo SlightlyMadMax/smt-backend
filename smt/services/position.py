@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Sequence
 
 from smt.db.models import Position, PositionStatus
@@ -54,7 +54,7 @@ class PositionService:
         """
         Transition a LISTED Position to CLOSED: record sold_at timestamp.
         """
-        sold_at = sold_at or datetime.utcnow()
+        sold_at = sold_at or datetime.now(timezone.utc)
         update_data = PositionUpdate(
             status=PositionStatus.CLOSED.value,
             sold_at=sold_at,
