@@ -22,10 +22,10 @@ class PositionCreate(PositionBase):
 
 
 class PositionUpdate(BaseModel):
-    sell_order_id: Optional[str]
-    sell_price: Optional[float]
-    status: Optional[PositionStatus]
-    sold_at: Optional[datetime]
+    sell_order_id: Optional[str] = None
+    sell_price: Optional[float] = None
+    status: Optional[PositionStatus] = None
+    sold_at: Optional[datetime] = None
 
 
 class Position(PositionBase):
