@@ -56,6 +56,7 @@ class PoolItem(TimeStampedModel, Base):
     volatility: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=True)
     potential_profit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     use_for_trading: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    positions = relationship("Position", back_populates="pool_item")
 
     @property
     def effective_buy_price(self) -> Decimal | None:
