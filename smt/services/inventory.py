@@ -40,3 +40,13 @@ class InventoryService:
             context_id=game_option.context_id,
             items=orm_items,
         )
+
+    async def snapshot_counts(self, game_option: GameOptions) -> dict[str, int]:
+        raw_inventory = self.steam.get_inventory(game=game_option)
+        counts: dict[str, int] = {}
+        for raw in raw_inventory.values():
+            mh = raw.get("market_hash_name")
+            if not mh:
+                continue
+            counts[mh] = counts.get(mh, 0) + 1
+        return counts

@@ -274,3 +274,25 @@ class TestInventoryService:
         # Act & Assert
         with pytest.raises(Exception, match="Database error"):
             await inventory_service.refresh(sample_game_option)
+
+    async def test_snapshot_counts_returns_correct_counts(
+        self, inventory_service, mock_steam_service, sample_game_option
+    ):
+        # Arrange
+        raw_inventory = {
+            "item1": {"market_hash_name": "AK-47 | Redline (Field-Tested)"},
+            "item2": {"market_hash_name": "AWP | Dragon Lore (Factory New)"},
+            "item3": {"market_hash_name": "AK-47 | Redline (Field-Tested)"},
+            "item4": {"market_hash_name": "AK-47 | Redline (Field-Tested)"},
+        }
+        mock_steam_service.get_inventory.return_value = raw_inventory
+
+        # Act
+        result = await inventory_service.snapshot_counts(sample_game_option)
+
+        # Assert
+        mock_steam_service.get_inventory.assert_called_once_with(game=sample_game_option)
+        assert result == {
+            "AK-47 | Redline (Field-Tested)": 3,
+            "AWP | Dragon Lore (Factory New)": 1,
+        }
