@@ -15,7 +15,6 @@ class PositionStatus(Enum):
 
 class PositionBase(BaseModel):
     pool_item_hash: str = Field(..., description="Market hash name of the pool item")
-    quantity: int = Field(default=1, ge=1)
 
 
 class PositionCreate(PositionBase):
@@ -25,6 +24,7 @@ class PositionCreate(PositionBase):
 
 
 class PositionUpdate(BaseModel):
+    asset_id: Optional[str] = None
     sell_order_id: Optional[str] = None
     status: Optional[PositionStatus] = None
     sold_at: Optional[datetime] = None
@@ -34,6 +34,7 @@ class Position(PositionBase):
     id: int
     buy_order_id: str
     buy_price: Decimal
+    asset_id: Optional[str]
     sell_order_id: Optional[str]
     sell_price: Decimal
     sold_at: Optional[datetime]

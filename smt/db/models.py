@@ -134,9 +134,9 @@ class Position(TimeStampedModel, Base):
         String(255), ForeignKey("pool_items.market_hash_name", ondelete="CASCADE"), nullable=False
     )
     pool_item = relationship("PoolItem", back_populates="positions")
+    asset_id: Mapped[str] = mapped_column(String(32), nullable=True, unique=True)
     buy_order_id: Mapped[str] = mapped_column(String(64), nullable=False)
     buy_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     sell_order_id: Mapped[str] = mapped_column(String(64), nullable=True)
     sell_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
     sold_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -146,7 +146,7 @@ class Position(TimeStampedModel, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<Position id={self.id} item={self.pool_item_hash} "
-            f"status={self.status.value} qty={self.quantity} buy={self.buy_price}"
+            f"<Position id={self.id} item={self.pool_item_hash} asset_id={self.asset_id}"
+            f"status={self.status.value} buy={self.buy_price}"
             f" sell={self.sell_price}>"
         )
