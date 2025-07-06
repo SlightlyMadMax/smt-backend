@@ -13,7 +13,8 @@ class PoolRepo:
         self.session = session
 
     async def list_items(self) -> Sequence[PoolItem]:
-        result = await self.session.execute(select(PoolItem).order_by(PoolItem.created_at.desc()))
+        stmt = select(PoolItem).order_by(PoolItem.created_at.desc())
+        result = await self.session.execute(stmt)
         return result.scalars().all()
 
     async def get_by_market_hash_name(self, market_hash_name: str) -> PoolItem:
@@ -53,11 +54,10 @@ class PoolRepo:
 
     async def add_items(self, items: list[PoolItemCreate]) -> list[PoolItem]:
         names = [item.market_hash_name for item in items]
+        stmt = select(PoolItem.market_hash_name).where(PoolItem.market_hash_name.in_(names))
 
         # Find existing items
-        result = await self.session.execute(
-            select(PoolItem.market_hash_name).where(PoolItem.market_hash_name.in_(names))
-        )
+        result = await self.session.execute(stmt)
         existing = {name for name, in result.all()}
 
         new_items = [PoolItem(**item.model_dump()) for item in items if item.market_hash_name not in existing]
