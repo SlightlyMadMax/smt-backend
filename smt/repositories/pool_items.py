@@ -17,6 +17,11 @@ class PoolRepo:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def list_marked_for_trading(self) -> Sequence[PoolItem]:
+        stmt = select(PoolItem).where(PoolItem.use_for_trading is True)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
     async def get_by_market_hash_name(self, market_hash_name: str) -> PoolItem:
         stmt = select(PoolItem).where(PoolItem.market_hash_name == market_hash_name)
         result = await self.session.execute(stmt)
