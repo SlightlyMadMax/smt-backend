@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import List, Sequence
 
 from steampy.models import GameOptions
 
@@ -42,6 +42,28 @@ class InventoryService:
             context_id=game_option.context_id,
             items=orm_items,
         )
+
+    async def snapshot_items(self, game_option: GameOptions) -> dict[str, List[Item]]:
+        """
+        Returns a mapping:
+          market_hash_name -> list of Item
+        """
+        raw_inventory = self.steam.get_inventory(game=game_option)
+        grouped: dict[str, list[Item]] = {}
+        for raw in raw_inventory.values():
+            data = transform_inventory_item(raw)
+            item = Item(
+                id=data["id"],
+                app_id=game_option.app_id,
+                context_id=game_option.context_id,
+                name=data["name"],
+                market_hash_name=data["market_hash_name"],
+                tradable=data["tradable"],
+                marketable=data["marketable"],
+                icon_url=data["icon_url"],
+            )
+            grouped.setdefault(item.market_hash_name, []).append(item)
+        return grouped
 
     async def snapshot_counts(self, game_option: GameOptions) -> dict[str, int]:
         raw_inventory = self.steam.get_inventory(game=game_option)
