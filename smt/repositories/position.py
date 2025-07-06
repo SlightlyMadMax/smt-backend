@@ -28,6 +28,9 @@ class PositionRepo:
     async def list_open(self) -> Sequence[Position]:
         return await self.list_by_status(PositionStatus.OPEN)
 
+    async def list_bought(self) -> Sequence[Position]:
+        return await self.list_by_status(PositionStatus.BOUGHT)
+
     async def list_listed(self) -> Sequence[Position]:
         return await self.list_by_status(PositionStatus.LISTED)
 

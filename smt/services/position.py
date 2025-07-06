@@ -23,6 +23,9 @@ class PositionService:
     async def list_open(self) -> Sequence[Position]:
         return await self.repo.list_open()
 
+    async def list_bought(self) -> Sequence[Position]:
+        return await self.repo.list_bought()
+
     async def list_listed(self) -> Sequence[Position]:
         return await self.repo.list_listed()
 
