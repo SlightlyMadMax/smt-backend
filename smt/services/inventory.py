@@ -1,6 +1,8 @@
+from typing import Sequence
+
 from steampy.models import GameOptions
 
-from smt.db.models import Item as ItemORM
+from smt.db.models import Item
 from smt.repositories.items import ItemRepo
 from smt.services.steam import SteamService
 from smt.utils.steam import transform_inventory_item
@@ -15,16 +17,16 @@ class InventoryService:
         self.steam = steam
         self.item_repo = item_repo
 
-    async def list(self, game_option: GameOptions):
+    async def list(self, game_option: GameOptions) -> Sequence[Item]:
         return await self.item_repo.list_for_game(game_option.app_id, game_option.context_id)
 
-    async def refresh(self, game_option: GameOptions):
+    async def refresh(self, game_option: GameOptions) -> None:
         raw_inventory = self.steam.get_inventory(game=game_option)
-        orm_items: list[ItemORM] = []
+        orm_items: list[Item] = []
         for raw in raw_inventory.values():
             data = transform_inventory_item(raw)
             orm_items.append(
-                ItemORM(
+                Item(
                     id=data["id"],
                     app_id=game_option.app_id,
                     context_id=game_option.context_id,
