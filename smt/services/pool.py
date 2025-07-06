@@ -21,6 +21,9 @@ class PoolService:
     async def list(self) -> Sequence[PoolItem]:
         return await self.pool_repo.list_items()
 
+    async def list_marked_for_trading(self) -> Sequence[PoolItem]:
+        return await self.pool_repo.list_marked_for_trading()
+
     async def get_by_market_hash_name(self, market_hash_name: str) -> PoolItem:
         return await self.pool_repo.get_by_market_hash_name(market_hash_name)
 
