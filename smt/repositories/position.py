@@ -20,22 +20,14 @@ class PositionRepo:
             raise NoResultFound(f"Position with id {position_id} not found")
         return pos
 
+    async def list_positions(self) -> Sequence[Position]:
+        result = await self.session.execute(select(Position))
+        return result.scalars().all()
+
     async def list_by_status(self, status: PositionStatus) -> Sequence[Position]:
         stmt = select(Position).where(Position.status == status)
         result = await self.session.execute(stmt)
         return result.scalars().all()
-
-    async def list_open(self) -> Sequence[Position]:
-        return await self.list_by_status(PositionStatus.OPEN)
-
-    async def list_bought(self) -> Sequence[Position]:
-        return await self.list_by_status(PositionStatus.BOUGHT)
-
-    async def list_listed(self) -> Sequence[Position]:
-        return await self.list_by_status(PositionStatus.LISTED)
-
-    async def list_closed(self) -> Sequence[Position]:
-        return await self.list_by_status(PositionStatus.CLOSED)
 
     async def add(self, data: PositionCreate) -> Position:
         pos = Position(
