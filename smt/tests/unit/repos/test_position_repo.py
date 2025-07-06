@@ -49,6 +49,7 @@ async def setup_test_data(db_session):
             pool_item_hash="ak47_redline",
             buy_order_id="order_001",
             buy_price=Decimal("25.50"),
+            sell_price=Decimal("30.00"),
             quantity=1,
             status=PositionStatus.OPEN,
         ),
@@ -57,9 +58,9 @@ async def setup_test_data(db_session):
             pool_item_hash="awp_dragon_lore",
             buy_order_id="order_002",
             buy_price=Decimal("1500.00"),
+            sell_price=Decimal("1600.00"),
             quantity=1,
             sell_order_id="sell_002",
-            sell_price=Decimal("1600.00"),
             status=PositionStatus.LISTED,
         ),
         Position(
@@ -67,9 +68,9 @@ async def setup_test_data(db_session):
             pool_item_hash="ak47_redline",
             buy_order_id="order_003",
             buy_price=Decimal("26.00"),
+            sell_price=Decimal("28.00"),
             quantity=2,
             sell_order_id="sell_003",
-            sell_price=Decimal("28.00"),
             sold_at=datetime.now(timezone.utc),
             status=PositionStatus.CLOSED,
         ),
@@ -134,6 +135,7 @@ class TestPositionRepo:
             pool_item_hash="ak47_redline",
             buy_order_id="order_new",
             buy_price=30.00,
+            sell_price=35.00,
             quantity=3,
         )
 
@@ -144,10 +146,10 @@ class TestPositionRepo:
         assert new_position.pool_item_hash == "ak47_redline"
         assert new_position.buy_order_id == "order_new"
         assert new_position.buy_price == Decimal("30.00")
+        assert new_position.sell_price == Decimal("35.00")
         assert new_position.quantity == 3
         assert new_position.status == PositionStatus.OPEN
         assert new_position.sell_order_id is None
-        assert new_position.sell_price is None
         assert new_position.sold_at is None
 
         # Verify it was saved to database
@@ -159,7 +161,6 @@ class TestPositionRepo:
     async def test_update_position_partial(self, position_repo):
         update_data = PositionUpdate(
             sell_order_id="sell_new",
-            sell_price=27.00,
             status=PositionStatus.LISTED,
         )
 
@@ -167,7 +168,6 @@ class TestPositionRepo:
 
         assert updated_position.id == 1
         assert updated_position.sell_order_id == "sell_new"
-        assert updated_position.sell_price == Decimal("27.00")
         assert updated_position.status == PositionStatus.LISTED
         assert updated_position.sold_at is None  # Not updated
         # Original fields should remain
@@ -178,7 +178,6 @@ class TestPositionRepo:
         sold_time = datetime.now(timezone.utc)
         update_data = PositionUpdate(
             sell_order_id="sell_complete",
-            sell_price=26.50,
             status=PositionStatus.CLOSED,
             sold_at=sold_time,
         )
@@ -187,7 +186,6 @@ class TestPositionRepo:
 
         assert updated_position.id == 1
         assert updated_position.sell_order_id == "sell_complete"
-        assert updated_position.sell_price == Decimal("26.50")
         assert updated_position.status == PositionStatus.CLOSED
         assert abs((updated_position.sold_at.replace(tzinfo=timezone.utc) - sold_time).total_seconds()) < 1
 
@@ -228,7 +226,6 @@ class TestPositionRepo:
         # Test that None values in update don't overwrite existing data
         update_data = PositionUpdate(
             sell_order_id=None,
-            sell_price=None,
             status=PositionStatus.LISTED,
             sold_at=None,
         )
@@ -239,5 +236,4 @@ class TestPositionRepo:
         assert updated_position.status == PositionStatus.LISTED
         # None values should set fields to None
         assert updated_position.sell_order_id is None
-        assert updated_position.sell_price is None
         assert updated_position.sold_at is None

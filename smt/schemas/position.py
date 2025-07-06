@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Optional
 
@@ -14,17 +15,17 @@ class PositionStatus(Enum):
 
 class PositionBase(BaseModel):
     pool_item_hash: str = Field(..., description="Market hash name of the pool item")
-    quantity: int = Field(1, ge=1)
+    quantity: int = Field(default=1, ge=1)
 
 
 class PositionCreate(PositionBase):
     buy_order_id: str
-    buy_price: float
+    buy_price: Decimal
+    sell_price: Decimal
 
 
 class PositionUpdate(BaseModel):
     sell_order_id: Optional[str] = None
-    sell_price: Optional[float] = None
     status: Optional[PositionStatus] = None
     sold_at: Optional[datetime] = None
 
@@ -32,9 +33,9 @@ class PositionUpdate(BaseModel):
 class Position(PositionBase):
     id: int
     buy_order_id: str
-    buy_price: float
+    buy_price: Decimal
     sell_order_id: Optional[str]
-    sell_price: Optional[float]
+    sell_price: Decimal
     sold_at: Optional[datetime]
     status: PositionStatus
     created_at: datetime

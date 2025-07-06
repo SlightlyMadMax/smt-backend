@@ -29,6 +29,7 @@ class TestPositionService:
             pool_item_hash="ak47_redline",
             buy_order_id="order_123",
             buy_price=25.50,
+            sell_price=30.0,
             quantity=1,
         )
         expected_position = Position(
@@ -36,6 +37,7 @@ class TestPositionService:
             pool_item_hash="ak47_redline",
             buy_order_id="order_123",
             buy_price=Decimal("25.50"),
+            sell_price=Decimal("30.00"),
             quantity=1,
             status=PositionStatus.OPEN,
         )
@@ -96,18 +98,16 @@ class TestPositionService:
         # Arrange
         position_id = 1
         sell_order_id = "sell_123"
-        sell_price = 30.00
 
         expected_position = Position(
             id=position_id,
             sell_order_id=sell_order_id,
-            sell_price=Decimal("30.00"),
             status=PositionStatus.LISTED,
         )
         mock_repo.update.return_value = expected_position
 
         # Act
-        result = await position_service.mark_as_listed(position_id, sell_order_id, sell_price)
+        result = await position_service.mark_as_listed(position_id, sell_order_id)
 
         # Assert
         mock_repo.update.assert_called_once()
@@ -116,7 +116,6 @@ class TestPositionService:
 
         update_data = call_args[0][1]  # Second positional arg
         assert update_data.sell_order_id == sell_order_id
-        assert update_data.sell_price == sell_price
         assert update_data.status == PositionStatus.LISTED
 
         assert result == expected_position
@@ -206,11 +205,10 @@ class TestPositionService:
         # Arrange
         position_id = 42
         sell_order_id = "custom_sell_order"
-        sell_price = 99.99
         mock_repo.update.return_value = Mock()
 
         # Act
-        await position_service.mark_as_listed(position_id, sell_order_id, sell_price)
+        await position_service.mark_as_listed(position_id, sell_order_id)
 
         # Assert - verify the exact PositionUpdate object structure
         mock_repo.update.assert_called_once()
@@ -219,7 +217,6 @@ class TestPositionService:
 
         assert isinstance(update_data, PositionUpdate)
         assert update_data.sell_order_id == sell_order_id
-        assert update_data.sell_price == sell_price
         assert update_data.status == PositionStatus.LISTED
 
     async def test_close_creates_correct_update_data(self, position_service, mock_repo):

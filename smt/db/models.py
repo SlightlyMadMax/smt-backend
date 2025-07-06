@@ -138,7 +138,7 @@ class Position(TimeStampedModel, Base):
     buy_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     sell_order_id: Mapped[str] = mapped_column(String(64), nullable=True)
-    sell_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=True)
+    sell_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
     sold_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[PositionStatus] = mapped_column(
         Enum(PositionStatus, name="position_status"), default=PositionStatus.OPEN, nullable=False

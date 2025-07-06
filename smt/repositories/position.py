@@ -42,6 +42,7 @@ class PositionRepo:
             pool_item_hash=data.pool_item_hash,
             buy_order_id=data.buy_order_id,
             buy_price=data.buy_price,
+            sell_price=data.sell_price,
             quantity=data.quantity,
             status=PositionStatus.OPEN,
         )
@@ -56,7 +57,6 @@ class PositionRepo:
             .where(Position.id == position_id)
             .values(
                 sell_order_id=data.sell_order_id,
-                sell_price=data.sell_price,
                 status=data.status,
                 sold_at=data.sold_at,
             )
