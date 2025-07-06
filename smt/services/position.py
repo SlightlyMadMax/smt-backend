@@ -32,6 +32,14 @@ class PositionService:
     async def list_closed(self) -> Sequence[Position]:
         return await self.repo.list_closed()
 
+    async def mark_as_bought(self, position_id: int) -> Position:
+        """
+        Transition a Position from OPEN to BOUGHT.
+        """
+        update_data = PositionUpdate(status=PositionStatus.BOUGHT.value)
+        pos = await self.repo.update(position_id, update_data)
+        return pos
+
     async def mark_as_listed(
         self,
         position_id: int,
