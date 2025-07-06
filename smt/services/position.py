@@ -40,20 +40,11 @@ class PositionService:
         pos = await self.repo.update(position_id, update_data)
         return pos
 
-    async def mark_as_listed(
-        self,
-        position_id: int,
-        sell_order_id: str,
-        sell_price: float,
-    ) -> Position:
+    async def mark_as_listed(self, position_id: int, sell_order_id: str) -> Position:
         """
-        Transition a Position from OPEN to LISTED: record sell_order_id and sell_price.
+        Transition a Position from OPEN to LISTED.
         """
-        update_data = PositionUpdate(
-            sell_order_id=sell_order_id,
-            sell_price=sell_price,
-            status=PositionStatus.LISTED.value,
-        )
+        update_data = PositionUpdate(sell_order_id=sell_order_id, status=PositionStatus.LISTED.value)
         pos = await self.repo.update(position_id, update_data)
         return pos
 
