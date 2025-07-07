@@ -94,7 +94,7 @@ class SteamService:
 
     @requires_login
     def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
-        logger.info(f"Creating a buy order for {quantity} {market_hash_name}.")
+        logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
         kopecks = int((price * 100).to_integral_value())
         resp = self.client.market.create_buy_order(
             market_name=market_hash_name,
@@ -104,7 +104,7 @@ class SteamService:
             currency=Currency.RUB,
         )
         if not resp.get("success", False):
-            logger.warning(f"Failed to create a buy order for {quantity} {market_hash_name}.")
+            logger.error(f"Failed to create a buy order for {quantity} {market_hash_name}.")
             raise Exception
         buy_order_id = resp.get("buy_orderid")
         logger.info(f"Buy order with id {buy_order_id} successfully created.")
@@ -112,12 +112,12 @@ class SteamService:
 
     @requires_login
     def create_sell_order(self, asset_id: str, game: GameOptions, price: Decimal) -> str:
-        logger.info(f"Creating a sell order for {asset_id} at {price} rub.")
+        logger.debug(f"Creating a sell order for {asset_id} at {price} rub.")
         kopecks = int((price * 100).to_integral_value())
         net_received = calculate_fees(gross=kopecks)["net_received"]
         resp = self.client.market.create_sell_order(assetid=asset_id, game=game, money_to_receive=net_received)
         if not resp.get("success", False):
-            logger.warning(f"Failed to create a sell order for {asset_id} at {price} rub.")
+            logger.error(f"Failed to create a sell order for {asset_id} at {price} rub.")
             raise Exception
         sell_order_id = resp.get("sell_orderid")
         logger.info(f"Sell order with id {sell_order_id} successfully created.")
