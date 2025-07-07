@@ -25,8 +25,8 @@ async def shutdown(ctx) -> None:
 class WorkerSettings:
     functions = [refresh_task]
     cron_jobs = [
-        cron(refresh_periodic_task, hour="*", minute="0", second="0"),
-        cron(trading_cycle, hour="*", minute="2,12,22,32,42,52", second="0"),
+        cron(refresh_periodic_task, hour=None, minute=0, second=0),
+        cron(trading_cycle, hour=None, minute={2, 12, 22, 32, 42, 52}, second=0),
     ]
     redis_settings = RedisSettings(host=settings.REDIS_HOST, port=int(settings.REDIS_PORT))
     on_startup = startup
