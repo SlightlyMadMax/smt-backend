@@ -68,7 +68,7 @@ class SteamService:
 
     @requires_login
     async def get_inventory(self, game: GameOptions) -> dict:
-        logger.info(f"Fetching inventory for app_id = {game.app_id}.")
+        logger.debug(f"Fetching inventory for app_id = {game.app_id}.")
         return await to_thread.run_sync(self.client.get_my_inventory, game, True, 1000)
 
     @requires_login
