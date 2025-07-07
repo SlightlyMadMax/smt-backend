@@ -15,7 +15,7 @@ from smt.services.steam import SteamService
 logger = logging.getLogger("services.trading")
 
 
-class TraderService:
+class TradingService:
     def __init__(
         self,
         steam_service: SteamService,
