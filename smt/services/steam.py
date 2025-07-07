@@ -93,6 +93,15 @@ class SteamService:
         return resp
 
     @requires_login
+    def get_my_market_listings(self) -> dict:
+        logger.debug("Fetching market listings.")
+        return self.client.market.get_my_market_listings()
+
+    def get_my_sell_listings(self) -> list[dict]:
+        resp = SteamService.get_my_market_listings(self)
+        return list(resp.get("sell_listings", {}).values())
+
+    @requires_login
     def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
         logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
         kopecks = int((price * 100).to_integral_value())
