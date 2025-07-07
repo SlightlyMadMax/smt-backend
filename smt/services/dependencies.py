@@ -39,10 +39,10 @@ def get_price_history_service(
 
 
 def get_pool_service(
-    item_repo=Depends(get_item_repo),
+    inventory_service=Depends(get_inventory_service),
     pool_repo=Depends(get_pool_repo),
 ) -> PoolService:
-    return PoolService(item_repo, pool_repo)
+    return PoolService(pool_repo, inventory_service)
 
 
 def get_settings_service(settings_repo=Depends(get_settings_repo)) -> SettingsService:

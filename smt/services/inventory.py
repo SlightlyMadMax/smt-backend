@@ -20,6 +20,9 @@ class InventoryService:
     async def list(self, game_option: GameOptions) -> Sequence[Item]:
         return await self.item_repo.list_for_game(game_option.app_id, game_option.context_id)
 
+    async def get_by_id(self, asset_id: str) -> Item:
+        return await self.item_repo.get_by_id(asset_id)
+
     async def refresh(self, game_option: GameOptions) -> None:
         raw_inventory = self.steam.get_inventory(game=game_option)
         orm_items: list[Item] = []

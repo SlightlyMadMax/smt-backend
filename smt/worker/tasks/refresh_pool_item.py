@@ -8,6 +8,7 @@ from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
 from smt.repositories.price_history import PriceHistoryRepo
 from smt.repositories.settings import SettingsRepo
+from smt.services.inventory import InventoryService
 from smt.services.market_analytics import MarketAnalyticsService
 from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService
@@ -21,6 +22,7 @@ logger = get_logger("worker.tasks")
 
 async def build_services(session: AsyncSession, steam_service: SteamService):
     item_repo = ItemRepo(session)
+    inventory_service = InventoryService(steam_service, item_repo)
     price_history_repo = PriceHistoryRepo(session)
     pool_repo = PoolRepo(session)
     settings_repo = SettingsRepo(session)
@@ -28,7 +30,7 @@ async def build_services(session: AsyncSession, steam_service: SteamService):
     price_history_service = PriceHistoryService(price_history_repo)
     settings_service = SettingsService(settings_repo)
     analytics_service = MarketAnalyticsService(settings_service)
-    pool_service = PoolService(item_repo, pool_repo)
+    pool_service = PoolService(pool_repo, inventory_service)
 
     stats_service = StatsRefreshService(
         price_history_service=price_history_service,

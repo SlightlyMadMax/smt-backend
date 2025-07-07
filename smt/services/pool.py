@@ -4,19 +4,19 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import NoResultFound
 
 from smt.db.models import Item, PoolItem
-from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
 from smt.schemas.pool import PoolItemCreate, PoolItemUpdate
+from smt.services.inventory import InventoryService
 
 
 class PoolService:
     def __init__(
         self,
-        item_repo: ItemRepo,
         pool_repo: PoolRepo,
+        inventory_service: InventoryService,
     ):
-        self.item_repo = item_repo
         self.pool_repo = pool_repo
+        self.inventory_service = inventory_service
 
     async def list(self) -> Sequence[PoolItem]:
         return await self.pool_repo.list_items()
@@ -29,7 +29,7 @@ class PoolService:
 
     async def add_one(self, asset_id: str) -> PoolItem:
         try:
-            asset = await self.item_repo.get_by_id(asset_id)
+            asset = await self.inventory_service.get_by_id(asset_id)
         except NoResultFound:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Inventory item {asset_id} not found")
 
@@ -50,7 +50,7 @@ class PoolService:
         unique_assets: dict[str, Item] = {}
         for aid in asset_ids:
             try:
-                asset = await self.item_repo.get_by_id(aid)
+                asset = await self.inventory_service.get_by_id(aid)
             except NoResultFound:
                 continue
             unique_assets[asset.market_hash_name] = asset
