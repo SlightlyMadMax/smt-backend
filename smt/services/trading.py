@@ -125,11 +125,8 @@ class TradingService:
 
     async def _open_new_positions(self) -> None:
         """Submit new buy orders for PoolItems flagged for trading if none are open."""
-        logger.info("Im HERE")
         pool_items = await self.pool_item_service.list_marked_for_trading()
-        logger.info(pool_items)
         existing = await self.position_service.list_active()
-        logger.info(existing)
 
         for item in pool_items:
             existing_positions = [p for p in existing if p.pool_item_hash == item.market_hash_name]
