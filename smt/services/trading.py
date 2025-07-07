@@ -8,6 +8,7 @@ from smt.schemas.position import PositionCreate, PositionStatus
 from smt.services.inventory import InventoryService
 from smt.services.pool import PoolService
 from smt.services.position import PositionService
+from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
 
 
@@ -21,21 +22,28 @@ class TraderService:
         inventory_service: InventoryService,
         position_service: PositionService,
         pool_item_service: PoolService,
+        settings_service: SettingsService,
     ):
         self.steam_service = steam_service
         self.inventory_service = inventory_service
         self.position_service = position_service
         self.pool_item_service = pool_item_service
+        self.settings_service = settings_service
 
     async def run_cycle(self) -> None:
         logger.info("Starting trading cycle")
         try:
             assets = await self._snapshot_all_items()
             await self._sync_open_to_bought(assets)
+
             await self._list_bought_positions()
+
             listings = self.steam_service.get_my_market_listings()
             await self._sync_listed_to_closed(listings)
-            await self._open_new_positions(assets)
+
+            settings = await self.settings_service.get_settings()
+            if not settings.emergency_stop:
+                await self._open_new_positions(assets)
         except Exception as e:
             logger.error(f"Error in trading cycle: {e}")
 
