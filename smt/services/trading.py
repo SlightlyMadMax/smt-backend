@@ -81,6 +81,9 @@ class TraderService:
             # find first unclaimed asset
             candidate = next((aid for aid in available if aid not in claimed), None)
             if candidate:
+                logger.info(
+                    f"Found an unclaimed item with id = {candidate} for Position {pos.id}, marking the Position as BOUGHT."
+                )
                 # record asset_id and mark BOUGHT
                 await self.position_service.mark_as_bought(
                     position_id=pos.id,
@@ -92,6 +95,9 @@ class TraderService:
         """Place a sell order for each BOUGHT position."""
         bought_positions = await self.position_service.list_by_status(PositionStatus.BOUGHT)
         for pos in bought_positions:
+            logger.info(
+                f"Placing a sell order for Position {pos.id}, market_hash_name: {pos.pool_item_hash}, price: {pos.sell_price} rub."
+            )
             sell_id = self.steam_service.create_sell_order(
                 asset_id=pos.asset_id,
                 game=GameOptions(pos.pool_item.app_id, pos.pool_item.context_id),
@@ -111,6 +117,7 @@ class TraderService:
         for pos in listed_positions:
             still_active = any(li.order_id == pos.sell_order_id for li in listings)
             if not still_active:
+                logger.info(f"Sell order {pos.sell_order_id} for Position {pos.id} disappeared, closing position.")
                 await self.position_service.close(position_id=pos.id)
 
     async def _open_new_positions(
