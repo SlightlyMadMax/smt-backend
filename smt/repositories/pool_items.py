@@ -18,7 +18,7 @@ class PoolRepo:
         return result.scalars().all()
 
     async def list_marked_for_trading(self) -> Sequence[PoolItem]:
-        stmt = select(PoolItem).where(PoolItem.use_for_trading is True)
+        stmt = select(PoolItem).where(PoolItem.use_for_trading)
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
