@@ -35,7 +35,6 @@ class PositionRepo:
             buy_order_id=data.buy_order_id,
             buy_price=data.buy_price,
             sell_price=data.sell_price,
-            quantity=data.quantity,
             status=PositionStatus.OPEN,
         )
         self.session.add(pos)
