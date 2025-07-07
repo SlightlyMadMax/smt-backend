@@ -4,10 +4,11 @@ from decimal import Decimal
 from functools import wraps
 from typing import Optional
 
+from anyio import to_thread
 from steampy.client import SteamClient
 from steampy.exceptions import LoginRequired
 from steampy.models import Currency, GameOptions
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import AsyncRetrying, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings
 from smt.logger import get_logger
@@ -19,9 +20,9 @@ logger = get_logger("services.steam")
 
 def requires_login(func):
     @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        self._ensure_login()
-        return func(self, *args, **kwargs)
+    async def wrapper(self, *args, **kwargs):
+        await self._ensure_login()
+        return await func(self, *args, **kwargs)
 
     return wrapper
 
@@ -44,35 +45,38 @@ class SteamService:
     def _should_check_login(self) -> bool:
         return not self._last_check or datetime.datetime.now(datetime.UTC) - self._last_check > self._check_interval
 
-    @retry(reraise=True, stop=stop_after_attempt(3), wait=wait_fixed(3))
-    def _ensure_login(self):
-        if not self._should_check_login():
-            return
+    async def _ensure_login(self):
+        async for attempt in AsyncRetrying(reraise=True, stop=stop_after_attempt(3), wait=wait_fixed(3)):
+            with attempt:
+                if not self._should_check_login():
+                    return
 
-        try:
-            self.client.is_session_alive()
-        except LoginRequired:
-            logger.info("Logging into Steam.")
-            self.client.login(
-                username=self._username,
-                password=self._password,
-                steam_guard=self._guard,
-            )
-            assert self.client.was_login_executed
+                try:
+                    await to_thread.run_sync(self.client.is_session_alive)
+                except LoginRequired:
+                    logger.info("Logging into Steam.")
+                    await to_thread.run_sync(
+                        self.client.login,
+                        self._username,
+                        self._password,
+                        self._guard,
+                    )
+                    assert self.client.was_login_executed
+                    logger.info("Steam login successful.")
 
-        self._last_check = datetime.datetime.now(datetime.UTC)
-
-    @requires_login
-    def get_inventory(self, game: GameOptions) -> dict:
-        logger.debug(f"Fetching inventory for app_id = {game.app_id}.")
-        return self.client.get_my_inventory(game=game, count=1000)
+                self._last_check = datetime.datetime.now(datetime.UTC)
 
     @requires_login
-    def get_price_history(
+    async def get_inventory(self, game: GameOptions) -> dict:
+        logger.info(f"Fetching inventory for app_id = {game.app_id}.")
+        return await to_thread.run_sync(self.client.get_my_inventory, game, True, 1000)
+
+    @requires_login
+    async def get_price_history(
         self, market_hash_name: str, game: GameOptions, days: int = 30
     ) -> list[tuple[datetime.datetime, float, int]]:
         logger.debug(f"Fetching price history for {market_hash_name} (last {days}).")
-        resp = self.client.market.fetch_price_history(market_hash_name, game=game)
+        resp = await to_thread.run_sync(self.client.market.fetch_price_history, market_hash_name, game)
         raw = resp.get("prices", [])
 
         now = datetime.datetime.now(datetime.UTC)
@@ -87,30 +91,32 @@ class SteamService:
         return history
 
     @requires_login
-    def get_price(self, market_hash_name: str, game: GameOptions) -> dict:
+    async def get_price(self, market_hash_name: str, game: GameOptions) -> dict:
         logger.debug(f"Fetching current price and volume for {market_hash_name}.")
-        resp = self.client.market.fetch_price(market_hash_name, game=game, currency=Currency.RUB, country="RU")
+        resp = await to_thread.run_sync(self.client.market.fetch_price, market_hash_name, game, Currency.RUB, "RU")
         return resp
 
     @requires_login
-    def get_my_market_listings(self) -> dict:
+    async def get_my_market_listings(self) -> dict:
         logger.debug("Fetching market listings.")
-        return self.client.market.get_my_market_listings()
+        return await to_thread.run_sync(self.client.market.get_my_market_listings)
 
-    def get_my_sell_listings(self) -> list[dict]:
-        resp = SteamService.get_my_market_listings(self)
+    @requires_login
+    async def get_my_sell_listings(self) -> list[dict]:
+        resp = await self.get_my_market_listings()
         return list(resp.get("sell_listings", {}).values())
 
     @requires_login
-    def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
+    async def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
         logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
         kopecks = int((price * 100).to_integral_value())
-        resp = self.client.market.create_buy_order(
-            market_name=market_hash_name,
-            price_single_item=str(kopecks),
-            quantity=quantity,
-            game=game,
-            currency=Currency.RUB,
+        resp = await to_thread.run_sync(
+            self.client.market.create_buy_order,
+            market_hash_name,
+            str(kopecks),
+            quantity,
+            game,
+            Currency.RUB,
         )
         if not resp.get("success", False):
             logger.error(f"Failed to create a buy order for {quantity} {market_hash_name}.")
@@ -120,11 +126,11 @@ class SteamService:
         return buy_order_id
 
     @requires_login
-    def create_sell_order(self, asset_id: str, game: GameOptions, price: Decimal) -> str:
+    async def create_sell_order(self, asset_id: str, game: GameOptions, price: Decimal) -> str:
         logger.debug(f"Creating a sell order for {asset_id} at {price} rub.")
         kopecks = int((price * 100).to_integral_value())
-        net_received = calculate_fees(gross=kopecks)["net_received"]
-        resp = self.client.market.create_sell_order(assetid=asset_id, game=game, money_to_receive=net_received)
+        net_received = str(calculate_fees(gross=kopecks)["net_received"])
+        resp = await to_thread.run_sync(self.client.market.create_sell_order, asset_id, game, net_received)
         if not resp.get("success", False):
             logger.error(f"Failed to create a sell order for {asset_id} at {price} rub.")
             raise Exception

@@ -101,7 +101,7 @@ class TradingService:
             logger.info(
                 f"Placing a sell order for Position {pos.id}, market_hash_name: {pos.pool_item_hash}, price: {pos.sell_price} rub."
             )
-            sell_id = self.steam_service.create_sell_order(
+            sell_id = await self.steam_service.create_sell_order(
                 asset_id=pos.asset_id,
                 game=GameOptions(pos.pool_item.app_id, pos.pool_item.context_id),
                 price=pos.sell_price,
@@ -136,7 +136,7 @@ class TradingService:
 
             for _ in range(to_create):
                 logger.info(f"Creating a buy order for {item.market_hash_name}, price: {item.effective_buy_price}.")
-                buy_id = self.steam_service.create_buy_order(
+                buy_id = await self.steam_service.create_buy_order(
                     market_hash_name=item.market_hash_name,
                     price=item.effective_buy_price,
                     game=GameOptions(item.app_id, item.context_id),

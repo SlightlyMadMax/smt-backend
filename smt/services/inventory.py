@@ -24,7 +24,7 @@ class InventoryService:
         return await self.item_repo.get_by_id(asset_id)
 
     async def refresh(self, game_option: GameOptions) -> None:
-        raw_inventory = self.steam.get_inventory(game=game_option)
+        raw_inventory = await self.steam.get_inventory(game=game_option)
         orm_items: list[Item] = []
         for raw in raw_inventory.values():
             data = transform_inventory_item(raw)
@@ -51,7 +51,7 @@ class InventoryService:
         Returns a mapping:
           market_hash_name -> list of Item
         """
-        raw_inventory = self.steam.get_inventory(game=game_option)
+        raw_inventory = await self.steam.get_inventory(game=game_option)
         grouped: dict[str, list[Item]] = {}
         for raw in raw_inventory.values():
             data = transform_inventory_item(raw)
@@ -69,7 +69,7 @@ class InventoryService:
         return grouped
 
     async def snapshot_counts(self, game_option: GameOptions) -> dict[str, int]:
-        raw_inventory = self.steam.get_inventory(game=game_option)
+        raw_inventory = await self.steam.get_inventory(game=game_option)
         counts: dict[str, int] = {}
         for raw in raw_inventory.values():
             mh = raw.get("market_hash_name")

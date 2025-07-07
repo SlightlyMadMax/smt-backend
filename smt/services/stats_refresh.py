@@ -3,7 +3,6 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import List
 
-from anyio import to_thread
 from sqlalchemy.exc import NoResultFound
 from steampy.models import GameOptions
 
@@ -44,12 +43,7 @@ class StatsRefreshService:
                 continue
 
             game_opt = GameOptions(item.app_id, item.context_id)
-            raw_hist = await to_thread.run_sync(
-                self.steam.get_price_history,
-                name,
-                game_opt,
-                days,
-            )
+            raw_hist = await self.steam.get_price_history(market_hash_name=name, game=game_opt, days=days)
             for ts, price, vol in raw_hist:
                 all_records.append(
                     PriceHistoryRecordCreate(
@@ -74,11 +68,7 @@ class StatsRefreshService:
             return
 
         game_opt = GameOptions(item.app_id, item.context_id)
-        snap = await to_thread.run_sync(
-            self.steam.get_price,
-            market_hash_name,
-            game_opt,
-        )
+        snap = await self.steam.get_price(market_hash_name=market_hash_name, game=game_opt)
 
         await self.pool_service.update(
             market_hash_name,
