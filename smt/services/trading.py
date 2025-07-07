@@ -36,13 +36,14 @@ class TradingService:
         start = time.monotonic()
         try:
             assets = await self._snapshot_all_items()
-            await self._sync_open_to_bought(assets)
+            listings = await self.steam_service.get_my_market_listings()
+            buy_orders = list(listings.get("buy_orders", {}).values())
+            await self._sync_open_to_bought(assets, buy_orders)
 
             await self._list_bought_positions()
 
-            listings = self.steam_service.get_my_sell_listings()
-
-            await self._sync_listed_to_closed(listings)
+            sell_listings = list(listings.get("sell_listings", {}).values())
+            await self._sync_listed_to_closed(sell_listings)
 
             settings = await self.settings_service.get_settings()
             if not settings.emergency_stop:
@@ -72,20 +73,23 @@ class TradingService:
             all_assets[(app_id, ctx_id)] = {mh: [itm.id for itm in lst] for mh, lst in grouped.items()}
         return all_assets
 
-    async def _sync_open_to_bought(self, assets: Dict[Tuple[str, str], Dict[str, List[str]]]) -> None:
-        """Assign asset_id to OPEN positions when buys fill."""
+    async def _sync_open_to_bought(self, assets: Dict[Tuple[str, str], Dict[str, List[str]]], buy_orders: list) -> None:
+        """Assign asset_id to OPEN positions when their buy orders are filled and disappeared from listings."""
         open_positions = await self.position_service.list_by_status(PositionStatus.OPEN)
-        # build set of already claimed asset_ids
+        active_buy_order_ids = {order["order_id"] for order in buy_orders if "order_id" in order}
         claimed = {pos.asset_id for pos in await self.position_service.list() if pos.asset_id}
 
         for pos in open_positions:
+            if pos.buy_order_id in active_buy_order_ids:
+                continue
             key = (pos.pool_item.app_id, pos.pool_item.context_id)
             available = assets.get(key, {}).get(pos.pool_item_hash, [])
             # find first unclaimed asset
             candidate = next((aid for aid in available if aid not in claimed), None)
             if candidate:
                 logger.info(
-                    f"Found an unclaimed item with id = {candidate} for Position {pos.id}, marking the Position as BOUGHT."
+                    f"Buy order {pos.buy_order_id} disappeared and unclaimed item {candidate} was found "
+                    f"for Position {pos.id}. Marking it as BOUGHT."
                 )
                 # record asset_id and mark BOUGHT
                 await self.position_service.mark_as_bought(
