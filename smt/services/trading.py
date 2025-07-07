@@ -46,7 +46,7 @@ class TradingService:
 
             settings = await self.settings_service.get_settings()
             if not settings.emergency_stop:
-                await self._open_new_positions(assets)
+                await self._open_new_positions()
         except Exception as e:
             logger.error(f"Error in trading cycle: {e}")
 
@@ -123,21 +123,14 @@ class TradingService:
                 logger.info(f"Sell order {pos.sell_order_id} for Position {pos.id} disappeared, closing position.")
                 await self.position_service.close(position_id=pos.id)
 
-    async def _open_new_positions(
-        self,
-        assets: Dict[Tuple[str, str], Dict[str, List[str]]],
-    ) -> None:
+    async def _open_new_positions(self) -> None:
         """Submit new buy orders for PoolItems flagged for trading if none are open."""
         pool_items = await self.pool_item_service.list_marked_for_trading()
         existing = await self.position_service.list_active()
 
         for item in pool_items:
-            key = (item.app_id, item.context_id)
-            held_asset_ids = assets.get(key, {}).get(item.market_hash_name, [])
-
             existing_positions = [p for p in existing if p.pool_item_hash == item.market_hash_name]
-            current_count = len(existing_positions) + len(held_asset_ids)
-            to_create = item.max_listed - current_count
+            to_create = item.max_listed - len(existing_positions)
             if to_create <= 0:
                 continue
 
