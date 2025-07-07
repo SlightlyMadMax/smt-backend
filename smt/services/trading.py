@@ -1,9 +1,9 @@
-import logging
 from typing import Dict, List, Sequence, Tuple
 
 from steampy.models import GameOptions
 
 from smt.db.models import PoolItem
+from smt.logger import get_logger
 from smt.schemas.position import PositionCreate, PositionStatus
 from smt.services.inventory import InventoryService
 from smt.services.pool import PoolService
@@ -12,7 +12,7 @@ from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
 
 
-logger = logging.getLogger("services.trading")
+logger = get_logger("services.trading")
 
 
 class TradingService:
@@ -38,7 +38,8 @@ class TradingService:
 
             await self._list_bought_positions()
 
-            listings = self.steam_service.get_my_market_listings()
+            listings = self.steam_service.get_my_sell_listings()
+
             await self._sync_listed_to_closed(listings)
 
             settings = await self.settings_service.get_settings()
