@@ -50,9 +50,6 @@ class MarketAnalyticsService:
     async def decide_trade_flag(self, profit: Decimal, volume24h: Optional[int], volatility: Decimal) -> bool:
         settings = await self.settings_service.get_settings()
 
-        if settings.emergency_stop:
-            return False
-
         if profit < settings.min_profit_threshold:
             return False
 
