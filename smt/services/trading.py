@@ -1,3 +1,4 @@
+import time
 from typing import Dict, List, Sequence, Tuple
 
 from steampy.models import GameOptions
@@ -32,6 +33,7 @@ class TradingService:
 
     async def run_cycle(self) -> None:
         logger.info("Starting trading cycle")
+        start = time.monotonic()
         try:
             assets = await self._snapshot_all_items()
             await self._sync_open_to_bought(assets)
@@ -48,7 +50,7 @@ class TradingService:
         except Exception as e:
             logger.error(f"Error in trading cycle: {e}")
 
-        logger.info("Trading cycle completed")
+        logger.info(f"Trading cycle complete in {time.monotonic() - start}:.2f s.")
 
     async def _snapshot_all_items(
         self,
