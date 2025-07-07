@@ -130,21 +130,26 @@ class TraderService:
 
         for item in pool_items:
             key = (item.app_id, item.context_id)
-            held = assets.get(key, {}).get(item.market_hash_name, [])
-            # skip if we already claim one or hold one
-            if any(p.pool_item_hash == item.market_hash_name for p in existing) or held:
+            held_asset_ids = assets.get(key, {}).get(item.market_hash_name, [])
+
+            existing_positions = [p for p in existing if p.pool_item_hash == item.market_hash_name]
+            current_count = len(existing_positions) + len(held_asset_ids)
+            to_create = item.max_listed - current_count
+            if to_create <= 0:
                 continue
 
-            buy_id = self.steam_service.create_buy_order(
-                market_hash_name=item.market_hash_name,
-                price=item.effective_buy_price,
-                game=GameOptions(item.app_id, item.context_id),
-                quantity=1,
-            )
-            create = PositionCreate(
-                pool_item_hash=item.market_hash_name,
-                buy_order_id=buy_id,
-                buy_price=item.effective_buy_price,
-                sell_price=item.effective_sell_price,
-            )
-            await self.position_service.add(create)
+            for _ in range(to_create):
+                logger.info(f"Creating a buy order for {item.market_hash_name}, price: {item.effective_buy_price}.")
+                buy_id = self.steam_service.create_buy_order(
+                    market_hash_name=item.market_hash_name,
+                    price=item.effective_buy_price,
+                    game=GameOptions(item.app_id, item.context_id),
+                    quantity=1,
+                )
+                create = PositionCreate(
+                    pool_item_hash=item.market_hash_name,
+                    buy_order_id=buy_id,
+                    buy_price=item.effective_buy_price,
+                    sell_price=item.effective_sell_price,
+                )
+                await self.position_service.add(create)
