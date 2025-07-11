@@ -74,7 +74,7 @@ class SteamService:
     @requires_login
     async def get_price_history(
         self, market_hash_name: str, game: GameOptions, days: int = 30
-    ) -> list[tuple[datetime.datetime, float, int]]:
+    ) -> list[tuple[datetime.datetime, Decimal, int]]:
         logger.debug(f"Fetching price history for {market_hash_name} (last {days}).")
         resp = await to_thread.run_sync(self.client.market.fetch_price_history, market_hash_name, game)
         raw = resp.get("prices", [])
@@ -82,11 +82,11 @@ class SteamService:
         now = datetime.datetime.now(datetime.UTC)
         cutoff = now - datetime.timedelta(days=days)
 
-        history: list[tuple[datetime, float, int]] = []
+        history: list[tuple[datetime.datetime, Decimal, int]] = []
         for ts_str, price, volume in raw:
             t = parse_steam_ts(ts_str)
             if t >= cutoff:
-                history.append((t, float(price), int(volume)))
+                history.append((t, Decimal(str(price)), int(volume)))
 
         return history
 
