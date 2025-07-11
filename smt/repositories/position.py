@@ -3,6 +3,7 @@ from typing import Sequence
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from smt.db.models import Position
 from smt.schemas.position import PositionCreate, PositionStatus, PositionUpdate
@@ -13,7 +14,7 @@ class PositionRepo:
         self.session = session
 
     async def get_by_id(self, position_id: int) -> Position:
-        stmt = select(Position).where(Position.id == position_id)
+        stmt = select(Position).options(selectinload(Position.pool_item)).where(Position.id == position_id)
         result = await self.session.execute(stmt)
         pos = result.scalar_one_or_none()
         if not pos:
@@ -21,11 +22,12 @@ class PositionRepo:
         return pos
 
     async def list_positions(self) -> Sequence[Position]:
-        result = await self.session.execute(select(Position))
+        stmt = select(Position).options(selectinload(Position.pool_item))
+        result = await self.session.execute(stmt)
         return result.scalars().all()
 
     async def list_by_status(self, status: PositionStatus) -> Sequence[Position]:
-        stmt = select(Position).where(Position.status == status)
+        stmt = select(Position).options(selectinload(Position.pool_item)).where(Position.status == status)
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
@@ -39,7 +41,8 @@ class PositionRepo:
         )
         self.session.add(pos)
         await self.session.commit()
-        await self.session.refresh(pos)
+        # eager‐load pool_item now that pos exists
+        await self.session.refresh(pos, attribute_names=["pool_item"])
         return pos
 
     async def update(self, position_id: int, data: PositionUpdate) -> Position:
