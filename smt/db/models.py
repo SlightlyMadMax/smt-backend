@@ -93,7 +93,7 @@ class PriceHistoryRecord(Base):
         nullable=False,
     )
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
     volume: Mapped[int] = mapped_column(Integer, nullable=False)
 
     def __repr__(self):
