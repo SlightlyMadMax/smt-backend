@@ -56,6 +56,49 @@ class TestPoolItemsRepo:
         hash_names = [p.market_hash_name for p in pool_items]
         assert set(hash_names) == {"a1", "b2", "c3"}
 
+    async def test_list_marked_for_trading_with_trading_items(self, pool_repo, db_session):
+        # Add some items specifically marked for trading
+        trading_items = [
+            PoolItem(
+                market_hash_name="trading_item_1",
+                name="Trading Item 1",
+                app_id="100",
+                context_id="1",
+                icon_url="https://cdn.com/trading1.png",
+                use_for_trading=True,
+            ),
+            PoolItem(
+                market_hash_name="trading_item_2",
+                name="Trading Item 2",
+                app_id="200",
+                context_id="2",
+                icon_url="https://cdn.com/trading2.png",
+                use_for_trading=True,
+            ),
+            PoolItem(
+                market_hash_name="non_trading_item",
+                name="Non Trading Item",
+                app_id="100",
+                context_id="1",
+                icon_url="https://cdn.com/non_trading.png",
+                use_for_trading=False,
+            ),
+        ]
+
+        db_session.add_all(trading_items)
+        await db_session.commit()
+
+        # Act
+        trading_pool_items = await pool_repo.list_marked_for_trading()
+
+        # Assert
+        trading_hash_names = {p.market_hash_name for p in trading_pool_items}
+        assert trading_hash_names == {"trading_item_1", "trading_item_2"}
+
+        # Verify all returned items are marked for trading
+        for item in trading_pool_items:
+            assert item.use_for_trading is True
+
     @pytest.mark.parametrize(
         "market_hash_name,expected_name",
         [
