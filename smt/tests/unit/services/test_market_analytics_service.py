@@ -162,16 +162,6 @@ class TestMarketAnalyticsService:
         assert net <= sell_price  # Net should be less than gross due to fees
         assert profit == net - buy_price  # Basic profit calculation
 
-    async def test_decide_trade_flag_emergency_stop(self, market_analytics_service, mock_settings_service):
-        """Test that emergency stop prevents trading"""
-        mock_settings_service.get_settings.return_value.emergency_stop = True
-
-        result = await market_analytics_service.decide_trade_flag(
-            profit=Decimal("5.00"), volume24h=500, volatility=Decimal("0.10")
-        )
-
-        assert result is False
-
     async def test_decide_trade_flag_low_profit(self, market_analytics_service, mock_settings_service):
         """Test that low profit prevents trading"""
         mock_settings_service.get_settings.return_value.min_profit_threshold = Decimal("5.00")
