@@ -41,7 +41,6 @@ class PositionRepo:
         )
         self.session.add(pos)
         await self.session.commit()
-        # eager‐load pool_item now that pos exists
         await self.session.refresh(pos, attribute_names=["pool_item"])
         return pos
 
@@ -50,8 +49,11 @@ class PositionRepo:
             update(Position)
             .where(Position.id == position_id)
             .values(
+                asset_id=data.asset_id,
                 sell_order_id=data.sell_order_id,
                 status=data.status,
+                bought_at=data.bought_at,
+                listed_at=data.listed_at,
                 sold_at=data.sold_at,
             )
             .execution_options(synchronize_session="fetch")
