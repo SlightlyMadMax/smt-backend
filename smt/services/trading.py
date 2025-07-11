@@ -122,7 +122,7 @@ class TradingService:
         """Mark LISTED positions as CLOSED when sell orders disappear."""
         listed_positions = await self.position_service.list_by_status(PositionStatus.LISTED)
         for pos in listed_positions:
-            still_active = any(li.order_id == pos.sell_order_id for li in listings)
+            still_active = any(li.listing_id == pos.sell_order_id for li in listings)
             if not still_active:
                 logger.info(f"Sell order {pos.sell_order_id} for Position {pos.id} disappeared, closing position.")
                 await self.position_service.close(position_id=pos.id)
