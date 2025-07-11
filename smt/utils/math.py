@@ -1,8 +1,8 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List
 
 
-def weighted_percentile(prices: List[float], volumes: List[int], pct: float) -> Decimal:
+def weighted_percentile(prices: List[Decimal], volumes: List[int], pct: int) -> Decimal:
     """
     Return the price at which the cumulative volume reaches pct% of total.
     """
@@ -13,5 +13,6 @@ def weighted_percentile(prices: List[float], volumes: List[int], pct: float) -> 
     for price, vol in pv:
         cum += vol
         if cum >= cutoff:
-            return Decimal(price).quantize(Decimal("0.01"))
-    return Decimal(pv[-1][0]).quantize(Decimal("0.01"))
+            return price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    # Fallback to the highest price
+    return pv[-1][0].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)

@@ -17,7 +17,7 @@ class MarketAnalyticsService:
         buy_pct = settings.buy_percentile
         sell_pct = settings.sell_percentile
 
-        prices = [float(r.price) for r in records]
+        prices = [r.price for r in records]
         vols = [r.volume for r in records]
         buy = weighted_percentile(prices, vols, buy_pct)
         sell = weighted_percentile(prices, vols, sell_pct)
