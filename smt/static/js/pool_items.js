@@ -207,10 +207,12 @@ async function pollUpdates() {
       if (timeEl) timeEl.textContent = formatDatetime(ts);
     }
 
-    if (flag === true) {
-      const row = document.querySelector(`tr[data-hash="${name}"]`);
-      if (row) {
+    const row = document.querySelector(`tr[data-hash="${name}"]`);
+    if (row) {
+      if (flag === true) {
         row.classList.replace('not-ready', 'ready');
+      } else {
+        row.classList.replace('ready', 'not-ready');
       }
     }
   });
