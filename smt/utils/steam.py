@@ -1,6 +1,12 @@
 import re
 from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal
+from typing import Tuple
+
+from smt.logger import get_logger
+
+
+logger = get_logger("utils.steam")
 
 
 def transform_inventory_item(item: dict) -> dict:
@@ -26,6 +32,27 @@ def parse_steam_ts(ts: str) -> datetime:
     return dt.replace(tzinfo=timezone.utc)
 
 
+def _floor_fee(amount: int, pct: Decimal, minimum: int, base: int = 0) -> int:
+    """
+    floor(max(amount * pct, minimum) + base)
+    """
+    raw = max(Decimal(amount) * pct, Decimal(minimum)) + base
+    return int(raw.to_integral_value(rounding=ROUND_DOWN))
+
+
+def _calculate_for_received(
+    received: int, steam_fee_pct: Decimal, steam_fee_min: int, steam_fee_base: int, publisher_fee_pct: Decimal
+) -> Tuple[int, int, int]:
+    """
+    Given a candidate 'received', return a tuple of
+      (steam_fee, publisher_fee, total_amount_sent).
+    """
+    steam_fee = _floor_fee(received, steam_fee_pct, steam_fee_min, steam_fee_base)
+    publisher_fee = _floor_fee(received, publisher_fee_pct, 1, 0)
+    total_sent = received + steam_fee + publisher_fee
+    return steam_fee, publisher_fee, total_sent
+
+
 def calculate_fees(
     gross: int,
     steam_fee_percent: Decimal = Decimal("0.05"),
@@ -41,30 +68,44 @@ def calculate_fees(
       - net_received (int)
     following Steam’s logic.
     """
-    # Estimate how much the seller should receive before fees
     estimated_received = int((gross - steam_fee_base) / (1 + steam_fee_percent + publisher_fee_percent))
 
-    # Try small adjustments around the estimate
-    for delta in range(-2, 3):
-        received = estimated_received + delta
-        # Steam fee: floor(max(received * pct, minimum) + base)
-        steam_fee = int(
-            (max(Decimal(received) * steam_fee_percent, Decimal(steam_fee_minimum)) + steam_fee_base).to_integral_value(
-                rounding=ROUND_DOWN
-            )
-        )
-        # Publisher fee: floor(max(received * pct, 1))
-        publisher_fee = int(
-            max(Decimal(received) * publisher_fee_percent, Decimal(1.0)).to_integral_value(rounding=ROUND_DOWN)
-        )
+    has_ever_undershot = False
+    steam_fee, publisher_fee, amount_sent = _calculate_for_received(
+        estimated_received, steam_fee_percent, steam_fee_minimum, steam_fee_base, publisher_fee_percent
+    )
 
-        if received + steam_fee + publisher_fee == gross:
-            return {
-                "steam_fee": steam_fee,
-                "publisher_fee": publisher_fee,
-                "total_fees": steam_fee + publisher_fee,
-                "net_received": received,
-            }
+    # 2) iterate up/down up to 10x, like Steam’s JS
+    iterations = 0
+    while amount_sent != gross and iterations < 10:
+        if amount_sent > gross:
+            if has_ever_undershot:
+                # apply last‑cent patch at estimated_received−1
+                sf2, pf2, sent2 = _calculate_for_received(
+                    estimated_received - 1, steam_fee_percent, steam_fee_minimum, steam_fee_base, publisher_fee_percent
+                )
+                diff = gross - sent2
+                sf2 += diff
+                sent2 = gross
+                steam_fee, publisher_fee, amount_sent = sf2, pf2, sent2
+                break
+            else:
+                estimated_received -= 1
+        else:
+            has_ever_undershot = True
+            estimated_received += 1
 
-    # Fallback if nothing matched exactly
-    return {"steam_fee": 0, "publisher_fee": 0, "total_fees": 0, "net_received": 0}
+        steam_fee, publisher_fee, amount_sent = _calculate_for_received(
+            estimated_received, steam_fee_percent, steam_fee_minimum, steam_fee_base, publisher_fee_percent
+        )
+        iterations += 1
+
+    total_fees = steam_fee + publisher_fee
+    net_received = gross - total_fees
+
+    return {
+        "steam_fee": steam_fee,
+        "publisher_fee": publisher_fee,
+        "total_fees": total_fees,
+        "net_received": net_received,
+    }
