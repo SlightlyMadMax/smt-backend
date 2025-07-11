@@ -33,25 +33,31 @@ class PositionService:
 
         return list(open_) + list(bought) + list(listed)
 
-    async def mark_as_bought(self, position_id: int, asset_id: str) -> Position:
+    async def mark_as_bought(self, position_id: int, asset_id: str, bought_at: Optional[datetime] = None) -> Position:
         """
         Transition a Position from OPEN to BOUGHT.
         """
         pos = await self.get(position_id)
         if pos.status != PositionStatus.OPEN:
             raise ValueError("Can only mark OPEN positions as BOUGHT")
-        update_data = PositionUpdate(asset_id=asset_id, status=PositionStatus.BOUGHT.value)
+        bought_at = bought_at or datetime.now(timezone.utc)
+        update_data = PositionUpdate(asset_id=asset_id, status=PositionStatus.BOUGHT.value, bought_at=bought_at)
         pos = await self.repo.update(position_id, update_data)
         return pos
 
-    async def mark_as_listed(self, position_id: int, sell_order_id: str) -> Position:
+    async def mark_as_listed(
+        self, position_id: int, sell_order_id: str, listed_at: Optional[datetime] = None
+    ) -> Position:
         """
         Transition a Position from BOUGHT to LISTED.
         """
         pos = await self.get(position_id)
         if pos.status != PositionStatus.BOUGHT:
             raise ValueError("Can only mark BOUGHT positions as LISTED")
-        update_data = PositionUpdate(sell_order_id=sell_order_id, status=PositionStatus.LISTED.value)
+        listed_at = listed_at or datetime.now(timezone.utc)
+        update_data = PositionUpdate(
+            sell_order_id=sell_order_id, status=PositionStatus.LISTED.value, listed_at=listed_at
+        )
         pos = await self.repo.update(position_id, update_data)
         return pos
 

@@ -28,6 +28,8 @@ class PositionUpdate(BaseModel):
     sell_order_id: Optional[str] = None
     status: Optional[PositionStatus] = None
     sold_at: Optional[datetime] = None
+    bought_at: Optional[datetime] = None
+    listed_at: Optional[datetime] = None
 
 
 class Position(PositionBase):
