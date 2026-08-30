@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from smt.db.models import Position
-from smt.schemas.position import PositionCreate, PositionStatus, PositionUpdate
+from smt.schemas.position import ACTIVE_STATUSES, PositionCreate, PositionStatus, PositionUpdate
 
 
 class PositionRepo:
@@ -37,6 +37,23 @@ class PositionRepo:
         stmt = select(func.coalesce(func.sum(Position.realized_profit), 0)).where(
             Position.status == PositionStatus.CLOSED,
             Position.sold_at >= since,
+        )
+        result = await self.session.execute(stmt)
+        return Decimal(result.scalar_one())
+
+    async def count_by_status(self) -> dict[PositionStatus, int]:
+        stmt = select(Position.status, func.count()).group_by(Position.status)
+        result = await self.session.execute(stmt)
+        return {status: count for status, count in result.all()}
+
+    async def capital_in_open_trades(self) -> Decimal:
+        stmt = select(func.coalesce(func.sum(Position.buy_price), 0)).where(Position.status.in_(ACTIVE_STATUSES))
+        result = await self.session.execute(stmt)
+        return Decimal(result.scalar_one())
+
+    async def total_realized_profit(self) -> Decimal:
+        stmt = select(func.coalesce(func.sum(Position.realized_profit), 0)).where(
+            Position.status == PositionStatus.CLOSED
         )
         result = await self.session.execute(stmt)
         return Decimal(result.scalar_one())

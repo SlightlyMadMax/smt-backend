@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional, Sequence
 
 from smt.db.models import Position, PositionStatus
 from smt.repositories.position import PositionRepo
-from smt.schemas.position import PositionCreate, PositionUpdate
+from smt.schemas.position import ACTIVE_STATUSES, PositionCreate, PositionUpdate
 from smt.utils.steam import net_received
 
 
@@ -30,15 +30,22 @@ class PositionService:
 
     async def list_active(self) -> List[Position]:
         active: List[Position] = []
-        for status in (
-            PositionStatus.OPEN,
-            PositionStatus.BOUGHT,
-            PositionStatus.LISTING_PENDING,
-            PositionStatus.LISTED,
-        ):
+        for status in ACTIVE_STATUSES:
             active.extend(await self.list_by_status(status=status))
 
         return active
+
+    async def summary(self) -> dict:
+        counts = await self.repo.count_by_status()
+        return {
+            "counts": {status.value: counts.get(status, 0) for status in PositionStatus},
+            "active_count": sum(counts.get(status, 0) for status in ACTIVE_STATUSES),
+            "capital_in_open_trades": await self.repo.capital_in_open_trades(),
+            "realized_profit_24h": await self.repo.realized_profit_since(
+                datetime.now(timezone.utc) - timedelta(days=1)
+            ),
+            "realized_profit_total": await self.repo.total_realized_profit(),
+        }
 
     async def mark_as_bought(self, position_id: int, asset_id: str, bought_at: Optional[datetime] = None) -> Position:
         """

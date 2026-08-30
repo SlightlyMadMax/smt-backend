@@ -15,6 +15,14 @@ class PositionStatus(Enum):
     CANCELLED = "CANCELLED"
 
 
+ACTIVE_STATUSES = (
+    PositionStatus.OPEN,
+    PositionStatus.BOUGHT,
+    PositionStatus.LISTING_PENDING,
+    PositionStatus.LISTED,
+)
+
+
 class PositionBase(BaseModel):
     pool_item_hash: str = Field(..., description="Market hash name of the pool item")
 
@@ -51,3 +59,28 @@ class Position(PositionBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PositionRow(BaseModel):
+    id: int
+    pool_item_hash: str
+    name: str
+    icon_url: str
+    listing_url: str
+    status: PositionStatus
+    buy_price: Decimal
+    sell_price: Decimal
+    net_proceeds: Optional[Decimal] = None
+    realized_profit: Optional[Decimal] = None
+    bought_at: Optional[datetime] = None
+    listed_at: Optional[datetime] = None
+    sold_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class PositionSummary(BaseModel):
+    counts: dict[str, int]
+    active_count: int
+    capital_in_open_trades: Decimal
+    realized_profit_24h: Decimal
+    realized_profit_total: Decimal
