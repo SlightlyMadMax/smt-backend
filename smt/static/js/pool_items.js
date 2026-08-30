@@ -79,6 +79,7 @@ bulkForm.addEventListener('submit', async ev => {
     hashes.forEach(h => {
       const selector = `
         .poll-current-price[data-hash="${h}"],
+        .poll-buy-order[data-hash="${h}"],
         .poll-buy-price[data-hash="${h}"],
         .poll-sell-price[data-hash="${h}"],
         .poll-volume[data-hash="${h}"],
@@ -134,6 +135,7 @@ async function pollUpdates() {
 
   const selectors = [
     '.poll-current-price',
+    '.poll-buy-order',
     '.poll-buy-price',
     '.poll-sell-price',
     '.poll-volume',
@@ -169,6 +171,7 @@ async function pollUpdates() {
     const {
       market_hash_name: name,
       current_lowest_price: curr,
+      current_highest_buy_order: topBuy,
       current_volume24h: vol,
       updated_at: ts,
       optimal_buy_price: buy,
@@ -196,6 +199,7 @@ async function pollUpdates() {
     }
 
     maybeSet('.poll-current-price', 'data-hash', curr);
+    maybeSet('.poll-buy-order', 'data-hash', topBuy);
     maybeSet('.poll-buy-price', 'data-hash', buy);
     maybeSet('.poll-sell-price', 'data-hash', sell);
     maybeSet('.poll-volume', 'data-hash', vol);
