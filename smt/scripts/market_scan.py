@@ -203,7 +203,10 @@ def report(candidates: List[Candidate], out_path: Optional[str]) -> None:
     share = len(tradable) / len(measured) * 100
     print(f"\nmeasured {len(measured)} items, {len(tradable)} clear the fee hurdle ({share:.1f}%)")
 
-    header = f"{'item':<40}{'price':>8}{'vol30d':>8}{'buy':>8}{'sell':>8}" f"{'per trip':>10}{'trips':>7}{'per 30d':>9}"
+    header = (
+        f"{'item':<38}{'buy':>7}{'sell':>7}{'vol30d':>8}"
+        f"{'trips':>6}{'hold h':>8}{'per trip':>9}{'window':>8}{'ROI':>8}"
+    )
     print("\n" + header)
     for c in measured[:30]:
         name = c.market_hash_name.encode("ascii", "replace").decode()[:39]
