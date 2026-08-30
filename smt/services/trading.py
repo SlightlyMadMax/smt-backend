@@ -1,9 +1,10 @@
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from steampy.models import GameOptions
 
-from smt.db.models import PoolItem
+from smt.db.models import Item, PoolItem
 from smt.logger import get_logger
 from smt.schemas.position import PositionCreate, PositionStatus
 from smt.services.inventory import InventoryService
@@ -14,6 +15,8 @@ from smt.services.steam import SteamService
 
 
 logger = get_logger("services.trading")
+
+CANCEL_GRACE_PERIOD = timedelta(minutes=10)
 
 
 class TradingService:
@@ -35,8 +38,8 @@ class TradingService:
         logger.info("Starting trading cycle")
         start = time.monotonic()
         try:
-            assets = await self._snapshot_all_items()
             listings = await self.steam_service.get_my_market_listings()
+            assets = await self._snapshot_all_items()
             buy_orders = list(listings.get("buy_orders", {}).values())
             sell_listings = list(listings.get("sell_listings", {}).values())
 
@@ -55,48 +58,75 @@ class TradingService:
 
     async def _snapshot_all_items(
         self,
-    ) -> Dict[Tuple[str, str], Dict[str, List[str]]]:
+    ) -> Dict[Tuple[str, str], Dict[str, List[Item]]]:
         """
+        Refresh the stored inventory for every game in the pool.
+
         Returns a mapping per game:
-          (app_id, context_id) -> { market_hash_name: [asset_id, ...] }
+          (app_id, context_id) -> { market_hash_name: [Item, ...] }
         """
         pool_items: Sequence[PoolItem] = await self.pool_item_service.list()
         games: Dict[Tuple[str, str], List[PoolItem]] = {}
         for item in pool_items:
             games.setdefault((item.app_id, item.context_id), []).append(item)
 
-        all_assets: Dict[Tuple[str, str], Dict[str, List[str]]] = {}
-        for (app_id, ctx_id), items in games.items():
-            # snapshot_items returns {market_hash_name: [ItemORM, ...]}
-            grouped = await self.inventory_service.snapshot_items(GameOptions(app_id, ctx_id))
-            # reduce to asset_id list
-            all_assets[(app_id, ctx_id)] = {mh: [itm.id for itm in lst] for mh, lst in grouped.items()}
+        all_assets: Dict[Tuple[str, str], Dict[str, List[Item]]] = {}
+        for app_id, ctx_id in games:
+            all_assets[(app_id, ctx_id)] = await self.inventory_service.sync_snapshot(GameOptions(app_id, ctx_id))
         return all_assets
 
-    async def _sync_open_to_bought(self, assets: Dict[Tuple[str, str], Dict[str, List[str]]], buy_orders: list) -> None:
-        """Assign asset_id to OPEN positions when their buy orders are filled and disappeared from listings."""
+    async def _sync_open_to_bought(
+        self, assets: Dict[Tuple[str, str], Dict[str, List[Item]]], buy_orders: list
+    ) -> None:
+        """
+        Resolve OPEN positions whose buy order is no longer active on Steam.
+
+        A position is only matched against an asset that entered the inventory after
+        the position was opened, so items owned beforehand are never claimed. When no
+        such asset exists the order did not fill and the position is cancelled.
+        """
         open_positions = await self.position_service.list_by_status(PositionStatus.OPEN)
         active_buy_order_ids = {order["order_id"] for order in buy_orders if "order_id" in order}
         claimed = {pos.asset_id for pos in await self.position_service.list() if pos.asset_id}
+        now = datetime.now(timezone.utc)
 
         for pos in open_positions:
             if pos.buy_order_id in active_buy_order_ids:
                 continue
+
             key = (pos.pool_item.app_id, pos.pool_item.context_id)
-            available = assets.get(key, {}).get(pos.pool_item_hash, [])
-            # find first unclaimed asset
-            candidate = next((aid for aid in available if aid not in claimed), None)
+            available = sorted(
+                assets.get(key, {}).get(pos.pool_item_hash, []),
+                key=lambda item: item.first_seen_at,
+            )
+            candidate = next(
+                (item for item in available if item.id not in claimed and item.first_seen_at > pos.created_at),
+                None,
+            )
+
             if candidate:
                 logger.info(
-                    f"Buy order {pos.buy_order_id} disappeared and unclaimed item {candidate} was found "
-                    f"for Position {pos.id}. Marking it as BOUGHT."
+                    f"Buy order {pos.buy_order_id} disappeared and item {candidate.id} acquired at "
+                    f"{candidate.first_seen_at} was found for Position {pos.id}. Marking it as BOUGHT."
                 )
-                # record asset_id and mark BOUGHT
                 await self.position_service.mark_as_bought(
                     position_id=pos.id,
-                    asset_id=candidate,
+                    asset_id=candidate.id,
                 )
-                claimed.add(candidate)
+                claimed.add(candidate.id)
+                continue
+
+            if now - pos.created_at < CANCEL_GRACE_PERIOD:
+                logger.info(
+                    f"Buy order {pos.buy_order_id} for Position {pos.id} is not listed yet, waiting before cancelling."
+                )
+                continue
+
+            logger.warning(
+                f"Buy order {pos.buy_order_id} for Position {pos.id} disappeared without a matching new item. "
+                f"Marking the position as CANCELLED."
+            )
+            await self.position_service.mark_as_cancelled(position_id=pos.id)
 
     async def _list_bought_positions(self) -> None:
         """Place a sell order for each BOUGHT position."""

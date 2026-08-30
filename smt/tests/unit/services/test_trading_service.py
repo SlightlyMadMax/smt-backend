@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -5,19 +6,30 @@ from unittest.mock import AsyncMock
 import pytest
 
 from smt.schemas.position import PositionStatus
-from smt.services.trading import TradingService
+from smt.services.trading import CANCEL_GRACE_PERIOD, TradingService
 
 
-def make_position(position_id: int, status: PositionStatus, asset_id=None, sell_order_id=None):
+ITEM_HASH = "AK-47 | Redline (Field-Tested)"
+GAME_KEY = ("730", "2")
+NOW = datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
+
+
+def make_position(position_id: int, status: PositionStatus, asset_id=None, sell_order_id=None, created_at=None):
     return SimpleNamespace(
         id=position_id,
-        pool_item_hash="AK-47 | Redline (Field-Tested)",
+        buy_order_id=f"BUY-{position_id}",
+        pool_item_hash=ITEM_HASH,
         pool_item=SimpleNamespace(app_id="730", context_id="2"),
         asset_id=asset_id,
         sell_order_id=sell_order_id,
         sell_price=Decimal("15.00"),
         status=status,
+        created_at=created_at or (NOW - CANCEL_GRACE_PERIOD - timedelta(minutes=1)),
     )
+
+
+def make_asset(asset_id: str, first_seen_at: datetime):
+    return SimpleNamespace(id=asset_id, market_hash_name=ITEM_HASH, first_seen_at=first_seen_at)
 
 
 def make_listing(listing_id: str, asset_id: str, need_confirmation: bool = False):
@@ -31,6 +43,7 @@ def make_listing(listing_id: str, asset_id: str, need_confirmation: bool = False
 def position_service():
     service = AsyncMock()
     service.list_by_status.return_value = []
+    service.list.return_value = []
     return service
 
 
@@ -124,3 +137,57 @@ class TestListBoughtPositions:
         trading_service.steam_service.create_sell_order.assert_awaited_once()
         position_service.mark_as_listing_pending.assert_awaited_once_with(position_id=1)
         position_service.mark_as_listed.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestSyncOpenToBought:
+    async def test_claims_asset_that_arrived_after_the_position_was_opened(self, trading_service, position_service):
+        position = make_position(1, PositionStatus.OPEN)
+        position_service.list_by_status.return_value = [position]
+        position_service.list.return_value = []
+        assets = {GAME_KEY: {ITEM_HASH: [make_asset("NEW-1", position.created_at + timedelta(minutes=1))]}}
+
+        await trading_service._sync_open_to_bought(assets, buy_orders=[])
+
+        position_service.mark_as_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-1")
+        position_service.mark_as_cancelled.assert_not_awaited()
+
+    async def test_never_claims_an_asset_owned_before_the_position(self, trading_service, position_service):
+        position = make_position(1, PositionStatus.OPEN)
+        position_service.list_by_status.return_value = [position]
+        position_service.list.return_value = []
+        assets = {GAME_KEY: {ITEM_HASH: [make_asset("OWNED", position.created_at - timedelta(days=365))]}}
+
+        await trading_service._sync_open_to_bought(assets, buy_orders=[])
+
+        position_service.mark_as_bought.assert_not_awaited()
+        position_service.mark_as_cancelled.assert_awaited_once_with(position_id=1)
+
+    async def test_leaves_position_alone_while_buy_order_is_active(self, trading_service, position_service):
+        position_service.list_by_status.return_value = [make_position(1, PositionStatus.OPEN)]
+        position_service.list.return_value = []
+
+        await trading_service._sync_open_to_bought({}, buy_orders=[{"order_id": "BUY-1"}])
+
+        position_service.mark_as_bought.assert_not_awaited()
+        position_service.mark_as_cancelled.assert_not_awaited()
+
+    async def test_does_not_cancel_within_the_grace_period(self, trading_service, position_service):
+        fresh = make_position(1, PositionStatus.OPEN, created_at=datetime.now(timezone.utc))
+        position_service.list_by_status.return_value = [fresh]
+        position_service.list.return_value = []
+
+        await trading_service._sync_open_to_bought({}, buy_orders=[])
+
+        position_service.mark_as_cancelled.assert_not_awaited()
+
+    async def test_does_not_claim_an_asset_taken_by_another_position(self, trading_service, position_service):
+        position = make_position(2, PositionStatus.OPEN)
+        position_service.list_by_status.return_value = [position]
+        position_service.list.return_value = [make_position(1, PositionStatus.BOUGHT, asset_id="NEW-1")]
+        assets = {GAME_KEY: {ITEM_HASH: [make_asset("NEW-1", position.created_at + timedelta(minutes=1))]}}
+
+        await trading_service._sync_open_to_bought(assets, buy_orders=[])
+
+        position_service.mark_as_bought.assert_not_awaited()
+        position_service.mark_as_cancelled.assert_awaited_once_with(position_id=2)
