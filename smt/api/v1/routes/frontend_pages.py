@@ -6,9 +6,16 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import HTMLResponse
 
 from smt.schemas.inventory import GAME_MAP, GameName
-from smt.services.dependencies import get_inventory_service, get_pool_service, get_settings_service
+from smt.schemas.position import PositionStatus
+from smt.services.dependencies import (
+    get_inventory_service,
+    get_pool_service,
+    get_position_service,
+    get_settings_service,
+)
 from smt.services.inventory import InventoryService
 from smt.services.pool import PoolService
+from smt.services.position import PositionService
 from smt.services.settings import SettingsService
 
 
@@ -67,6 +74,21 @@ async def pool_page(
         {
             "request": request,
             "items": items,
+        },
+    )
+
+
+@router.get("/trade-market", response_class=HTMLResponse, include_in_schema=False)
+async def trade_market_page(
+    request: Request,
+    service: PositionService = Depends(get_position_service),
+):
+    return templates.TemplateResponse(
+        "trade_market.html",
+        {
+            "request": request,
+            "summary": await service.summary(),
+            "statuses": [status.value for status in PositionStatus],
         },
     )
 

@@ -1,0 +1,120 @@
+.summary-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--gap);
+  margin: var(--gap);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--gap);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-alt);
+}
+
+.tile-label {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.tile-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.status-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+  margin: 0 var(--gap) var(--gap);
+}
+
+.status-chip {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+}
+
+.status-chip.status-closed {
+  background: var(--color-positive-bg);
+  color: var(--color-positive-text);
+}
+
+.status-chip.status-cancelled {
+  background: var(--color-negative-bg);
+  color: var(--color-negative-text);
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 var(--gap) var(--gap-sm);
+}
+
+.filter-bar select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: var(--radius);
+}
+
+.filter-hint {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.positions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.positions-table th,
+.positions-table td {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.positions-table th {
+  background: var(--color-surface-alt);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.positions-table .item-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  white-space: normal;
+}
+
+.positions-table img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.positions-table .empty {
+  text-align: center;
+  font-style: italic;
+  color: var(--color-muted);
+}
+
+.profit-positive {
+  color: var(--color-positive-text);
+  font-weight: 600;
+}
+
+.profit-negative {
+  color: var(--color-negative-text);
+  font-weight: 600;
+}

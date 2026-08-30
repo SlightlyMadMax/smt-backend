@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ static_url('css/trade_market.css') }}">
+{% endblock %}
+
+{% block title %}Trade Market — Steam Market Trader{% endblock %}
+
+{% block content %}
+<h1 class="page-name">Trade Market</h1>
+
+<section class="summary-tiles" id="summary">
+  <div class="tile">
+    <span class="tile-label">Active positions</span>
+    <span class="tile-value" data-summary="active_count">{{ summary.active_count }}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Capital in open trades</span>
+    <span class="tile-value" data-summary="capital_in_open_trades">{{ summary.capital_in_open_trades }}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Realised profit, 24h</span>
+    <span class="tile-value" data-summary="realized_profit_24h">{{ summary.realized_profit_24h }}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Realised profit, total</span>
+    <span class="tile-value" data-summary="realized_profit_total">{{ summary.realized_profit_total }}</span>
+  </div>
+</section>
+
+<section class="status-breakdown">
+  {% for status, count in summary.counts.items() %}
+    <span class="status-chip status-{{ status|lower }}" data-status-count="{{ status }}">
+      {{ status.replace('_', ' ')|title }}: <strong>{{ count }}</strong>
+    </span>
+  {% endfor %}
+</section>
+
+<div class="filter-bar">
+  <label for="status-filter">Show</label>
+  <select id="status-filter">
+    <option value="">All positions</option>
+    {% for status in statuses %}
+      <option value="{{ status }}">{{ status.replace('_', ' ')|title }}</option>
+    {% endfor %}
+  </select>
+  <span class="filter-hint" id="row-count"></span>
+</div>
+
+<div class="table-scroll">
+  <table class="positions-table">
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Status</th>
+        <th>Buy</th>
+        <th>Sell</th>
+        <th>Net</th>
+        <th>Profit</th>
+        <th>Opened</th>
+        <th>Bought</th>
+        <th>Listed</th>
+        <th>Sold</th>
+      </tr>
+    </thead>
+    <tbody id="positions-body">
+      <tr><td colspan="10" class="empty">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ static_url('js/trade_market.js') }}" defer></script>
+{% endblock %}
