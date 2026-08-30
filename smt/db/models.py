@@ -76,7 +76,7 @@ class PoolItem(TimeStampedModel, Base):
 
     @property
     def listing_url(self) -> str:
-        base = "https://steamcommunity.com/market/listings/"
+        base = "https://steamcommunity.com/market/listings"
         encoded_name = quote(self.market_hash_name, safe="")
         return f"{base}/{self.app_id}/{encoded_name}"
 
