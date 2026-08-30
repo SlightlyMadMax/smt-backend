@@ -1,5 +1,3 @@
-import asyncio
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from smt.db.database import async_session_maker
@@ -18,6 +16,9 @@ from smt.services.steam import SteamService
 
 
 logger = get_logger("worker.tasks")
+
+# Bounds how many items share one price history insert; pacing is handled by SteamService.
+REFRESH_BATCH_SIZE = 10
 
 
 async def build_services(session: AsyncSession, steam_service: SteamService):
@@ -48,13 +49,8 @@ async def refresh_task(ctx, market_hash_names: list[str]):
         try:
             stats_service, _ = await build_services(session=session, steam_service=ctx["steam_service"])
 
-            batch_size = 10
-            for i in range(0, len(market_hash_names), batch_size):
-                batch = market_hash_names[i : i + batch_size]
-                await stats_service.refresh_all(batch)
-
-                if i + batch_size < len(market_hash_names):
-                    await asyncio.sleep(2)
+            for i in range(0, len(market_hash_names), REFRESH_BATCH_SIZE):
+                await stats_service.refresh_all(market_hash_names[i : i + REFRESH_BATCH_SIZE])
 
             logger.info(f"Refresh completed for {len(market_hash_names)} items")
         except Exception as e:
@@ -69,13 +65,8 @@ async def refresh_periodic_task(ctx):
             all_items = await pool_repo.list_items()
             market_hash_names = [item.market_hash_name for item in all_items]
 
-            batch_size = 10
-            for i in range(0, len(market_hash_names), batch_size):
-                batch = market_hash_names[i : i + batch_size]
-                await stats_service.refresh_all(batch)
-
-                if i + batch_size < len(market_hash_names):
-                    await asyncio.sleep(2)
+            for i in range(0, len(market_hash_names), REFRESH_BATCH_SIZE):
+                await stats_service.refresh_all(market_hash_names[i : i + REFRESH_BATCH_SIZE])
 
             logger.info(f"Periodic refresh completed for {len(market_hash_names)} items")
         except Exception as e:

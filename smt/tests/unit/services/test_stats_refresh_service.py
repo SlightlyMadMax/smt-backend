@@ -9,6 +9,7 @@ from smt.exceptions import OrderBookUnavailable
 from smt.services import steam as steam_module
 from smt.services.stats_refresh import StatsRefreshService
 from smt.services.steam import ACCOUNT_CURRENCY, SteamService
+from smt.utils.rate_limit import RateLimiter
 
 
 def order_book_payload(currency=int(ACCOUNT_CURRENCY), min_sell=682, max_buy=668):
@@ -66,6 +67,7 @@ def steam_service():
         service = SteamService()
     service.client = SimpleNamespace(_session=SimpleNamespace(cookies=SimpleNamespace(get_dict=lambda domain: {})))
     service._ensure_login = AsyncMock()
+    service._limiter = RateLimiter(max_calls=1000, period=60)
     return service
 
 

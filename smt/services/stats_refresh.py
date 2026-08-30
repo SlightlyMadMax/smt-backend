@@ -1,4 +1,3 @@
-import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import List
@@ -60,7 +59,6 @@ class StatsRefreshService:
                         volume=vol,
                     )
                 )
-            await asyncio.sleep(0.1)
 
         if all_records:
             await self.price_history_service.add_many(all_records)
@@ -130,6 +128,5 @@ class StatsRefreshService:
 
         for name in market_hash_names:
             await self.refresh_current_stats(name)
-            await asyncio.sleep(0.1)
 
         await self.refresh_indicators(market_hash_names)

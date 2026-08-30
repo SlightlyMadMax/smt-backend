@@ -14,6 +14,7 @@ from tenacity import AsyncRetrying, stop_after_attempt, wait_fixed
 from smt.core.config import Settings
 from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed, SteamLoginUnavailable
 from smt.logger import get_logger
+from smt.utils.rate_limit import RateLimiter
 from smt.utils.steam import calculate_fees, parse_steam_ts
 
 
@@ -22,6 +23,8 @@ logger = get_logger("services.steam")
 STEAM_COMMUNITY_URL = "https://steamcommunity.com"
 ORDER_BOOK_TIMEOUT = 30
 ACCOUNT_CURRENCY = Currency.RUB
+STEAM_MAX_CALLS_PER_PERIOD = 15
+STEAM_RATE_LIMIT_PERIOD = 60.0
 LOGIN_COOLDOWN_BASE = datetime.timedelta(minutes=5)
 LOGIN_COOLDOWN_MAX = datetime.timedelta(hours=1)
 
@@ -35,6 +38,17 @@ def requires_login(func):
     @wraps(func)
     async def wrapper(self, *args, **kwargs):
         await self._ensure_login()
+        return await func(self, *args, **kwargs)
+
+    return wrapper
+
+
+def throttled(func):
+    """Pace outbound Steam calls so a batch cannot burst past Steam's limits."""
+
+    @wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        await self._limiter.acquire()
         return await func(self, *args, **kwargs)
 
     return wrapper
@@ -55,6 +69,7 @@ class SteamService:
         self._last_check: Optional[datetime] = None
         self._login_blocked_until: Optional[datetime] = None
         self._login_failures: int = 0
+        self._limiter = RateLimiter(STEAM_MAX_CALLS_PER_PERIOD, STEAM_RATE_LIMIT_PERIOD)
         self._check_interval = datetime.timedelta(minutes=5)
 
     def _should_check_login(self) -> bool:
@@ -75,10 +90,12 @@ class SteamService:
     async def _log_in(self) -> None:
         async for attempt in AsyncRetrying(reraise=True, stop=stop_after_attempt(3), wait=wait_fixed(3)):
             with attempt:
+                await self._limiter.acquire()
                 try:
                     await to_thread.run_sync(self.client.is_session_alive)
                 except LoginRequired:
                     logger.info("Logging into Steam.")
+                    await self._limiter.acquire()
                     await to_thread.run_sync(
                         self.client.login,
                         self._username,
@@ -115,11 +132,13 @@ class SteamService:
         self._last_check = datetime.datetime.now(datetime.UTC)
 
     @requires_login
+    @throttled
     async def get_inventory(self, game: GameOptions) -> dict:
         logger.debug(f"Fetching inventory for app_id = {game.app_id}.")
         return await to_thread.run_sync(self.client.get_my_inventory, game, True, 1000)
 
     @requires_login
+    @throttled
     async def get_price_history(
         self, market_hash_name: str, game: GameOptions, days: int = 30
     ) -> list[tuple[datetime.datetime, Decimal, int]]:
@@ -139,6 +158,7 @@ class SteamService:
         return history
 
     @requires_login
+    @throttled
     async def get_order_book(self, market_hash_name: str, app_id: str) -> dict:
         """
         Fetch the current order book for an item.
@@ -175,27 +195,32 @@ class SteamService:
         }
 
     @requires_login
+    @throttled
     async def get_my_market_listings(self) -> dict:
         logger.debug("Fetching market listings.")
         return await to_thread.run_sync(self.client.market.get_my_market_listings)
 
     @requires_login
+    @throttled
     async def get_wallet_balance(self) -> Decimal:
         balance = await to_thread.run_sync(self.client.get_wallet_balance, True, False)
         logger.debug(f"Wallet balance: {balance}.")
         return Decimal(balance)
 
     @requires_login
+    @throttled
     async def cancel_buy_order(self, buy_order_id: str) -> None:
         logger.info(f"Cancelling buy order {buy_order_id}.")
         await to_thread.run_sync(self.client.market.cancel_buy_order, buy_order_id)
 
     @requires_login
+    @throttled
     async def cancel_sell_listing(self, listing_id: str) -> None:
         logger.info(f"Cancelling sell listing {listing_id}.")
         await to_thread.run_sync(self.client.market.cancel_sell_order, listing_id)
 
     @requires_login
+    @throttled
     async def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
         logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
         kopecks = int((price * 100).to_integral_value())
@@ -215,6 +240,7 @@ class SteamService:
         return buy_order_id
 
     @requires_login
+    @throttled
     async def create_sell_order(self, asset_id: str, game: GameOptions, price: Decimal) -> None:
         logger.debug(f"Creating a sell order for {asset_id} at {price} rub.")
         kopecks = int((price * 100).to_integral_value())
