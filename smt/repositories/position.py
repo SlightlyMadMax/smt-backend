@@ -45,17 +45,14 @@ class PositionRepo:
         return pos
 
     async def update(self, position_id: int, data: PositionUpdate) -> Position:
+        values = data.model_dump(exclude_unset=True)
+        if not values:
+            return await self.get_by_id(position_id)
+
         stmt = (
             update(Position)
             .where(Position.id == position_id)
-            .values(
-                asset_id=data.asset_id,
-                sell_order_id=data.sell_order_id,
-                status=data.status,
-                bought_at=data.bought_at,
-                listed_at=data.listed_at,
-                sold_at=data.sold_at,
-            )
+            .values(**values)
             .execution_options(synchronize_session="fetch")
         )
         await self.session.execute(stmt)
