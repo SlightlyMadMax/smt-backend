@@ -295,3 +295,34 @@ button:disabled,
 .state-negative {
   background-color: var(--color-negative-bg);
 }
+
+/* ── toasts ──────────────────────────────────────────────────── */
+
+.toast-container {
+  position: fixed;
+  top: var(--gap);
+  right: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  z-index: 10;
+  max-width: min(28rem, 90vw);
+}
+
+.toast {
+  padding: 0.75rem var(--gap);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.toast.success {
+  background: var(--color-positive-bg);
+  color: var(--color-positive-text);
+}
+
+.toast.error {
+  background: var(--color-negative-bg);
+  color: var(--color-negative-text);
+}
