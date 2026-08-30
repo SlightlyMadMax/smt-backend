@@ -1,4 +1,5 @@
 import math
+from datetime import timedelta
 from decimal import Decimal
 from typing import List, Optional, Tuple
 
@@ -22,6 +23,32 @@ class MarketAnalyticsService:
         buy = weighted_percentile(prices, vols, buy_pct)
         sell = weighted_percentile(prices, vols, sell_pct)
         return buy, sell
+
+    @staticmethod
+    async def compute_recent_stats(
+        records: List[PriceHistoryRecord], window: timedelta = timedelta(hours=24)
+    ) -> Tuple[Optional[Decimal], Optional[int]]:
+        """
+        Return the volume weighted median price and the traded volume within `window`.
+
+        The window ends at the newest record rather than at the current time, because
+        Steam publishes price history with a lag.
+        """
+        if not records:
+            return None, None
+
+        latest = max(r.recorded_at for r in records)
+        recent = [r for r in records if latest - r.recorded_at <= window]
+        if not recent:
+            return None, None
+
+        prices = [r.price for r in recent]
+        volumes = [r.volume for r in recent]
+        total_volume = sum(volumes)
+        if total_volume == 0:
+            return None, 0
+
+        return weighted_percentile(prices, volumes, 50), total_volume
 
     @staticmethod
     async def compute_volume_weighted_volatility(records: List[PriceHistoryRecord]) -> Decimal:

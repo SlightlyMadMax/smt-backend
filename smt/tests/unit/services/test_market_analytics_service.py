@@ -226,3 +226,58 @@ class TestMarketAnalyticsService:
         )
 
         mock_settings_service.get_settings.assert_called_once()
+
+
+def make_record(
+    hours_ago: int, price: str, volume: int, base=datetime.datetime(2026, 8, 30, 12, tzinfo=datetime.timezone.utc)
+):
+    return PriceHistoryRecord(
+        id=hours_ago + 1,
+        market_hash_name="item",
+        recorded_at=base - datetime.timedelta(hours=hours_ago),
+        price=Decimal(price),
+        volume=volume,
+    )
+
+
+@pytest.mark.asyncio
+class TestComputeRecentStats:
+    async def test_returns_none_for_no_records(self, market_analytics_service):
+        assert await market_analytics_service.compute_recent_stats([]) == (None, None)
+
+    async def test_sums_volume_inside_the_window(self, market_analytics_service):
+        records = [make_record(h, "100.00", 10) for h in range(0, 24)]
+
+        median, volume = await market_analytics_service.compute_recent_stats(records)
+
+        assert volume == 240
+        assert median == Decimal("100.00")
+
+    async def test_ignores_records_outside_the_window(self, market_analytics_service):
+        records = [make_record(0, "100.00", 5), make_record(48, "999.00", 1000)]
+
+        median, volume = await market_analytics_service.compute_recent_stats(records)
+
+        assert volume == 5
+        assert median == Decimal("100.00")
+
+    async def test_window_ends_at_the_newest_record_not_now(self, market_analytics_service):
+        base = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+        records = [make_record(h, "50.00", 3, base=base) for h in range(0, 5)]
+
+        median, volume = await market_analytics_service.compute_recent_stats(records)
+
+        assert volume == 15
+
+    async def test_median_is_volume_weighted(self, market_analytics_service):
+        records = [make_record(0, "10.00", 1), make_record(1, "20.00", 100)]
+
+        median, volume = await market_analytics_service.compute_recent_stats(records)
+
+        assert volume == 101
+        assert median == Decimal("20.00")
+
+    async def test_zero_volume_returns_no_median(self, market_analytics_service):
+        records = [make_record(0, "10.00", 0), make_record(1, "20.00", 0)]
+
+        assert await market_analytics_service.compute_recent_stats(records) == (None, 0)
