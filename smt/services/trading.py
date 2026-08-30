@@ -20,6 +20,10 @@ logger = get_logger("services.trading")
 
 CANCEL_GRACE_PERIOD = timedelta(minutes=10)
 
+# Steam allows active buy orders worth up to ten times the wallet balance, and does not
+# hold the funds until an order actually fills.
+OPEN_ORDER_EXPOSURE_MULTIPLIER = Decimal("10")
+
 
 class TradingService:
     def __init__(
@@ -241,7 +245,18 @@ class TradingService:
             logger.warning(f"Not opening new positions, the wallet balance is unknown: {e!r}")
             return
 
-        logger.info(f"Opening positions with {balance} in the wallet and {free_slots} free slots.")
+        open_positions = [p for p in existing if p.status == PositionStatus.OPEN]
+        exposure = sum((p.buy_price for p in open_positions), Decimal("0"))
+        allowance = balance * OPEN_ORDER_EXPOSURE_MULTIPLIER - exposure
+
+        logger.info(
+            f"Opening positions with {balance} in the wallet, {free_slots} free slots and "
+            f"{allowance} of buy order allowance left ({exposure} already committed to open orders)."
+        )
+
+        if allowance <= 0:
+            logger.info("Open buy orders already reach the allowance, not opening new positions.")
+            return
 
         for item in pool_items:
             if free_slots <= 0:
@@ -290,7 +305,15 @@ class TradingService:
             for _ in range(to_create):
                 if buy_price > balance:
                     logger.info(
-                        f"Skipping {item.market_hash_name}: {buy_price} exceeds the remaining wallet balance {balance}."
+                        f"Skipping {item.market_hash_name}: a single order of {buy_price} exceeds "
+                        f"the wallet balance {balance}."
+                    )
+                    break
+
+                if buy_price > allowance:
+                    logger.info(
+                        f"Skipping {item.market_hash_name}: {buy_price} exceeds the remaining buy order "
+                        f"allowance {allowance}."
                     )
                     break
 
@@ -319,6 +342,6 @@ class TradingService:
                 )
                 await self.position_service.add(create)
 
-                balance -= buy_price
+                allowance -= buy_price
                 budget_left -= buy_price
                 free_slots -= 1
