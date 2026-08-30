@@ -1,7 +1,7 @@
 import datetime
 import json
 from decimal import Decimal
-from functools import wraps
+from functools import partial, wraps
 from typing import Optional
 
 import httpx
@@ -193,6 +193,39 @@ class SteamService:
             "sell_order_count": data.get("cSellOrders"),
             "buy_order_count": data.get("cBuyOrders"),
         }
+
+    @requires_login
+    @throttled
+    async def search_market(
+        self,
+        app_id: str,
+        start: int = 0,
+        count: int = 100,
+        sort_column: str = "quantity",
+        sort_dir: str = "desc",
+    ) -> dict:
+        """
+        One page of the market search, as JSON.
+
+        `sell_listings` counts how many copies are on sale, which is a rough liquidity
+        proxy; the real traded volume only comes from the price history.
+        """
+        logger.debug(f"Searching the market for app {app_id}, offset {start}.")
+        params = {
+            "query": "",
+            "start": start,
+            "count": count,
+            "search_descriptions": 0,
+            "sort_column": sort_column,
+            "sort_dir": sort_dir,
+            "appid": app_id,
+            "norender": 1,
+        }
+        resp = await to_thread.run_sync(
+            partial(self.client._session.get, f"{STEAM_COMMUNITY_URL}/market/search/render/", params=params, timeout=30)
+        )
+        resp.raise_for_status()
+        return resp.json()
 
     @requires_login
     @throttled
