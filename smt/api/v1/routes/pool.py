@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from starlette.responses import Response
 
+from smt.exceptions import OrderBookUnavailable, SteamLoginUnavailable
 from smt.schemas.pool import (
+    OrderBook,
     PoolItem,
     PoolItemBulkCreateRequest,
     PoolItemBulkCreateResponse,
@@ -13,8 +15,9 @@ from smt.schemas.pool import (
     RemoveManyResponse,
     RemoveResponse,
 )
-from smt.services.dependencies import get_pool_service
+from smt.services.dependencies import get_pool_service, get_steam_service
 from smt.services.pool import PoolService
+from smt.services.steam import SteamService
 from smt.worker.arq import ARQService, get_arq_service
 
 
@@ -27,7 +30,7 @@ async def read_pool(service: PoolService = Depends(get_pool_service)):
 
 
 @router.get("/status", response_model=list[PoolItemStatus])
-async def status(market_hash_names: str, service: PoolService = Depends(get_pool_service)):
+async def read_status(market_hash_names: str, service: PoolService = Depends(get_pool_service)):
     names = market_hash_names.split(",")
     items = await service.get_many(names)
     statuses = []
@@ -43,9 +46,28 @@ async def status(market_hash_names: str, service: PoolService = Depends(get_pool
                 volatility=item.volatility,
                 potential_profit=item.potential_profit,
                 use_for_trading=item.use_for_trading,
+                effective_buy_price=item.effective_buy_price,
+                effective_sell_price=item.effective_sell_price,
+                manual_buy_price=item.manual_buy_price,
+                manual_sell_price=item.manual_sell_price,
+                max_listed=item.max_listed,
+                current_highest_buy_order=item.current_highest_buy_order,
             )
         )
     return statuses
+
+
+@router.get("/{market_hash_name}/order-book", response_model=OrderBook)
+async def read_order_book(
+    market_hash_name: str,
+    pool_service: PoolService = Depends(get_pool_service),
+    steam: SteamService = Depends(get_steam_service),
+):
+    item = await pool_service.get_by_market_hash_name(market_hash_name)
+    try:
+        return OrderBook(**await steam.get_order_book(market_hash_name=market_hash_name, app_id=item.app_id))
+    except (OrderBookUnavailable, SteamLoginUnavailable) as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e))
 
 
 @router.post("/add", response_model=PoolItem)
