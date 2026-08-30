@@ -24,8 +24,32 @@ class ItemRepo:
         res = await self.session.execute(q)
         return res.scalars().all()
 
-    async def replace_for_game(self, app_id: str, context_id: str, items: list[Item]) -> None:
-        await self.session.execute(delete(Item).where(Item.app_id == app_id, Item.context_id == context_id))
-        if items:
-            self.session.add_all(items)
+    async def sync_for_game(self, app_id: str, context_id: str, items: list[Item]) -> set[str]:
+        """
+        Bring the stored inventory for a game in line with `items`.
+
+        Rows for assets that are still present keep their original `first_seen_at`.
+        Returns the ids of the assets that were not stored before.
+        """
+        existing = {item.id: item for item in await self.list_for_game(app_id, context_id)}
+        incoming_ids = {item.id for item in items}
+
+        stale_ids = set(existing) - incoming_ids
+        if stale_ids:
+            await self.session.execute(delete(Item).where(Item.id.in_(stale_ids)))
+
+        new_ids: set[str] = set()
+        for item in items:
+            stored = existing.get(item.id)
+            if stored is None:
+                self.session.add(item)
+                new_ids.add(item.id)
+            else:
+                stored.name = item.name
+                stored.market_hash_name = item.market_hash_name
+                stored.tradable = item.tradable
+                stored.marketable = item.marketable
+                stored.icon_url = item.icon_url
+
         await self.session.commit()
+        return new_ids

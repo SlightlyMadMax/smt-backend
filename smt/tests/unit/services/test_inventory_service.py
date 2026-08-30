@@ -19,7 +19,7 @@ def mock_steam_service():
 def mock_item_repo():
     repo = Mock(spec=ItemRepo)
     repo.list_for_game = AsyncMock()
-    repo.replace_for_game = AsyncMock()
+    repo.sync_for_game = AsyncMock()
     repo.get_by_id = AsyncMock()
     return repo
 
@@ -148,9 +148,9 @@ class TestInventoryService:
         mock_transform.assert_any_call({"some": "raw_data_1"})
         mock_transform.assert_any_call({"some": "raw_data_2"})
 
-        # Verify replace_for_game was called with correct parameters
-        mock_item_repo.replace_for_game.assert_called_once()
-        call_args = mock_item_repo.replace_for_game.call_args
+        # Verify sync_for_game was called with correct parameters
+        mock_item_repo.sync_for_game.assert_called_once()
+        call_args = mock_item_repo.sync_for_game.call_args
         assert call_args.kwargs["app_id"] == "730"
         assert call_args.kwargs["context_id"] == "2"
 
@@ -191,7 +191,7 @@ class TestInventoryService:
         # Assert
         mock_steam_service.get_inventory.assert_called_once_with(game=sample_game_option)
         mock_transform.assert_not_called()
-        mock_item_repo.replace_for_game.assert_called_once_with(app_id="730", context_id="2", items=[])
+        mock_item_repo.sync_for_game.assert_called_once_with(app_id="730", context_id="2", items=[])
 
     @patch("smt.services.inventory.transform_inventory_item")
     async def test_refresh_handles_single_item(
@@ -216,7 +216,7 @@ class TestInventoryService:
         # Assert
         mock_transform.assert_called_once_with({"some": "raw_data"})
 
-        call_args = mock_item_repo.replace_for_game.call_args
+        call_args = mock_item_repo.sync_for_game.call_args
         orm_items = call_args.kwargs["items"]
         assert len(orm_items) == 1
         assert orm_items[0].id == "item1"
@@ -244,7 +244,7 @@ class TestInventoryService:
         await inventory_service.refresh(custom_game_option)
 
         # Assert
-        call_args = mock_item_repo.replace_for_game.call_args
+        call_args = mock_item_repo.sync_for_game.call_args
         assert call_args.kwargs["app_id"] == "440"
         assert call_args.kwargs["context_id"] == "3"
 
@@ -290,7 +290,7 @@ class TestInventoryService:
             "marketable": True,
             "icon_url": "https://test.com/icon.png",
         }
-        mock_item_repo.replace_for_game.side_effect = Exception("Database error")
+        mock_item_repo.sync_for_game.side_effect = Exception("Database error")
 
         # Act & Assert
         with pytest.raises(Exception, match="Database error"):

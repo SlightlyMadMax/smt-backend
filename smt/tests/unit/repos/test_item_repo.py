@@ -82,7 +82,7 @@ class TestItemRepo:
         ids = [item.id for item in results]
         assert set(ids) == set(expected_ids)
 
-    async def test_replace_for_game_overwrites(self, db_session, item_repo):
+    async def test_sync_for_game_drops_missing_assets(self, db_session, item_repo):
         # Replace items for game (100,1) with a new list
         new_items = [
             Item(
@@ -95,15 +95,53 @@ class TestItemRepo:
                 marketable=True,
             )
         ]
-        await item_repo.replace_for_game(app_id="100", context_id="1", items=new_items)
+        await item_repo.sync_for_game(app_id="100", context_id="1", items=new_items)
         # After replace, only 'd4' should exist for (100,1)
         remaining = (
             (await db_session.execute(select(Item).where(Item.app_id == "100", Item.context_id == "1"))).scalars().all()
         )
         assert [i.id for i in remaining] == ["d4"]
 
-    async def test_replace_for_game_empty_list(self, db_session, item_repo):
-        await item_repo.replace_for_game(app_id="100", context_id="1", items=[])
+    async def test_sync_for_game_empty_list_clears_game(self, db_session, item_repo):
+        await item_repo.sync_for_game(app_id="100", context_id="1", items=[])
         remaining = (await db_session.execute(select(Item))).scalars().all()
         ids = [i.id for i in remaining]
         assert set(ids) == {"c3"}
+
+    async def test_sync_for_game_preserves_first_seen_at(self, db_session, item_repo):
+        original = (await item_repo.list_for_game("100", "1"))[0]
+        first_seen_at = original.first_seen_at
+
+        resynced = Item(
+            id=original.id,
+            market_hash_name=original.market_hash_name,
+            name="Renamed",
+            app_id="100",
+            context_id="1",
+            icon_url="https://cdn.com/new.png",
+            tradable=True,
+            marketable=True,
+        )
+        new_ids = await item_repo.sync_for_game(app_id="100", context_id="1", items=[resynced])
+
+        stored = await item_repo.get_by_id(original.id)
+        assert stored.first_seen_at == first_seen_at
+        assert stored.name == "Renamed"
+        assert new_ids == set()
+
+    async def test_sync_for_game_reports_new_assets(self, db_session, item_repo):
+        existing = await item_repo.list_for_game("100", "1")
+        fresh = Item(
+            id="brand-new",
+            market_hash_name="brand-new",
+            name="Brand New",
+            app_id="100",
+            context_id="1",
+            icon_url="https://cdn.com/new.png",
+            tradable=True,
+            marketable=True,
+        )
+
+        new_ids = await item_repo.sync_for_game(app_id="100", context_id="1", items=[*existing, fresh])
+
+        assert new_ids == {"brand-new"}

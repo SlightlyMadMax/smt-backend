@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from typing import Dict, List, Sequence
 
 from steampy.models import GameOptions
 
@@ -23,9 +23,8 @@ class InventoryService:
     async def get_by_id(self, asset_id: str) -> Item:
         return await self.item_repo.get_by_id(asset_id)
 
-    async def refresh(self, game_option: GameOptions) -> None:
-        raw_inventory = await self.steam.get_inventory(game=game_option)
-        orm_items: list[Item] = []
+    def _to_orm(self, raw_inventory: dict, game_option: GameOptions) -> List[Item]:
+        orm_items: List[Item] = []
         for raw in raw_inventory.values():
             data = transform_inventory_item(raw)
             orm_items.append(
@@ -40,11 +39,28 @@ class InventoryService:
                     icon_url=data["icon_url"],
                 )
             )
-        await self.item_repo.replace_for_game(
+        return orm_items
+
+    async def refresh(self, game_option: GameOptions) -> None:
+        raw_inventory = await self.steam.get_inventory(game=game_option)
+        await self.item_repo.sync_for_game(
             app_id=game_option.app_id,
             context_id=game_option.context_id,
-            items=orm_items,
+            items=self._to_orm(raw_inventory, game_option),
         )
+
+    async def sync_snapshot(self, game_option: GameOptions) -> Dict[str, List[Item]]:
+        """
+        Refresh the stored inventory from Steam and return it grouped by market_hash_name.
+
+        The returned items are the persisted ones, so they carry `first_seen_at`.
+        """
+        await self.refresh(game_option)
+
+        grouped: Dict[str, List[Item]] = {}
+        for item in await self.list(game_option):
+            grouped.setdefault(item.market_hash_name, []).append(item)
+        return grouped
 
     async def snapshot_items(self, game_option: GameOptions) -> dict[str, List[Item]]:
         """

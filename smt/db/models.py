@@ -31,6 +31,7 @@ class Item(Base):
     tradable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     marketable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     icon_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def __repr__(self):
         return f"<Item {self.name} ({self.id})>"
