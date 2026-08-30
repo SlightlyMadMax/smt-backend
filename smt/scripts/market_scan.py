@@ -42,6 +42,8 @@ class Candidate:
     spread_pct: Optional[Decimal] = None
     required_pct: Optional[Decimal] = None
     profit_per_trade: Optional[Decimal] = None
+    round_trips: int = 0
+    profit_per_window: Optional[Decimal] = None
     median_price: Optional[Decimal] = None
     price_drift: Optional[Decimal] = None
     tradable: bool = False
@@ -101,6 +103,24 @@ async def collect_candidates(
     return candidates
 
 
+def count_round_trips(points: List[tuple], buy_target: Decimal, sell_target: Decimal) -> int:
+    """
+    How many times the price fell to the buy target and then rose to the sell target.
+
+    Fills are assumed at the targets themselves, because that is where the bot's limit
+    orders sit; entering at the extreme of a dip would flatter the result.
+    """
+    holding = False
+    trips = 0
+    for _, price, _ in points:
+        if not holding and price <= buy_target:
+            holding = True
+        elif holding and price >= sell_target:
+            holding = False
+            trips += 1
+    return trips
+
+
 async def measure(
     steam: SteamService,
     candidate: Candidate,
@@ -144,13 +164,16 @@ async def measure(
     candidate.required_pct = required_spread_pct(candidate.buy_target)
     candidate.profit_per_trade = (net_received(candidate.sell_target) - candidate.buy_target).quantize(Decimal("0.01"))
     candidate.tradable = candidate.profit_per_trade > 0
+
+    candidate.round_trips = count_round_trips(points, candidate.buy_target, candidate.sell_target)
+    candidate.profit_per_window = (candidate.profit_per_trade * candidate.round_trips).quantize(Decimal("0.01"))
     return candidate
 
 
 def report(candidates: List[Candidate], out_path: Optional[str]) -> None:
     measured = [c for c in candidates if c.spread_pct is not None]
     rejected = [c for c in candidates if c.spread_pct is None and c.note]
-    measured.sort(key=lambda c: (c.profit_per_trade or Decimal("-999")), reverse=True)
+    measured.sort(key=lambda c: (c.profit_per_window or Decimal("-999")), reverse=True)
     tradable = [c for c in measured if c.tradable]
 
     if rejected:
@@ -165,12 +188,13 @@ def report(candidates: List[Candidate], out_path: Optional[str]) -> None:
     share = len(tradable) / len(measured) * 100
     print(f"\nmeasured {len(measured)} items, {len(tradable)} clear the fee hurdle ({share:.1f}%)")
 
-    header = f"{'item':<44}{'price':>8}{'vol30d':>9}{'buy':>9}{'sell':>9}{'spread':>9}{'needs':>8}{'profit':>9}"
+    header = f"{'item':<40}{'price':>8}{'vol30d':>8}{'buy':>8}{'sell':>8}" f"{'per trip':>10}{'trips':>7}{'per 30d':>9}"
     print("\n" + header)
     for c in measured[:30]:
+        name = c.market_hash_name.encode("ascii", "replace").decode()[:39]
         print(
-            f"{c.market_hash_name[:43]:<44}{c.current_price:>8}{c.volume_30d:>9}"
-            f"{c.buy_target:>9}{c.sell_target:>9}{c.spread_pct:>8}%{c.required_pct:>7}%{c.profit_per_trade:>9}"
+            f"{name:<40}{c.current_price:>8}{c.volume_30d:>8}"
+            f"{c.buy_target:>8}{c.sell_target:>8}{c.profit_per_trade:>10}{c.round_trips:>7}{c.profit_per_window:>9}"
         )
 
     if out_path:
