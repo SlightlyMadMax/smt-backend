@@ -240,3 +240,33 @@
   color: var(--color-muted);
   margin-top: 0.25rem;
 }
+
+/* the row itself opens the details */
+
+.pool-row {
+  cursor: pointer;
+}
+
+.pool-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.chevron-cell {
+  width: 2rem;
+  text-align: center;
+}
+
+.row-chevron {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid var(--color-muted);
+  border-bottom: 2px solid var(--color-muted);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 0.15s ease;
+}
+
+.pool-row[aria-expanded="true"] .row-chevron {
+  transform: rotate(-135deg) translate(-2px, -2px);
+}

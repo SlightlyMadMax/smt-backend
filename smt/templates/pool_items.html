@@ -42,8 +42,10 @@
             </thead>
             <tbody>
             {% for item in items %}
-            <tr class="{% if item.use_for_trading %}state-positive{% else %}state-negative{% endif %}"
-                data-hash="{{ item.market_hash_name }}">
+            <tr class="pool-row {% if item.use_for_trading %}state-positive{% else %}state-negative{% endif %}"
+                data-hash="{{ item.market_hash_name }}"
+                tabindex="0" role="button" aria-expanded="false" aria-controls="details-{{ loop.index }}"
+                title="Show price history, order book and manual overrides">
 
                 <td>
                     <label class="checkbox-label">
@@ -69,11 +71,7 @@
 
                 <td><span class="poll-updated-at" data-hash="{{ item.market_hash_name }}">{% if item.updated_at is not none %}{{ item.updated_at.strftime("%Y-%m-%d %H:%M") }}{% else %}<em>Loading…</em>{% endif %}</span></td>
 
-                <td>
-                    <button type="button" class="btn small secondary details-toggle"
-                            data-hash="{{ item.market_hash_name }}"
-                            aria-expanded="false" aria-controls="details-{{ loop.index }}">Details</button>
-                </td>
+                <td class="chevron-cell"><span class="row-chevron" aria-hidden="true"></span></td>
             </tr>
             <tr class="details-row" id="details-{{ loop.index }}"
                 data-details-for="{{ item.market_hash_name }}" hidden>

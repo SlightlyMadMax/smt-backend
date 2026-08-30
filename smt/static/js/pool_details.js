@@ -168,24 +168,36 @@ async function loadDetails(hash, panel) {
   });
 }
 
-document.querySelectorAll('.details-toggle').forEach(button => {
-  button.addEventListener('click', async () => {
-    const hash = button.dataset.hash;
-    const row = document.querySelector('.details-row[data-details-for="' + CSS.escape(hash) + '"]');
-    const panel = row.querySelector('.details-panel');
-    const expanded = button.getAttribute('aria-expanded') === 'true';
+async function toggleRow(row) {
+  const hash = row.dataset.hash;
+  const detailsRow = document.querySelector('.details-row[data-details-for="' + CSS.escape(hash) + '"]');
+  const panel = detailsRow.querySelector('.details-panel');
+  const expanded = row.getAttribute('aria-expanded') === 'true';
 
-    button.setAttribute('aria-expanded', String(!expanded));
-    button.textContent = expanded ? 'Details' : 'Hide';
-    row.hidden = expanded;
+  row.setAttribute('aria-expanded', String(!expanded));
+  detailsRow.hidden = expanded;
 
-    if (expanded) return;
+  if (expanded) return;
 
-    try {
-      await loadDetails(hash, panel);
-    } catch (e) {
-      panel.innerHTML = '<p class="details-empty">Could not load details: ' +
-        escapeHtml(e.message) + '</p>';
-    }
+  try {
+    await loadDetails(hash, panel);
+  } catch (e) {
+    panel.innerHTML = '<p class="details-empty">Could not load details: ' +
+      escapeHtml(e.message) + '</p>';
+  }
+}
+
+document.querySelectorAll('.pool-row').forEach(row => {
+  // the checkbox and the item link keep their own behaviour
+  row.addEventListener('click', ev => {
+    if (ev.target.closest('a, input, label, button, select')) return;
+    toggleRow(row);
+  });
+
+  row.addEventListener('keydown', ev => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    if (ev.target !== row) return;
+    ev.preventDefault();
+    toggleRow(row);
   });
 });
