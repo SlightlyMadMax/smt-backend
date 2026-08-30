@@ -180,6 +180,12 @@ class SteamService:
         return await to_thread.run_sync(self.client.market.get_my_market_listings)
 
     @requires_login
+    async def get_wallet_balance(self) -> Decimal:
+        balance = await to_thread.run_sync(self.client.get_wallet_balance, True, False)
+        logger.debug(f"Wallet balance: {balance}.")
+        return Decimal(balance)
+
+    @requires_login
     async def cancel_buy_order(self, buy_order_id: str) -> None:
         logger.info(f"Cancelling buy order {buy_order_id}.")
         await to_thread.run_sync(self.client.market.cancel_buy_order, buy_order_id)
