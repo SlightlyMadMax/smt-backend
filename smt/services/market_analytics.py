@@ -1,4 +1,5 @@
 import math
+import statistics
 from datetime import timedelta
 from decimal import Decimal
 from typing import List, Optional, Tuple
@@ -9,9 +10,33 @@ from smt.utils.math import weighted_percentile
 from smt.utils.steam import calculate_fees
 
 
+OUTLIER_PRICE_FACTOR = Decimal("5")
+
+
 class MarketAnalyticsService:
     def __init__(self, settings_service: SettingsService):
         self.settings_service = settings_service
+
+    @staticmethod
+    def filter_price_outliers(
+        records: List[PriceHistoryRecord], factor: Decimal = OUTLIER_PRICE_FACTOR
+    ) -> List[PriceHistoryRecord]:
+        """
+        Drop records whose price is more than `factor` times away from the median.
+
+        Steam price history occasionally contains points one or two orders of magnitude
+        off the real price, which distorts volatility far more than it distorts a volume
+        weighted percentile.
+        """
+        if not records:
+            return []
+
+        median = statistics.median(r.price for r in records)
+        if median <= 0:
+            return list(records)
+
+        low, high = median / factor, median * factor
+        return [r for r in records if low <= r.price <= high]
 
     async def compute_weighted_percentile_targets(self, records: List[PriceHistoryRecord]) -> Tuple[Decimal, Decimal]:
         settings = await self.settings_service.get_settings()

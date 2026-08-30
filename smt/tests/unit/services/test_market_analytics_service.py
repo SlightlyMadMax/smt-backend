@@ -288,3 +288,44 @@ class TestComputeRecentStats:
         _, volume = await market_analytics_service.compute_recent_stats(records)
 
         assert volume == 24
+
+
+class TestFilterPriceOutliers:
+    def test_keeps_everything_when_prices_are_close(self, market_analytics_service):
+        records = [make_record(h, p, 10) for h, p in enumerate(["6.80", "6.90", "7.00", "7.10"])]
+
+        assert len(market_analytics_service.filter_price_outliers(records)) == 4
+
+    def test_drops_prices_far_above_the_median(self, market_analytics_service):
+        records = [make_record(h, p, 10) for h, p in enumerate(["6.80", "6.90", "7.00", "1463.75"])]
+
+        kept = market_analytics_service.filter_price_outliers(records)
+
+        assert [str(r.price) for r in kept] == ["6.80", "6.90", "7.00"]
+
+    def test_drops_prices_far_below_the_median(self, market_analytics_service):
+        records = [make_record(h, p, 10) for h, p in enumerate(["6.80", "6.90", "7.00", "0.01"])]
+
+        kept = market_analytics_service.filter_price_outliers(records)
+
+        assert all(r.price > Decimal("1") for r in kept)
+
+    def test_keeps_a_genuine_move_within_the_factor(self, market_analytics_service):
+        records = [make_record(h, p, 10) for h, p in enumerate(["10.00", "10.00", "10.00", "40.00"])]
+
+        assert len(market_analytics_service.filter_price_outliers(records)) == 4
+
+    def test_handles_no_records(self, market_analytics_service):
+        assert market_analytics_service.filter_price_outliers([]) == []
+
+    @pytest.mark.asyncio
+    async def test_volatility_drops_once_outliers_are_removed(self, market_analytics_service):
+        normal = [make_record(h, "6.90", 10) for h in range(0, 10)]
+        spiked = normal + [make_record(10, "1463.75", 8)]
+
+        raw = await market_analytics_service.compute_volume_weighted_volatility(spiked)
+        clean = await market_analytics_service.compute_volume_weighted_volatility(
+            market_analytics_service.filter_price_outliers(spiked)
+        )
+
+        assert raw > clean

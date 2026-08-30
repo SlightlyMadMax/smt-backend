@@ -96,13 +96,16 @@ class StatsRefreshService:
         since = datetime.now(UTC) - timedelta(days=days)
 
         for item in items:
-            records = await self.price_history_service.list(item.market_hash_name, since=since)
-            records = list(records)
-            if len(records) < 2:
+            records = list(await self.price_history_service.list(item.market_hash_name, since=since))
+            clean = self.analytics_service.filter_price_outliers(records)
+            dropped = len(records) - len(clean)
+            if dropped:
+                logger.info(f"Ignoring {dropped} outlier price records for {item.market_hash_name}.")
+            if len(clean) < 2:
                 continue
 
-            opt_buy, opt_sell = await self.analytics_service.compute_weighted_percentile_targets(records)
-            sigma = await self.analytics_service.compute_volume_weighted_volatility(records)
+            opt_buy, opt_sell = await self.analytics_service.compute_weighted_percentile_targets(clean)
+            sigma = await self.analytics_service.compute_volume_weighted_volatility(clean)
             net_sell, profit = await self.analytics_service.compute_net_and_profit(opt_sell, opt_buy)
             flag = await self.analytics_service.decide_trade_flag(profit, item.current_volume24h, sigma)
 
