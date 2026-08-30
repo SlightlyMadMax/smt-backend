@@ -1,3 +1,26 @@
+:root {
+  --color-accent: #2d8cf0;
+  --color-accent-dark: #1a6fb3;
+  --color-success: #28a745;
+  --color-danger: #d9534f;
+  --color-text: #222;
+  --color-muted: #666;
+  --color-border: #ddd;
+  --color-surface: #fff;
+  --color-surface-alt: #f5f5f5;
+  --color-header: #333;
+  --color-header-hover: #444;
+  --color-positive-bg: #e6ffed;
+  --color-positive-text: #1b803a;
+  --color-negative-bg: #ffe6e6;
+  --color-negative-text: #a33;
+
+  --radius: 4px;
+  --radius-lg: 8px;
+  --gap: 1rem;
+  --gap-sm: 0.5rem;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -7,25 +30,31 @@
 html, body {
   height: 100%;
   font-family: sans-serif;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.site-content {
+  padding-bottom: 2rem;
 }
 
 .page-name {
   text-align: center;
-  margin-top: 1rem;
+  margin-top: var(--gap);
 }
 
-/* home menu */
+/* ── site chrome ─────────────────────────────────────────────── */
 
 .site-header {
-  background: #333;
-  color: white;
+  background: var(--color-header);
+  color: #fff;
   padding: 1em 1.5em;
   display: flex;
   align-items: center;
 }
 
 .site-logo a {
-  color: white;
+  color: #fff;
   text-decoration: none;
   font-size: 1.25em;
   margin-right: 2em;
@@ -33,10 +62,8 @@ html, body {
 
 .main-nav > ul {
   list-style: none;
-  padding: 0;
-  margin: 0;
   display: flex;
-  gap: 1rem;
+  gap: var(--gap);
 }
 
 .main-nav li {
@@ -44,8 +71,13 @@ html, body {
 }
 
 .main-nav a {
-  color: white;
+  color: #fff;
   text-decoration: none;
+}
+
+.main-nav a[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .submenu {
@@ -54,9 +86,10 @@ html, body {
   position: absolute;
   top: 100%;
   left: 0;
-  background: #444;
-  padding: 0.5em 0;
+  background: var(--color-header-hover);
+  padding: var(--gap-sm) 0;
   white-space: nowrap;
+  z-index: 2;
 }
 
 .main-nav li:hover > .submenu {
@@ -67,6 +100,198 @@ html, body {
   padding: 0.25em 1em;
 }
 
-.submenu a {
-  color: white;
+/* ── buttons ─────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-block;
+  padding: 0.5em 1em;
+  font-size: 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--color-accent-dark);
+}
+
+.btn.primary {
+  background: var(--color-success);
+}
+
+.btn.primary:hover {
+  filter: brightness(0.92);
+}
+
+.btn.secondary {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.btn.secondary:hover {
+  background: var(--color-border);
+}
+
+.btn.danger {
+  background: var(--color-danger);
+}
+
+.btn.danger:hover {
+  filter: brightness(0.9);
+}
+
+.btn.small {
+  font-size: 0.85rem;
+  padding: 2px 6px;
+}
+
+button:disabled,
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ── links ───────────────────────────────────────────────────── */
+
+.item-link {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+  padding-bottom: 2px;
+  transition: color 0.2s ease, border-bottom-color 0.2s ease;
+}
+
+.item-link:hover,
+.item-link:focus {
+  color: var(--color-accent-dark);
+  border-bottom-color: transparent;
+}
+
+.item-link:visited {
+  color: #636f83;
+}
+
+/* ── checkboxes ──────────────────────────────────────────────── */
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.checkbox-custom {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  border: 2px solid var(--color-header);
+  border-radius: 3px;
+  background: var(--color-surface);
+  position: relative;
+}
+
+.checkbox-label input:checked + .checkbox-custom {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.checkbox-label input:checked + .checkbox-custom::after {
+  content: '\2713';
+  color: #fff;
+  font-size: 0.75rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+}
+
+.checkbox-label input:focus-visible + .checkbox-custom {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── forms ───────────────────────────────────────────────────── */
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--gap);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--gap);
+}
+
+.form-group label {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.form-group input[type="number"],
+.form-group input[type="text"],
+.form-group select {
+  padding: var(--gap-sm);
+  border: 1px solid #ccc;
+  border-radius: var(--radius);
+}
+
+.form-group small {
+  color: var(--color-muted);
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap);
+  margin-top: 2rem;
+}
+
+.input-small {
+  width: 60px;
+  padding: 2px 6px;
+  font-size: 0.9rem;
+}
+
+/* ── status messages ─────────────────────────────────────────── */
+
+.status-message {
+  margin-top: var(--gap);
+  padding: var(--gap);
+  border-radius: var(--radius);
+  display: none;
+}
+
+.status-message.success {
+  background: var(--color-positive-bg);
+  color: var(--color-positive-text);
+}
+
+.status-message.error {
+  background: var(--color-negative-bg);
+  color: var(--color-negative-text);
+}
+
+/* ── state colours shared by cards and rows ──────────────────── */
+
+.state-positive {
+  background-color: var(--color-positive-bg);
+}
+
+.state-negative {
+  background-color: var(--color-negative-bg);
 }

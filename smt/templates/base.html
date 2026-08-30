@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>{% block title %}Steam Market Trader{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/base.css"/>
+  <link rel="stylesheet" href="{{ static_url('css/base.css') }}"/>
   {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -23,10 +23,10 @@
           </ul>
         </li>
         <li><a href="/pool">Pool</a></li>
-        <li><a href="#">Trade Market</a></li>
-        <li><a href="#">Action History</a></li>
+        <li><a href="#" aria-disabled="true" title="Not implemented yet">Trade Market</a></li>
+        <li><a href="#" aria-disabled="true" title="Not implemented yet">Action History</a></li>
         <li><a href="/settings">Settings</a></li>
-        <li><a href="#">Statistics</a></li>
+        <li><a href="#" aria-disabled="true" title="Not implemented yet">Statistics</a></li>
       </ul>
     </nav>
   </header>
@@ -34,5 +34,7 @@
   <main class="site-content">
     {% block content %}{% endblock %}
   </main>
+
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/pool_items.css">
+<link rel="stylesheet" href="{{ static_url('css/pool_items.css') }}">
 {% endblock %}
 
 {% block title %}My Trading Pool — Steam Market Trader{% endblock %}
@@ -20,6 +20,7 @@
         <button type="submit" class="btn">Apply</button>
     </div>
 
+    <div class="table-scroll">
     <table class="pool-table">
         <thead>
         <tr>
@@ -44,7 +45,7 @@
         </thead>
         <tbody>
         {% for item in items %}
-        <tr class="{% if item.use_for_trading %}ready{% else %}not-ready{% endif %}"
+        <tr class="{% if item.use_for_trading %}state-positive{% else %}state-negative{% endif %}"
             data-hash="{{ item.market_hash_name }}">
 
             <td>
@@ -158,6 +159,10 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 </form>
-<script src="/static/js/pool_items.js" defer></script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ static_url('js/pool_items.js') }}" defer></script>
 {% endblock %}

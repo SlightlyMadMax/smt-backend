@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-  <link rel="stylesheet" href="/static/css/settings.css">
+  <link rel="stylesheet" href="{{ static_url('css/settings.css') }}">
 {% endblock %}
 
 {% block title %}Trading Settings — Steam Market Trader{% endblock %}
@@ -120,5 +120,8 @@
 
     <div id="settings-status" class="status-message" style="display: none;"></div>
 
-    <script src="/static/js/settings.js"></script>
+    {% endblock %}
+
+{% block extra_js %}
+<script src="{{ static_url('js/settings.js') }}" defer></script>
 {% endblock %}
