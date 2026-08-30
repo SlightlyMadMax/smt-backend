@@ -34,6 +34,13 @@ def _from_minor_units(value) -> Optional[Decimal]:
     return None if value is None else (Decimal(value) / 100).quantize(Decimal("0.01"))
 
 
+def _to_levels(compact: Optional[list]) -> list[dict]:
+    """Steam sends the depth as a flat [price, quantity, price, quantity, ...] list."""
+    if not compact:
+        return []
+    return [{"price": _from_minor_units(compact[i]), "quantity": compact[i + 1]} for i in range(0, len(compact) - 1, 2)]
+
+
 def requires_login(func):
     @wraps(func)
     async def wrapper(self, *args, **kwargs):
@@ -192,6 +199,8 @@ class SteamService:
             "highest_buy_order": _from_minor_units(data.get("amtMaxBuyOrder")),
             "sell_order_count": data.get("cSellOrders"),
             "buy_order_count": data.get("cBuyOrders"),
+            "sell_levels": _to_levels(data.get("rgCompactSellOrders")),
+            "buy_levels": _to_levels(data.get("rgCompactBuyOrders")),
         }
 
     @requires_login

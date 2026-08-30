@@ -86,6 +86,11 @@ class PoolItemStatus(BaseModel):
     market_hash_name: str
     current_lowest_price: Optional[Decimal] = None
     current_highest_buy_order: Optional[Decimal] = None
+    effective_buy_price: Optional[Decimal] = None
+    effective_sell_price: Optional[Decimal] = None
+    manual_buy_price: Optional[Decimal] = None
+    manual_sell_price: Optional[Decimal] = None
+    max_listed: Optional[int] = None
     current_volume24h: Optional[int] = None
     optimal_buy_price: Optional[Decimal] = None
     optimal_sell_price: Optional[Decimal] = None
@@ -124,3 +129,17 @@ class RemoveManyResponse(BaseModel):
 
 class PoolItemBulkRefreshRequest(BaseModel):
     market_hash_names: list[str]
+
+
+class OrderBookLevel(BaseModel):
+    price: Decimal
+    quantity: int
+
+
+class OrderBook(BaseModel):
+    lowest_sell_order: Optional[Decimal] = None
+    highest_buy_order: Optional[Decimal] = None
+    sell_order_count: Optional[int] = None
+    buy_order_count: Optional[int] = None
+    sell_levels: list[OrderBookLevel] = []
+    buy_levels: list[OrderBookLevel] = []
