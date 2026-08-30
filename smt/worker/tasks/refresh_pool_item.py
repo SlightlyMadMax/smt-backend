@@ -13,6 +13,7 @@ from smt.services.price_history import PriceHistoryService
 from smt.services.settings import SettingsService
 from smt.services.stats_refresh import StatsRefreshService
 from smt.services.steam import SteamService
+from smt.worker.schedule import due
 
 
 logger = get_logger("worker.tasks")
@@ -59,16 +60,34 @@ async def refresh_task(ctx, market_hash_names: list[str]):
 
 
 async def refresh_periodic_task(ctx):
+    """
+    Cron ticks often; the configured intervals decide what actually runs.
+
+    Prices and indicators are refreshed on separate schedules because pulling history
+    from Steam costs requests, while recomputing indicators only costs database reads.
+    """
     async with async_session_maker() as session:
         try:
             stats_service, pool_repo = await build_services(session=session, steam_service=ctx["steam_service"])
+            settings = await SettingsService(SettingsRepo(session)).get_settings()
+
             all_items = await pool_repo.list_items()
             market_hash_names = [item.market_hash_name for item in all_items]
+            if not market_hash_names:
+                return
 
-            for i in range(0, len(market_hash_names), REFRESH_BATCH_SIZE):
-                await stats_service.refresh_all(market_hash_names[i : i + REFRESH_BATCH_SIZE])
+            if await due(ctx["redis"], "prices", settings.price_refresh_interval_minutes):
+                for i in range(0, len(market_hash_names), REFRESH_BATCH_SIZE):
+                    batch = market_hash_names[i : i + REFRESH_BATCH_SIZE]
+                    await stats_service.refresh_price_history(batch)
+                    for name in batch:
+                        await stats_service.refresh_current_stats(name)
+                logger.info(f"Price refresh completed for {len(market_hash_names)} items")
 
-            logger.info(f"Periodic refresh completed for {len(market_hash_names)} items")
+            if await due(ctx["redis"], "indicators", settings.stats_refresh_interval_minutes):
+                for i in range(0, len(market_hash_names), REFRESH_BATCH_SIZE):
+                    await stats_service.refresh_indicators(market_hash_names[i : i + REFRESH_BATCH_SIZE])
+                logger.info(f"Indicator refresh completed for {len(market_hash_names)} items")
         except Exception as e:
             logger.error(f"Periodic refresh failed: {e}")
             raise
