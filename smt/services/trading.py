@@ -231,6 +231,15 @@ class TradingService:
         pool_items = await self.pool_item_service.list_marked_for_trading()
         existing = await self.position_service.list_active()
 
+        day_start = datetime.now(timezone.utc) - timedelta(days=1)
+        realized = await self.position_service.realized_profit_since(day_start)
+        if realized < -settings.max_daily_loss:
+            logger.warning(
+                f"Not opening new positions: realized profit over the last 24h is {realized}, "
+                f"past the daily loss limit of -{settings.max_daily_loss}."
+            )
+            return
+
         free_slots = settings.max_concurrent_trades - len(existing)
         if free_slots <= 0:
             logger.info(

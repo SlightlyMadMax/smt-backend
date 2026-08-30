@@ -49,10 +49,15 @@ def position_service():
     return service
 
 
-def make_settings(max_concurrent_trades=10, max_investment_per_item=Decimal("50.00")):
+def make_settings(
+    max_concurrent_trades=10,
+    max_investment_per_item=Decimal("50.00"),
+    max_daily_loss=Decimal("100.00"),
+):
     return SimpleNamespace(
         max_concurrent_trades=max_concurrent_trades,
         max_investment_per_item=max_investment_per_item,
+        max_daily_loss=max_daily_loss,
         emergency_stop=False,
         cancel_untracked_orders=False,
     )
@@ -69,6 +74,7 @@ def trading_service(position_service):
     )
     service.settings_service.get_settings.return_value = make_settings()
     service.steam_service.get_wallet_balance.return_value = Decimal("1000.00")
+    position_service.realized_profit_since.return_value = Decimal("0")
     return service
 
 
@@ -489,3 +495,40 @@ class TestOpenNewPositionsLimits:
 
         trading_service.steam_service.get_order_book.assert_not_awaited()
         trading_service.steam_service.create_buy_order.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestDailyLossLimit:
+    async def test_trades_while_the_day_is_profitable(self, trading_service, position_service):
+        position_service.realized_profit_since.return_value = Decimal("5.00")
+        position_service.list_active.return_value = []
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.00"))]
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.create_buy_order.assert_awaited_once()
+
+    async def test_stops_once_the_daily_loss_limit_is_passed(self, trading_service, position_service):
+        trading_service.settings_service.get_settings.return_value = make_settings(max_daily_loss=Decimal("10.00"))
+        position_service.realized_profit_since.return_value = Decimal("-10.01")
+        position_service.list_active.return_value = []
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item()]
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.get_wallet_balance.assert_not_awaited()
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
+
+    async def test_a_loss_inside_the_limit_still_trades(self, trading_service, position_service):
+        trading_service.settings_service.get_settings.return_value = make_settings(max_daily_loss=Decimal("10.00"))
+        position_service.realized_profit_since.return_value = Decimal("-9.99")
+        position_service.list_active.return_value = []
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.00"))]
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.create_buy_order.assert_awaited_once()
