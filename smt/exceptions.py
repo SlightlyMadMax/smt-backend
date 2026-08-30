@@ -2,6 +2,10 @@ class SMTError(Exception):
     """Base class for all application specific errors."""
 
 
+class SteamLoginUnavailable(SMTError):
+    """Steam refused to establish a session and further attempts are on cooldown."""
+
+
 class SteamOperationFailed(SMTError):
     """Steam accepted the request but reported a failure."""
 

@@ -12,7 +12,7 @@ from steampy.models import Currency, GameOptions
 from tenacity import AsyncRetrying, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings
-from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed
+from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed, SteamLoginUnavailable
 from smt.logger import get_logger
 from smt.utils.steam import calculate_fees, parse_steam_ts
 
@@ -22,6 +22,8 @@ logger = get_logger("services.steam")
 STEAM_COMMUNITY_URL = "https://steamcommunity.com"
 ORDER_BOOK_TIMEOUT = 30
 ACCOUNT_CURRENCY = Currency.RUB
+LOGIN_COOLDOWN_BASE = datetime.timedelta(minutes=5)
+LOGIN_COOLDOWN_MAX = datetime.timedelta(hours=1)
 
 
 def _from_minor_units(value) -> Optional[Decimal]:
@@ -51,17 +53,28 @@ class SteamService:
             }
         )
         self._last_check: Optional[datetime] = None
+        self._login_blocked_until: Optional[datetime] = None
+        self._login_failures: int = 0
         self._check_interval = datetime.timedelta(minutes=5)
 
     def _should_check_login(self) -> bool:
         return not self._last_check or datetime.datetime.now(datetime.UTC) - self._last_check > self._check_interval
 
-    async def _ensure_login(self):
+    def _cooldown_remaining(self) -> Optional[datetime.timedelta]:
+        if not self._login_blocked_until:
+            return None
+        remaining = self._login_blocked_until - datetime.datetime.now(datetime.UTC)
+        return remaining if remaining > datetime.timedelta(0) else None
+
+    def _start_login_cooldown(self) -> datetime.timedelta:
+        self._login_failures += 1
+        cooldown = min(LOGIN_COOLDOWN_BASE * 2 ** (self._login_failures - 1), LOGIN_COOLDOWN_MAX)
+        self._login_blocked_until = datetime.datetime.now(datetime.UTC) + cooldown
+        return cooldown
+
+    async def _log_in(self) -> None:
         async for attempt in AsyncRetrying(reraise=True, stop=stop_after_attempt(3), wait=wait_fixed(3)):
             with attempt:
-                if not self._should_check_login():
-                    return
-
                 try:
                     await to_thread.run_sync(self.client.is_session_alive)
                 except LoginRequired:
@@ -75,7 +88,31 @@ class SteamService:
                     assert self.client.was_login_executed
                     logger.info("Steam login successful.")
 
-                self._last_check = datetime.datetime.now(datetime.UTC)
+    async def _ensure_login(self) -> None:
+        """
+        Make sure the Steam session is usable.
+
+        A refused login puts further attempts on a growing cooldown. Without it every
+        Steam call would start its own retry burst, and those bursts are what makes
+        Steam refuse the next login in the first place.
+        """
+        remaining = self._cooldown_remaining()
+        if remaining is not None:
+            raise SteamLoginUnavailable(f"Steam login is on cooldown for another {remaining}.")
+
+        if not self._should_check_login():
+            return
+
+        try:
+            await self._log_in()
+        except Exception as e:
+            cooldown = self._start_login_cooldown()
+            logger.error(f"Steam login failed ({self._login_failures} in a row), backing off for {cooldown}: {e!r}")
+            raise SteamLoginUnavailable(f"Could not log in to Steam: {e!r}") from e
+
+        self._login_failures = 0
+        self._login_blocked_until = None
+        self._last_check = datetime.datetime.now(datetime.UTC)
 
     @requires_login
     async def get_inventory(self, game: GameOptions) -> dict:
