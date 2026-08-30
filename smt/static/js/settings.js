@@ -3,6 +3,7 @@ const NUMERIC_FIELDS = [
   'buy_percentile', 'sell_percentile', 'min_volume_24h', 'min_volume_7d',
   'min_volatility_threshold', 'max_volatility_threshold', 'max_daily_loss',
   'max_hold_hours', 'min_return_on_capital_30d',
+  'price_refresh_interval_minutes', 'stats_refresh_interval_minutes', 'cooldown_after_loss_hours',
 ];
 
 const BOOLEAN_FIELDS = ['emergency_stop', 'cancel_untracked_orders'];

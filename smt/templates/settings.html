@@ -105,6 +105,30 @@
         </div>
 
         <div class="settings-section">
+            <h2>Schedule</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="price_refresh_interval_minutes">Price Refresh Interval, minutes</label>
+                    <input type="number" step="1" min="5" name="price_refresh_interval_minutes" value="{{ settings.price_refresh_interval_minutes }}" required>
+                    <small>How often price history and the order book are pulled from Steam</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="stats_refresh_interval_minutes">Indicator Refresh Interval, minutes</label>
+                    <input type="number" step="1" min="10" name="stats_refresh_interval_minutes" value="{{ settings.stats_refresh_interval_minutes }}" required>
+                    <small>How often the targets are recomputed from stored history</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="cooldown_after_loss_hours">Cooldown After a Loss, hours</label>
+                    <input type="number" step="1" min="0" name="cooldown_after_loss_hours" value="{{ settings.cooldown_after_loss_hours }}" required>
+                    <small>How long an item is left alone after a position closed at a loss</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
             <h2>Emergency Controls</h2>
 
             <div class="form-group">

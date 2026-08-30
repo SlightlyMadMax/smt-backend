@@ -11,7 +11,9 @@ from smt.services.market_analytics import ItemIndicators, MarketAnalyticsService
 
 def make_indicators(
     profit=Decimal("5.00"),
+    profit_pct=Decimal("50.00"),
     volume24h=500,
+    volume7d=3000,
     volatility=Decimal("0.10"),
     round_trips=8,
     median_hold_hours=Decimal("12.0"),
@@ -19,7 +21,9 @@ def make_indicators(
 ):
     return ItemIndicators(
         profit=profit,
+        profit_pct=profit_pct,
         volume24h=volume24h,
+        volume7d=volume7d,
         volatility=volatility,
         round_trips=round_trips,
         median_hold_hours=median_hold_hours,
@@ -39,6 +43,8 @@ def mock_settings_service():
     mock_settings.emergency_stop = False
     mock_settings.min_profit_threshold = Decimal("1.00")
     mock_settings.min_volume_24h = 100
+    mock_settings.min_volume_7d = 500
+    mock_settings.min_profit_percentage = Decimal("5.00")
     mock_settings.min_volatility_threshold = Decimal("0.01")
     mock_settings.max_volatility_threshold = Decimal("0.50")
     mock_settings.max_hold_hours = 48
@@ -468,3 +474,27 @@ class TestVelocityGates:
 
         assert flag is True
         assert reason == ""
+
+
+@pytest.mark.asyncio
+class TestMarginAndWeeklyVolumeGates:
+    async def test_a_thin_margin_is_rejected(self, market_analytics_service, mock_settings_service):
+        mock_settings_service.get_settings.return_value.min_profit_percentage = Decimal("10.00")
+
+        flag, reason = await market_analytics_service.decide_trade_flag(make_indicators(profit_pct=Decimal("4.00")))
+
+        assert flag is False
+        assert "margin" in reason
+
+    async def test_a_thin_week_is_rejected(self, market_analytics_service, mock_settings_service):
+        mock_settings_service.get_settings.return_value.min_volume_7d = 5000
+
+        flag, reason = await market_analytics_service.decide_trade_flag(make_indicators(volume7d=100))
+
+        assert flag is False
+        assert "7d" in reason
+
+    async def test_a_missing_weekly_volume_is_rejected(self, market_analytics_service):
+        flag, reason = await market_analytics_service.decide_trade_flag(make_indicators(volume7d=None))
+
+        assert flag is False
