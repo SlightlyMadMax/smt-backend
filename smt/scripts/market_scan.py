@@ -42,7 +42,10 @@ class Candidate:
     spread_pct: Optional[Decimal] = None
     required_pct: Optional[Decimal] = None
     profit_per_trade: Optional[Decimal] = None
+    median_price: Optional[Decimal] = None
+    price_drift: Optional[Decimal] = None
     tradable: bool = False
+    note: str = ""
 
 
 def required_spread_pct(buy: Decimal) -> Decimal:
@@ -118,6 +121,7 @@ async def measure(
     candidate.sell_target = weighted_percentile(prices, volumes, sell_pct)
 
     if candidate.buy_target <= 0:
+        candidate.note = "no usable buy target"
         return candidate
 
     candidate.spread_pct = ((candidate.sell_target / candidate.buy_target - 1) * 100).quantize(Decimal("0.01"))
@@ -129,30 +133,37 @@ async def measure(
 
 def report(candidates: List[Candidate], out_path: Optional[str]) -> None:
     measured = [c for c in candidates if c.spread_pct is not None]
+    rejected = [c for c in candidates if c.spread_pct is None and c.note]
     measured.sort(key=lambda c: (c.profit_per_trade or Decimal("-999")), reverse=True)
     tradable = [c for c in measured if c.tradable]
 
-    print(
-        f"\nmeasured {len(measured)} items, {len(tradable)} clear the fee hurdle "
-        f"({len(tradable) / len(measured) * 100:.1f}%)"
-        if measured
-        else "\nnothing measured"
-    )
+    if rejected:
+        print(f"\nskipped {len(rejected)} items whose history does not describe a single good, e.g.")
+        for c in rejected[:5]:
+            print(f"   {c.market_hash_name[:50]:<52} {c.note}")
 
-    print(f"\n{'item':<44}{'price':>8}{'vol30d':>9}{'buy':>8}{'sell':>8}{'spread':>9}{'needs':>8}{'profit':>9}")
+    if not measured:
+        print("\nnothing measured")
+        return
+
+    share = len(tradable) / len(measured) * 100
+    print(f"\nmeasured {len(measured)} items, {len(tradable)} clear the fee hurdle ({share:.1f}%)")
+
+    header = f"{'item':<44}{'price':>8}{'vol30d':>9}{'buy':>9}{'sell':>9}{'spread':>9}{'needs':>8}{'profit':>9}"
+    print("\n" + header)
     for c in measured[:30]:
         print(
             f"{c.market_hash_name[:43]:<44}{c.current_price:>8}{c.volume_30d:>9}"
-            f"{c.buy_target:>8}{c.sell_target:>8}{c.spread_pct:>8}%{c.required_pct:>7}%{c.profit_per_trade:>9}"
+            f"{c.buy_target:>9}{c.sell_target:>9}{c.spread_pct:>8}%{c.required_pct:>7}%{c.profit_per_trade:>9}"
         )
 
     if out_path:
         with open(out_path, "w", newline="", encoding="utf-8") as fh:
             writer = csv.writer(fh)
             writer.writerow([f.name for f in fields(Candidate)])
-            for c in measured:
+            for c in measured + rejected:
                 writer.writerow([getattr(c, f.name) for f in fields(Candidate)])
-        print(f"\nwrote {len(measured)} rows to {out_path}")
+        print(f"\nwrote {len(measured) + len(rejected)} rows to {out_path}")
 
 
 async def main() -> None:
@@ -165,6 +176,12 @@ async def main() -> None:
     parser.add_argument("--min-price", type=Decimal, default=Decimal("1.00"))
     parser.add_argument("--max-price", type=Decimal, default=Decimal("100.00"))
     parser.add_argument("--min-volume", type=int, default=100, help="minimum traded volume over the window")
+    parser.add_argument(
+        "--max-drift",
+        type=Decimal,
+        default=Decimal("2"),
+        help="reject an item when its median historical price differs from today's by more than this factor",
+    )
     parser.add_argument("--out", help="write the full result to this CSV")
     args = parser.parse_args()
 
@@ -177,7 +194,9 @@ async def main() -> None:
     measured = []
     for index, candidate in enumerate(candidates, start=1):
         try:
-            measured.append(await measure(steam, candidate, args.app_id, args.days, args.buy_pct, args.sell_pct))
+            measured.append(
+                await measure(steam, candidate, args.app_id, args.days, args.buy_pct, args.sell_pct, args.max_drift)
+            )
         except Exception as e:
             print(
                 f"  [{index}/{len(candidates)}] {candidate.market_hash_name}: {type(e).__name__}: {e}", file=sys.stderr
@@ -185,7 +204,7 @@ async def main() -> None:
             continue
         print(f"  [{index}/{len(candidates)}] {candidate.market_hash_name}", file=sys.stderr)
 
-    report([c for c in measured if c.volume_30d >= args.min_volume], args.out)
+    report([c for c in measured if c.volume_30d >= args.min_volume or c.note], args.out)
 
 
 if __name__ == "__main__":
