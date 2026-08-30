@@ -98,10 +98,6 @@ class StatsRefreshService:
 
             await self._persist_indicators(item.market_hash_name, opt_buy, opt_sell, sigma, profit, flag)
 
-    async def _fetch_prices(self, name: str, since: datetime) -> list[float]:
-        history = await self.price_history_service.list(market_hash_name=name, since=since)
-        return [float(r.price) for r in history]
-
     async def _persist_indicators(
         self, name: str, opt_buy: Decimal, opt_sell: Decimal, sigma: Decimal, profit: Decimal, flag: bool
     ) -> None:

@@ -61,35 +61,3 @@ class InventoryService:
         for item in await self.list(game_option):
             grouped.setdefault(item.market_hash_name, []).append(item)
         return grouped
-
-    async def snapshot_items(self, game_option: GameOptions) -> dict[str, List[Item]]:
-        """
-        Returns a mapping:
-          market_hash_name -> list of Item
-        """
-        raw_inventory = await self.steam.get_inventory(game=game_option)
-        grouped: dict[str, list[Item]] = {}
-        for raw in raw_inventory.values():
-            data = transform_inventory_item(raw)
-            item = Item(
-                id=data["id"],
-                app_id=game_option.app_id,
-                context_id=game_option.context_id,
-                name=data["name"],
-                market_hash_name=data["market_hash_name"],
-                tradable=data["tradable"],
-                marketable=data["marketable"],
-                icon_url=data["icon_url"],
-            )
-            grouped.setdefault(item.market_hash_name, []).append(item)
-        return grouped
-
-    async def snapshot_counts(self, game_option: GameOptions) -> dict[str, int]:
-        raw_inventory = await self.steam.get_inventory(game=game_option)
-        counts: dict[str, int] = {}
-        for raw in raw_inventory.values():
-            mh = raw.get("market_hash_name")
-            if not mh:
-                continue
-            counts[mh] = counts.get(mh, 0) + 1
-        return counts

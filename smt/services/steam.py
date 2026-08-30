@@ -103,11 +103,6 @@ class SteamService:
         return await to_thread.run_sync(self.client.market.get_my_market_listings)
 
     @requires_login
-    async def get_my_sell_listings(self) -> list[dict]:
-        resp = await self.get_my_market_listings()
-        return list(resp.get("sell_listings", {}).values())
-
-    @requires_login
     async def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
         logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
         kopecks = int((price * 100).to_integral_value())
