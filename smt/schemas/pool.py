@@ -21,6 +21,7 @@ class PoolItemCreate(PoolItemBase):
 class PoolItemUpdate(BaseModel):
     current_lowest_price: Optional[Decimal] = None
     current_median_price: Optional[Decimal] = None
+    current_highest_buy_order: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
     optimal_buy_price: Optional[Decimal] = None
     optimal_sell_price: Optional[Decimal] = None
@@ -34,6 +35,7 @@ class PoolItemUpdate(BaseModel):
     @field_validator(
         "current_lowest_price",
         "current_median_price",
+        "current_highest_buy_order",
         "optimal_buy_price",
         "optimal_sell_price",
         "manual_buy_price",
@@ -64,6 +66,7 @@ class PoolItem(PoolItemBase):
     sell_price: Optional[Decimal] = None
     current_lowest_price: Optional[Decimal] = None
     current_median_price: Optional[Decimal] = None
+    current_highest_buy_order: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
     optimal_buy_price: Optional[Decimal] = None
     optimal_sell_price: Optional[Decimal] = None
@@ -82,6 +85,7 @@ class PoolItem(PoolItemBase):
 class PoolItemStatus(BaseModel):
     market_hash_name: str
     current_lowest_price: Optional[Decimal] = None
+    current_highest_buy_order: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
     optimal_buy_price: Optional[Decimal] = None
     optimal_sell_price: Optional[Decimal] = None
