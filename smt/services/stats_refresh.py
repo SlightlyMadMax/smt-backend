@@ -1,5 +1,4 @@
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from typing import List
 
 from sqlalchemy.exc import NoResultFound
@@ -9,7 +8,7 @@ from smt.exceptions import OrderBookUnavailable
 from smt.logger import get_logger
 from smt.schemas.pool import PoolItemUpdate
 from smt.schemas.price_history import PriceHistoryRecordCreate
-from smt.services.market_analytics import MarketAnalyticsService
+from smt.services.market_analytics import ItemIndicators, MarketAnalyticsService
 from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService
 from smt.services.settings import SettingsService
@@ -105,30 +104,40 @@ class StatsRefreshService:
             opt_buy, opt_sell = await self.analytics_service.compute_weighted_percentile_targets(clean)
             sigma = await self.analytics_service.compute_volume_weighted_volatility(clean)
             net_sell, profit = await self.analytics_service.compute_net_and_profit(opt_sell, opt_buy)
-            flag = await self.analytics_service.decide_trade_flag(profit, item.current_volume24h, sigma)
+
+            round_trips, median_hold = self.analytics_service.simulate_round_trips(clean, opt_buy, opt_sell)
+            return_on_capital = self.analytics_service.project_return_on_capital(profit, round_trips, opt_buy, days)
+
+            flag, reason = await self.analytics_service.decide_trade_flag(
+                ItemIndicators(
+                    profit=profit,
+                    volume24h=item.current_volume24h,
+                    volatility=sigma,
+                    round_trips=round_trips,
+                    median_hold_hours=median_hold,
+                    return_on_capital_30d=return_on_capital,
+                )
+            )
 
             if flag and not self.analytics_service.history_describes_current_market(clean, item.current_lowest_price):
-                logger.warning(
-                    f"{item.market_hash_name}: the price history is centred far from the current price, "
-                    f"so its targets are not usable. Not trading it."
-                )
-                flag = False
+                flag, reason = False, "the price history is centred far from the current price"
 
-            await self._persist_indicators(item.market_hash_name, opt_buy, opt_sell, sigma, profit, flag)
+            if not flag:
+                logger.info(f"{item.market_hash_name} is not traded: {reason}.")
 
-    async def _persist_indicators(
-        self, name: str, opt_buy: Decimal, opt_sell: Decimal, sigma: Decimal, profit: Decimal, flag: bool
-    ) -> None:
-        await self.pool_service.update(
-            name,
-            PoolItemUpdate(
-                optimal_buy_price=opt_buy,
-                optimal_sell_price=opt_sell,
-                volatility=sigma,
-                potential_profit=profit,
-                use_for_trading=flag,
-            ),
-        )
+            await self.pool_service.update(
+                item.market_hash_name,
+                PoolItemUpdate(
+                    optimal_buy_price=opt_buy,
+                    optimal_sell_price=opt_sell,
+                    volatility=sigma,
+                    potential_profit=profit,
+                    round_trips=round_trips,
+                    median_hold_hours=median_hold,
+                    return_on_capital_30d=return_on_capital,
+                    use_for_trading=flag,
+                ),
+            )
 
     async def refresh_all(self, market_hash_names: list[str]) -> None:
         await self.refresh_price_history(market_hash_names)

@@ -16,6 +16,8 @@ class SettingsResponse(BaseModel):
     min_volume_7d: int
     max_volatility_threshold: Decimal
     min_volatility_threshold: Decimal
+    max_hold_hours: int
+    min_return_on_capital_30d: Decimal
     price_history_days: int
     analysis_window_days: int
     max_concurrent_trades: int
@@ -38,6 +40,8 @@ class SettingsUpdate(BaseModel):
     min_volume_7d: Optional[int] = Field(None, ge=0)
     max_volatility_threshold: Optional[Decimal] = Field(None, ge=0)
     min_volatility_threshold: Optional[Decimal] = Field(None, ge=0)
+    max_hold_hours: Optional[int] = Field(None, ge=1)
+    min_return_on_capital_30d: Optional[Decimal] = Field(None, ge=0)
     price_history_days: Optional[int] = Field(None, ge=1, le=365)
     analysis_window_days: Optional[int] = Field(None, ge=1, le=90)
     max_concurrent_trades: Optional[int] = Field(None, ge=1)

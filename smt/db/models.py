@@ -57,6 +57,9 @@ class PoolItem(TimeStampedModel, Base):
     current_volume24h: Mapped[int] = mapped_column(Integer, nullable=True)
     volatility: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=True)
     potential_profit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
+    round_trips: Mapped[int] = mapped_column(Integer, nullable=True)
+    median_hold_hours: Mapped[Decimal] = mapped_column(Numeric(10, 1), nullable=True)
+    return_on_capital_30d: Mapped[Decimal] = mapped_column(Numeric(10, 1), nullable=True)
     use_for_trading: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     positions = relationship("Position", back_populates="pool_item")
 
@@ -114,6 +117,8 @@ class TradingSettings(TimeStampedModel, Base):
     min_volume_24h: Mapped[int] = mapped_column(Integer, default=10)
     min_volume_7d: Mapped[int] = mapped_column(Integer, default=50)
     max_volatility_threshold: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=Decimal("0.500"))
+    max_hold_hours: Mapped[int] = mapped_column(Integer, default=48)
+    min_return_on_capital_30d: Mapped[Decimal] = mapped_column(Numeric(10, 1), default=Decimal("20.0"))
     min_volatility_threshold: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=Decimal("0.010"))
     price_history_days: Mapped[int] = mapped_column(Integer, default=30)
     analysis_window_days: Mapped[int] = mapped_column(Integer, default=7)

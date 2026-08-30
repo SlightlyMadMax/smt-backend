@@ -1,5 +1,6 @@
 import math
 import statistics
+from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
 from typing import List, Optional, Tuple
@@ -11,6 +12,18 @@ from smt.utils.steam import calculate_fees
 
 
 OUTLIER_PRICE_FACTOR = Decimal("5")
+
+
+@dataclass
+class ItemIndicators:
+    profit: Decimal
+    volume24h: Optional[int]
+    volatility: Decimal
+    round_trips: int
+    median_hold_hours: Optional[Decimal]
+    return_on_capital_30d: Optional[Decimal]
+
+
 PRICE_DRIFT_FACTOR = Decimal("2")
 
 
@@ -122,16 +135,78 @@ class MarketAnalyticsService:
         profit = (Decimal(profit_cents) / 100).quantize(Decimal("0.01"))
         return net, profit
 
-    async def decide_trade_flag(self, profit: Decimal, volume24h: Optional[int], volatility: Decimal) -> bool:
+    @staticmethod
+    def simulate_round_trips(
+        records: List[PriceHistoryRecord], buy_target: Decimal, sell_target: Decimal
+    ) -> Tuple[int, Optional[Decimal]]:
+        """
+        Replay the history the way the bot would trade it.
+
+        Fills are assumed at the targets, because that is where the limit orders sit;
+        entering at the bottom of a dip would flatter the result. Returns how many round
+        trips completed and the median hours a position stayed open.
+        """
+        ordered = sorted(records, key=lambda r: r.recorded_at)
+        holding = False
+        entered_at = None
+        trips = 0
+        holds: List[float] = []
+
+        for record in ordered:
+            if not holding and record.price <= buy_target:
+                holding, entered_at = True, record.recorded_at
+            elif holding and record.price >= sell_target:
+                holding = False
+                trips += 1
+                holds.append((record.recorded_at - entered_at).total_seconds() / 3600)
+
+        if not holds:
+            return trips, None
+        return trips, Decimal(str(round(statistics.median(holds), 1)))
+
+    @staticmethod
+    def project_return_on_capital(
+        profit_per_trade: Decimal, round_trips: int, buy_target: Decimal, window_days: int
+    ) -> Optional[Decimal]:
+        """
+        Return over the window, scaled to 30 days so the threshold means the same thing
+        whichever analysis window is configured.
+        """
+        if buy_target <= 0 or window_days <= 0:
+            return None
+
+        over_window = profit_per_trade * round_trips / buy_target * 100
+        return (over_window * Decimal(30) / Decimal(window_days)).quantize(Decimal("0.1"))
+
+    async def decide_trade_flag(self, indicators: ItemIndicators) -> Tuple[bool, str]:
+        """Whether the bot should trade this item, and why not when it should not."""
         settings = await self.settings_service.get_settings()
 
-        if profit < settings.min_profit_threshold:
-            return False
+        if indicators.profit < settings.min_profit_threshold:
+            return False, f"profit {indicators.profit} is below {settings.min_profit_threshold}"
 
-        if volume24h is None or volume24h < settings.min_volume_24h:
-            return False
+        if indicators.volume24h is None or indicators.volume24h < settings.min_volume_24h:
+            return False, f"volume {indicators.volume24h} is below {settings.min_volume_24h}"
 
-        if volatility < settings.min_volatility_threshold or volatility > settings.max_volatility_threshold:
-            return False
+        if indicators.volatility < settings.min_volatility_threshold:
+            return False, f"volatility {indicators.volatility} is below {settings.min_volatility_threshold}"
 
-        return True
+        if indicators.volatility > settings.max_volatility_threshold:
+            return False, f"volatility {indicators.volatility} is above {settings.max_volatility_threshold}"
+
+        if indicators.round_trips < 1:
+            return False, "the price never covered the whole range in the analysis window"
+
+        if indicators.median_hold_hours is None or indicators.median_hold_hours > settings.max_hold_hours:
+            return False, f"holding time {indicators.median_hold_hours} h is above {settings.max_hold_hours} h"
+
+        if (
+            indicators.return_on_capital_30d is None
+            or indicators.return_on_capital_30d < settings.min_return_on_capital_30d
+        ):
+            return False, (
+                f"return {indicators.return_on_capital_30d}% is below "
+                f"{settings.min_return_on_capital_30d}% per 30 days"
+            )
+
+        return True, ""

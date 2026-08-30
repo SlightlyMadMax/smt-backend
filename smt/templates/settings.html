@@ -87,6 +87,24 @@
         </div>
 
         <div class="settings-section">
+            <h2>Turnover</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="max_hold_hours">Max Holding Time, hours</label>
+                    <input type="number" step="1" min="1" name="max_hold_hours" value="{{ settings.max_hold_hours }}" required>
+                    <small>Reject items whose price typically takes longer than this to travel from the buy target to the sell target</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="min_return_on_capital_30d">Min Return on Capital, % per 30 days</label>
+                    <input type="number" step="0.1" min="0" name="min_return_on_capital_30d" value="{{ settings.min_return_on_capital_30d }}" required>
+                    <small>Profit per round trip times the number of round trips, over the money tied up</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
             <h2>Emergency Controls</h2>
 
             <div class="form-group">

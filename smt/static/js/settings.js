@@ -2,6 +2,7 @@ const NUMERIC_FIELDS = [
   'min_profit_threshold', 'min_profit_percentage', 'max_investment_per_item',
   'buy_percentile', 'sell_percentile', 'min_volume_24h', 'min_volume_7d',
   'min_volatility_threshold', 'max_volatility_threshold', 'max_daily_loss',
+  'max_hold_hours', 'min_return_on_capital_30d',
 ];
 
 const BOOLEAN_FIELDS = ['emergency_stop', 'cancel_untracked_orders'];

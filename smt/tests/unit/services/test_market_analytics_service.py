@@ -6,7 +6,25 @@ import pytest
 import pytest_asyncio
 
 from smt.schemas.price_history import PriceHistoryRecord
-from smt.services.market_analytics import MarketAnalyticsService
+from smt.services.market_analytics import ItemIndicators, MarketAnalyticsService
+
+
+def make_indicators(
+    profit=Decimal("5.00"),
+    volume24h=500,
+    volatility=Decimal("0.10"),
+    round_trips=8,
+    median_hold_hours=Decimal("12.0"),
+    return_on_capital_30d=Decimal("120.0"),
+):
+    return ItemIndicators(
+        profit=profit,
+        volume24h=volume24h,
+        volatility=volatility,
+        round_trips=round_trips,
+        median_hold_hours=median_hold_hours,
+        return_on_capital_30d=return_on_capital_30d,
+    )
 
 
 @pytest_asyncio.fixture
@@ -23,6 +41,8 @@ def mock_settings_service():
     mock_settings.min_volume_24h = 100
     mock_settings.min_volatility_threshold = Decimal("0.01")
     mock_settings.max_volatility_threshold = Decimal("0.50")
+    mock_settings.max_hold_hours = 48
+    mock_settings.min_return_on_capital_30d = Decimal("20.0")
 
     mock_service.get_settings.return_value = mock_settings
     return mock_service
@@ -166,8 +186,8 @@ class TestMarketAnalyticsService:
         """Test that low profit prevents trading"""
         mock_settings_service.get_settings.return_value.min_profit_threshold = Decimal("5.00")
 
-        result = await market_analytics_service.decide_trade_flag(
-            profit=Decimal("2.00"), volume24h=500, volatility=Decimal("0.10")  # Below threshold
+        result, _ = await market_analytics_service.decide_trade_flag(
+            make_indicators(profit=Decimal("2.00"), volume24h=500, volatility=Decimal("0.10"))
         )
 
         assert result is False
@@ -176,16 +196,16 @@ class TestMarketAnalyticsService:
         """Test that low volume prevents trading"""
         mock_settings_service.get_settings.return_value.min_volume_24h = 1000
 
-        result = await market_analytics_service.decide_trade_flag(
-            profit=Decimal("5.00"), volume24h=500, volatility=Decimal("0.10")  # Below threshold
+        result, _ = await market_analytics_service.decide_trade_flag(
+            make_indicators(profit=Decimal("5.00"), volume24h=500, volatility=Decimal("0.10"))
         )
 
         assert result is False
 
     async def test_decide_trade_flag_none_volume(self, market_analytics_service):
         """Test that None volume prevents trading"""
-        result = await market_analytics_service.decide_trade_flag(
-            profit=Decimal("5.00"), volume24h=None, volatility=Decimal("0.10")
+        result, _ = await market_analytics_service.decide_trade_flag(
+            make_indicators(profit=Decimal("5.00"), volume24h=None, volatility=Decimal("0.10"))
         )
 
         assert result is False
@@ -205,25 +225,23 @@ class TestMarketAnalyticsService:
         mock_settings_service.get_settings.return_value.min_volatility_threshold = Decimal("0.01")
         mock_settings_service.get_settings.return_value.max_volatility_threshold = Decimal("0.50")
 
-        result = await market_analytics_service.decide_trade_flag(
-            profit=Decimal("5.00"), volume24h=500, volatility=volatility
+        result, _ = await market_analytics_service.decide_trade_flag(
+            make_indicators(profit=Decimal("5.00"), volume24h=500, volatility=volatility)
         )
 
         assert result is expected
 
     async def test_decide_trade_flag_all_conditions_met(self, market_analytics_service):
         """Test that trade is approved when all conditions are met"""
-        result = await market_analytics_service.decide_trade_flag(
-            profit=Decimal("5.00"), volume24h=500, volatility=Decimal("0.10")
+        result, _ = await market_analytics_service.decide_trade_flag(
+            make_indicators(profit=Decimal("5.00"), volume24h=500, volatility=Decimal("0.10"))
         )
 
         assert result is True
 
     async def test_decide_trade_flag_calls_settings(self, market_analytics_service, mock_settings_service):
         """Test that decide_trade_flag calls settings service"""
-        await market_analytics_service.decide_trade_flag(
-            profit=Decimal("5.00"), volume24h=500, volatility=Decimal("0.10")
-        )
+        await market_analytics_service.decide_trade_flag(make_indicators())
 
         mock_settings_service.get_settings.assert_called_once()
 
@@ -359,3 +377,94 @@ class TestHistoryDescribesCurrentMarket:
 
     def test_cannot_judge_without_history(self, market_analytics_service):
         assert market_analytics_service.history_describes_current_market([], Decimal("6.82"))
+
+
+class TestSimulateRoundTrips:
+    def test_counts_a_completed_round_trip(self, market_analytics_service):
+        records = [make_record(4, "6.00", 10), make_record(2, "9.00", 10)]
+
+        trips, hold = market_analytics_service.simulate_round_trips(records, Decimal("6.50"), Decimal("8.50"))
+
+        assert trips == 1
+        assert hold == Decimal("2.0")
+
+    def test_an_unfinished_trip_does_not_count(self, market_analytics_service):
+        records = [make_record(4, "6.00", 10), make_record(2, "7.00", 10)]
+
+        trips, hold = market_analytics_service.simulate_round_trips(records, Decimal("6.50"), Decimal("8.50"))
+
+        assert trips == 0
+        assert hold is None
+
+    def test_counts_several_trips_and_takes_the_median_hold(self, market_analytics_service):
+        records = [
+            make_record(10, "6.00", 10),
+            make_record(9, "9.00", 10),
+            make_record(8, "6.00", 10),
+            make_record(4, "9.00", 10),
+        ]
+
+        trips, hold = market_analytics_service.simulate_round_trips(records, Decimal("6.50"), Decimal("8.50"))
+
+        assert trips == 2
+        assert hold == Decimal("2.5")
+
+    def test_a_rise_without_a_dip_first_is_ignored(self, market_analytics_service):
+        records = [make_record(4, "9.00", 10), make_record(2, "9.50", 10)]
+
+        trips, _ = market_analytics_service.simulate_round_trips(records, Decimal("6.50"), Decimal("8.50"))
+
+        assert trips == 0
+
+
+class TestProjectReturnOnCapital:
+    def test_scales_the_window_to_thirty_days(self, market_analytics_service):
+        # 1.00 profit on 10.00 capital, 5 trips over 15 days -> 50% per 15d -> 100% per 30d
+        result = market_analytics_service.project_return_on_capital(Decimal("1.00"), 5, Decimal("10.00"), 15)
+
+        assert result == Decimal("100.0")
+
+    def test_a_shorter_window_projects_higher(self, market_analytics_service):
+        weekly = market_analytics_service.project_return_on_capital(Decimal("1.00"), 5, Decimal("10.00"), 7)
+        monthly = market_analytics_service.project_return_on_capital(Decimal("1.00"), 5, Decimal("10.00"), 30)
+
+        assert weekly > monthly
+
+    def test_no_trips_means_no_return(self, market_analytics_service):
+        assert market_analytics_service.project_return_on_capital(Decimal("1.00"), 0, Decimal("10.00"), 7) == 0
+
+    def test_guards_against_a_zero_price(self, market_analytics_service):
+        assert market_analytics_service.project_return_on_capital(Decimal("1.00"), 5, Decimal("0"), 7) is None
+
+
+@pytest.mark.asyncio
+class TestVelocityGates:
+    async def test_a_slow_item_is_rejected(self, market_analytics_service):
+        flag, reason = await market_analytics_service.decide_trade_flag(
+            make_indicators(median_hold_hours=Decimal("256.0"))
+        )
+
+        assert flag is False
+        assert "holding time" in reason
+
+    async def test_a_poor_return_is_rejected(self, market_analytics_service):
+        flag, reason = await market_analytics_service.decide_trade_flag(
+            make_indicators(return_on_capital_30d=Decimal("5.0"))
+        )
+
+        assert flag is False
+        assert "return" in reason
+
+    async def test_an_item_that_never_completes_a_trip_is_rejected(self, market_analytics_service):
+        flag, reason = await market_analytics_service.decide_trade_flag(
+            make_indicators(round_trips=0, median_hold_hours=None)
+        )
+
+        assert flag is False
+        assert "never covered" in reason
+
+    async def test_a_fast_profitable_item_passes(self, market_analytics_service):
+        flag, reason = await market_analytics_service.decide_trade_flag(make_indicators())
+
+        assert flag is True
+        assert reason == ""

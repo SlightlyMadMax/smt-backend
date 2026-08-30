@@ -96,6 +96,9 @@ function buildStats(status) {
     ['Volatility', status.volatility],
     ['Computed buy', status.optimal_buy_price],
     ['Computed sell', status.optimal_sell_price],
+    ['Round trips', status.round_trips],
+    ['Median hold, h', status.median_hold_hours],
+    ['Return, % / 30d', status.return_on_capital_30d],
     ['Traded by the bot', status.use_for_trading ? 'yes' : 'no'],
   ];
   return '<dl class="details-stats">' + rows.map(pair =>

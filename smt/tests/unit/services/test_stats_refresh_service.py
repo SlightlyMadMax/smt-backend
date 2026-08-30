@@ -189,7 +189,9 @@ def indicator_service(refresh_service):
     )
     refresh_service.analytics_service.compute_volume_weighted_volatility.return_value = Decimal("0.095")
     refresh_service.analytics_service.compute_net_and_profit.return_value = (Decimal("6.98"), Decimal("0.77"))
-    refresh_service.analytics_service.decide_trade_flag.return_value = True
+    refresh_service.analytics_service.decide_trade_flag.return_value = (True, "")
+    refresh_service.analytics_service.simulate_round_trips = lambda records, buy, sell: (8, Decimal("12.0"))
+    refresh_service.analytics_service.project_return_on_capital = lambda profit, trips, buy, days: Decimal("120.0")
     refresh_service.price_history_service.list.return_value = [history_record("6.90"), history_record("6.95")]
     return refresh_service
 

@@ -31,6 +31,9 @@ class PoolItemUpdate(BaseModel):
     potential_profit: Optional[Decimal] = None
     use_for_trading: Optional[bool] = None
     max_listed: Optional[int] = None
+    round_trips: Optional[int] = None
+    median_hold_hours: Optional[Decimal] = None
+    return_on_capital_30d: Optional[Decimal] = None
 
     @field_validator(
         "current_lowest_price",
@@ -42,6 +45,8 @@ class PoolItemUpdate(BaseModel):
         "manual_sell_price",
         "volatility",
         "potential_profit",
+        "median_hold_hours",
+        "return_on_capital_30d",
         mode="before",
     )
     def parse_price(cls, v: Any) -> Optional[Decimal]:
@@ -78,6 +83,9 @@ class PoolItem(PoolItemBase):
     listing_url: str
     created_at: datetime
     updated_at: datetime
+    round_trips: Optional[int] = None
+    median_hold_hours: Optional[Decimal] = None
+    return_on_capital_30d: Optional[Decimal] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -98,6 +106,9 @@ class PoolItemStatus(BaseModel):
     potential_profit: Optional[Decimal] = None
     use_for_trading: bool = False
     updated_at: Optional[datetime] = None
+    round_trips: Optional[int] = None
+    median_hold_hours: Optional[Decimal] = None
+    return_on_capital_30d: Optional[Decimal] = None
 
 
 class PoolItemBulkCreateResponse(BaseModel):
