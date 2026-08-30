@@ -17,7 +17,9 @@ OUTLIER_PRICE_FACTOR = Decimal("5")
 @dataclass
 class ItemIndicators:
     profit: Decimal
+    profit_pct: Optional[Decimal]
     volume24h: Optional[int]
+    volume7d: Optional[int]
     volatility: Decimal
     round_trips: int
     median_hold_hours: Optional[Decimal]
@@ -185,8 +187,14 @@ class MarketAnalyticsService:
         if indicators.profit < settings.min_profit_threshold:
             return False, f"profit {indicators.profit} is below {settings.min_profit_threshold}"
 
+        if indicators.profit_pct is None or indicators.profit_pct < settings.min_profit_percentage:
+            return False, f"margin {indicators.profit_pct}% is below {settings.min_profit_percentage}%"
+
         if indicators.volume24h is None or indicators.volume24h < settings.min_volume_24h:
-            return False, f"volume {indicators.volume24h} is below {settings.min_volume_24h}"
+            return False, f"volume over 24h {indicators.volume24h} is below {settings.min_volume_24h}"
+
+        if indicators.volume7d is None or indicators.volume7d < settings.min_volume_7d:
+            return False, f"volume over 7d {indicators.volume7d} is below {settings.min_volume_7d}"
 
         if indicators.volatility < settings.min_volatility_threshold:
             return False, f"volatility {indicators.volatility} is below {settings.min_volatility_threshold}"

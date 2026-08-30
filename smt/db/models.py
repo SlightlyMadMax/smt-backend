@@ -55,6 +55,7 @@ class PoolItem(TimeStampedModel, Base):
     current_median_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     current_highest_buy_order: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     current_volume24h: Mapped[int] = mapped_column(Integer, nullable=True)
+    current_volume7d: Mapped[int] = mapped_column(Integer, nullable=True)
     volatility: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=True)
     potential_profit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     round_trips: Mapped[int] = mapped_column(Integer, nullable=True)

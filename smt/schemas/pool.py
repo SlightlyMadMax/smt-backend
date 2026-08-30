@@ -23,6 +23,7 @@ class PoolItemUpdate(BaseModel):
     current_median_price: Optional[Decimal] = None
     current_highest_buy_order: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
+    current_volume7d: Optional[int] = None
     optimal_buy_price: Optional[Decimal] = None
     optimal_sell_price: Optional[Decimal] = None
     manual_buy_price: Optional[Decimal] = None
@@ -57,7 +58,7 @@ class PoolItemUpdate(BaseModel):
             return Decimal(price_str)
         return Decimal(v)
 
-    @field_validator("current_volume24h", mode="before")
+    @field_validator("current_volume24h", "current_volume7d", mode="before")
     def parse_volume(cls, v: Any) -> Optional[int]:
         if v is None:
             return None
@@ -73,6 +74,7 @@ class PoolItem(PoolItemBase):
     current_median_price: Optional[Decimal] = None
     current_highest_buy_order: Optional[Decimal] = None
     current_volume24h: Optional[int] = None
+    current_volume7d: Optional[int] = None
     optimal_buy_price: Optional[Decimal] = None
     optimal_sell_price: Optional[Decimal] = None
     manual_buy_price: Optional[Decimal] = None
@@ -100,6 +102,7 @@ class PoolItemStatus(BaseModel):
     manual_sell_price: Optional[Decimal] = None
     max_listed: Optional[int] = None
     current_volume24h: Optional[int] = None
+    current_volume7d: Optional[int] = None
     optimal_buy_price: Optional[Decimal] = None
     optimal_sell_price: Optional[Decimal] = None
     volatility: Optional[Decimal] = None

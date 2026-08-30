@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import List
 
 from sqlalchemy.exc import NoResultFound
@@ -18,6 +19,7 @@ from smt.services.steam import SteamService
 logger = get_logger("services.stats_refresh")
 
 RECENT_STATS_LOOKBACK = timedelta(days=2)
+WEEKLY_WINDOW = timedelta(days=7)
 
 
 class StatsRefreshService:
@@ -107,11 +109,15 @@ class StatsRefreshService:
 
             round_trips, median_hold = self.analytics_service.simulate_round_trips(clean, opt_buy, opt_sell)
             return_on_capital = self.analytics_service.project_return_on_capital(profit, round_trips, opt_buy, days)
+            _, volume7d = await self.analytics_service.compute_recent_stats(clean, WEEKLY_WINDOW)
+            profit_pct = (profit / opt_buy * 100).quantize(Decimal("0.01")) if opt_buy > 0 else None
 
             flag, reason = await self.analytics_service.decide_trade_flag(
                 ItemIndicators(
                     profit=profit,
+                    profit_pct=profit_pct,
                     volume24h=item.current_volume24h,
+                    volume7d=volume7d,
                     volatility=sigma,
                     round_trips=round_trips,
                     median_hold_hours=median_hold,
@@ -132,6 +138,7 @@ class StatsRefreshService:
                     optimal_sell_price=opt_sell,
                     volatility=sigma,
                     potential_profit=profit,
+                    current_volume7d=volume7d,
                     round_trips=round_trips,
                     median_hold_hours=median_hold,
                     return_on_capital_30d=return_on_capital,

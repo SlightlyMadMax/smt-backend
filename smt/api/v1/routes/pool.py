@@ -75,6 +75,7 @@ async def read_status(market_hash_names: str, service: PoolService = Depends(get
                 manual_sell_price=item.manual_sell_price,
                 max_listed=item.max_listed,
                 current_highest_buy_order=item.current_highest_buy_order,
+                current_volume7d=item.current_volume7d,
                 round_trips=item.round_trips,
                 median_hold_hours=item.median_hold_hours,
                 return_on_capital_30d=item.return_on_capital_30d,

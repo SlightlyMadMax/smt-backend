@@ -93,6 +93,7 @@ function buildStats(status) {
   const rows = [
     ['Top buy order', status.current_highest_buy_order],
     ['Volume, 24h', status.current_volume24h],
+    ['Volume, 7d', status.current_volume7d],
     ['Volatility', status.volatility],
     ['Computed buy', status.optimal_buy_price],
     ['Computed sell', status.optimal_sell_price],
