@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class PositionStatus(Enum):
     OPEN = "OPEN"
     BOUGHT = "BOUGHT"
+    LISTING_PENDING = "LISTING_PENDING"
     LISTED = "LISTED"
     CLOSED = "CLOSED"
 
