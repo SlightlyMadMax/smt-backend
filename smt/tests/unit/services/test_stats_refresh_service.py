@@ -81,6 +81,15 @@ class TestGetOrderBook:
         assert book["sell_order_count"] == 38170
         assert book["buy_order_count"] == 528386
 
+    async def test_wraps_transport_errors(self, steam_service):
+        class Failing(FakeAsyncClient):
+            async def get(self, url, params=None, cookies=None):
+                raise httpx.ConnectError("boom")
+
+        with patch.object(steam_module.httpx, "AsyncClient", Failing(None)):
+            with pytest.raises(OrderBookUnavailable, match="Could not reach"):
+                await steam_service.get_order_book("Secret Saxton", "440")
+
     async def test_rejects_a_foreign_currency(self, steam_service):
         fake = FakeAsyncClient(FakeResponse(order_book_payload(currency=3, min_sell=8, max_buy=6)))
         with patch.object(steam_module.httpx, "AsyncClient", fake):
@@ -157,7 +166,7 @@ class TestRefreshCurrentStats:
         assert "current_lowest_price" not in payload.model_dump(exclude_unset=True)
 
     async def test_survives_a_network_error(self, refresh_service):
-        refresh_service.steam.get_order_book.side_effect = httpx.ConnectError("boom")
+        refresh_service.steam.get_order_book.side_effect = OrderBookUnavailable("unreachable")
 
         await refresh_service.refresh_current_stats("item")
 

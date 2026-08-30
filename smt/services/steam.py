@@ -113,11 +113,13 @@ class SteamService:
         params = {"q": "Load", "qp": json.dumps([int(app_id), market_hash_name], separators=(",", ":"))}
         cookies = self.client._session.cookies.get_dict(domain="steamcommunity.com")
 
-        async with httpx.AsyncClient(timeout=ORDER_BOOK_TIMEOUT) as client:
-            resp = await client.get(f"{STEAM_COMMUNITY_URL}/market/orderbook", params=params, cookies=cookies)
-
-        resp.raise_for_status()
-        payload = resp.json().get("data") or {}
+        try:
+            async with httpx.AsyncClient(timeout=ORDER_BOOK_TIMEOUT) as client:
+                resp = await client.get(f"{STEAM_COMMUNITY_URL}/market/orderbook", params=params, cookies=cookies)
+            resp.raise_for_status()
+            payload = resp.json().get("data") or {}
+        except httpx.HTTPError as e:
+            raise OrderBookUnavailable(f"Could not reach the order book for {market_hash_name}: {e}") from e
         if not payload.get("success"):
             raise OrderBookUnavailable(f"Steam returned no order book for {market_hash_name}")
 

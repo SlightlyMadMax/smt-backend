@@ -3,7 +3,6 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import List
 
-import httpx
 from sqlalchemy.exc import NoResultFound
 from steampy.models import GameOptions
 
@@ -85,7 +84,7 @@ class StatsRefreshService:
             book = await self.steam.get_order_book(market_hash_name=market_hash_name, app_id=item.app_id)
             values["current_lowest_price"] = book["lowest_sell_order"]
             values["current_highest_buy_order"] = book["highest_buy_order"]
-        except (OrderBookUnavailable, httpx.HTTPError) as e:
+        except OrderBookUnavailable as e:
             logger.warning(f"Could not fetch the order book for {market_hash_name}: {e}")
 
         await self.pool_service.update(market_hash_name, PoolItemUpdate(**values))
