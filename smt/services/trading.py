@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from steampy.models import GameOptions
 
 from smt.db.models import Item, PoolItem
+from smt.exceptions import OrderBookUnavailable
 from smt.logger import get_logger
 from smt.schemas.position import PositionCreate, PositionStatus
 from smt.services.inventory import InventoryService
@@ -193,18 +194,46 @@ class TradingService:
             if to_create <= 0:
                 continue
 
+            buy_price = item.effective_buy_price
+            if buy_price is None:
+                logger.warning(f"{item.market_hash_name} is marked for trading but has no buy price, skipping.")
+                continue
+
+            try:
+                book = await self.steam_service.get_order_book(
+                    market_hash_name=item.market_hash_name, app_id=item.app_id
+                )
+            except OrderBookUnavailable as e:
+                logger.warning(f"Skipping {item.market_hash_name}, could not read the order book: {e}")
+                continue
+
+            lowest_ask = book["lowest_sell_order"]
+            if lowest_ask is None:
+                logger.warning(f"Skipping {item.market_hash_name}, the order book has no sell orders.")
+                continue
+
+            if buy_price >= lowest_ask:
+                logger.info(
+                    f"Skipping {item.market_hash_name}: buy price {buy_price} is not below the cheapest listing "
+                    f"{lowest_ask}, so the order would fill immediately at market instead of waiting for a dip."
+                )
+                continue
+
             for _ in range(to_create):
-                logger.info(f"Creating a buy order for {item.market_hash_name}, price: {item.effective_buy_price}.")
+                logger.info(
+                    f"Creating a buy order for {item.market_hash_name}, price: {buy_price} "
+                    f"(top bid {book['highest_buy_order']}, cheapest listing {lowest_ask})."
+                )
                 buy_id = await self.steam_service.create_buy_order(
                     market_hash_name=item.market_hash_name,
-                    price=item.effective_buy_price,
+                    price=buy_price,
                     game=GameOptions(item.app_id, item.context_id),
                     quantity=1,
                 )
                 create = PositionCreate(
                     pool_item_hash=item.market_hash_name,
                     buy_order_id=buy_id,
-                    buy_price=item.effective_buy_price,
+                    buy_price=buy_price,
                     sell_price=item.effective_sell_price,
                 )
                 await self.position_service.add(create)

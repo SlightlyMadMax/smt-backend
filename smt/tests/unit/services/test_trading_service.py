@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from smt.exceptions import OrderBookUnavailable
 from smt.schemas.position import PositionStatus
 from smt.services.trading import CANCEL_GRACE_PERIOD, TradingService
 
@@ -191,3 +192,88 @@ class TestSyncOpenToBought:
 
         position_service.mark_as_bought.assert_not_awaited()
         position_service.mark_as_cancelled.assert_awaited_once_with(position_id=2)
+
+
+def make_pool_item(buy=Decimal("6.00"), sell=Decimal("7.77"), max_listed=1):
+    return SimpleNamespace(
+        market_hash_name=ITEM_HASH,
+        app_id="440",
+        context_id="2",
+        max_listed=max_listed,
+        effective_buy_price=buy,
+        effective_sell_price=sell,
+    )
+
+
+def make_book(lowest_ask, highest_bid=Decimal("6.68")):
+    return {
+        "lowest_sell_order": lowest_ask,
+        "highest_buy_order": highest_bid,
+        "sell_order_count": 10,
+        "buy_order_count": 20,
+    }
+
+
+@pytest.mark.asyncio
+class TestOpenNewPositions:
+    async def test_places_an_order_below_the_cheapest_listing(self, trading_service, position_service):
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.00"))]
+        position_service.list_active.return_value = []
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.create_buy_order.assert_awaited_once()
+        assert trading_service.steam_service.create_buy_order.await_args.kwargs["price"] == Decimal("6.00")
+        position_service.add.assert_awaited_once()
+
+    async def test_skips_when_the_order_would_fill_at_market(self, trading_service, position_service):
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.91"))]
+        position_service.list_active.return_value = []
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
+        position_service.add.assert_not_awaited()
+
+    async def test_skips_when_the_price_equals_the_cheapest_listing(self, trading_service, position_service):
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.82"))]
+        position_service.list_active.return_value = []
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
+
+    async def test_skips_when_the_order_book_is_unavailable(self, trading_service, position_service):
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item()]
+        position_service.list_active.return_value = []
+        trading_service.steam_service.get_order_book.side_effect = OrderBookUnavailable("nope")
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
+
+    async def test_skips_when_there_is_no_buy_price(self, trading_service, position_service):
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=None)]
+        position_service.list_active.return_value = []
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.get_order_book.assert_not_awaited()
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
+
+    async def test_reads_the_order_book_once_per_item(self, trading_service, position_service):
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [
+            make_pool_item(buy=Decimal("6.00"), max_listed=3)
+        ]
+        position_service.list_active.return_value = []
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        assert trading_service.steam_service.get_order_book.await_count == 1
+        assert trading_service.steam_service.create_buy_order.await_count == 3
