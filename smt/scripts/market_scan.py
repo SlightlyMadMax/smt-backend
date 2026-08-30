@@ -43,7 +43,9 @@ class Candidate:
     required_pct: Optional[Decimal] = None
     profit_per_trade: Optional[Decimal] = None
     round_trips: int = 0
+    median_hold_hours: Optional[Decimal] = None
     profit_per_window: Optional[Decimal] = None
+    return_on_capital_pct: Optional[Decimal] = None
     median_price: Optional[Decimal] = None
     price_drift: Optional[Decimal] = None
     tradable: bool = False
@@ -103,22 +105,30 @@ async def collect_candidates(
     return candidates
 
 
-def count_round_trips(points: List[tuple], buy_target: Decimal, sell_target: Decimal) -> int:
+def simulate_round_trips(points: List[tuple], buy_target: Decimal, sell_target: Decimal) -> tuple:
     """
-    How many times the price fell to the buy target and then rose to the sell target.
+    Walk the history the way the bot would trade it.
 
-    Fills are assumed at the targets themselves, because that is where the bot's limit
-    orders sit; entering at the extreme of a dip would flatter the result.
+    Fills are assumed at the targets themselves, because that is where the limit orders
+    sit; entering at the bottom of a dip would flatter the result. Returns the number of
+    completed round trips and the median hours a position stayed open, which is what
+    decides how often the same capital can be reused.
     """
     holding = False
+    entered_at = None
     trips = 0
-    for _, price, _ in points:
+    holds: List[float] = []
+
+    for timestamp, price, _ in points:
         if not holding and price <= buy_target:
-            holding = True
+            holding, entered_at = True, timestamp
         elif holding and price >= sell_target:
             holding = False
             trips += 1
-    return trips
+            holds.append((timestamp - entered_at).total_seconds() / 3600)
+
+    median_hold = Decimal(str(round(statistics.median(holds), 1))) if holds else None
+    return trips, median_hold
 
 
 async def measure(
@@ -165,15 +175,20 @@ async def measure(
     candidate.profit_per_trade = (net_received(candidate.sell_target) - candidate.buy_target).quantize(Decimal("0.01"))
     candidate.tradable = candidate.profit_per_trade > 0
 
-    candidate.round_trips = count_round_trips(points, candidate.buy_target, candidate.sell_target)
+    candidate.round_trips, candidate.median_hold_hours = simulate_round_trips(
+        points, candidate.buy_target, candidate.sell_target
+    )
     candidate.profit_per_window = (candidate.profit_per_trade * candidate.round_trips).quantize(Decimal("0.01"))
+    candidate.return_on_capital_pct = (candidate.profit_per_window / candidate.buy_target * 100).quantize(
+        Decimal("0.1")
+    )
     return candidate
 
 
 def report(candidates: List[Candidate], out_path: Optional[str]) -> None:
     measured = [c for c in candidates if c.spread_pct is not None]
     rejected = [c for c in candidates if c.spread_pct is None and c.note]
-    measured.sort(key=lambda c: (c.profit_per_window or Decimal("-999")), reverse=True)
+    measured.sort(key=lambda c: (c.return_on_capital_pct or Decimal("-999")), reverse=True)
     tradable = [c for c in measured if c.tradable]
 
     if rejected:
@@ -192,9 +207,10 @@ def report(candidates: List[Candidate], out_path: Optional[str]) -> None:
     print("\n" + header)
     for c in measured[:30]:
         name = c.market_hash_name.encode("ascii", "replace").decode()[:39]
+        hold = c.median_hold_hours if c.median_hold_hours is not None else "-"
         print(
-            f"{name:<40}{c.current_price:>8}{c.volume_30d:>8}"
-            f"{c.buy_target:>8}{c.sell_target:>8}{c.profit_per_trade:>10}{c.round_trips:>7}{c.profit_per_window:>9}"
+            f"{name[:37]:<38}{c.buy_target:>7}{c.sell_target:>7}{c.volume_30d:>8}"
+            f"{c.round_trips:>6}{hold:>8}{c.profit_per_trade:>9}{c.profit_per_window:>8}{c.return_on_capital_pct:>7}%"
         )
 
     if out_path:
