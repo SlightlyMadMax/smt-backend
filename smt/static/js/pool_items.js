@@ -213,11 +213,8 @@ async function pollUpdates() {
 
     const row = document.querySelector(`tr[data-hash="${name}"]`);
     if (row) {
-      if (flag === true) {
-        row.classList.replace('not-ready', 'ready');
-      } else {
-        row.classList.replace('ready', 'not-ready');
-      }
+      row.classList.toggle('state-positive', flag === true);
+      row.classList.toggle('state-negative', flag !== true);
     }
   });
 }

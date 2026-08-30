@@ -7,6 +7,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
 from smt.api.v1.routes import frontend_router, inventory_router, pool_router, price_history_router, settings_router
+from smt.api.v1.routes.frontend_pages import STATIC_DIR
 from smt.core.config import get_settings
 from smt.logger import setup_all_loggers
 from smt.worker.arq import get_arq_service
@@ -36,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="/code/smt/static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 api_router = APIRouter(prefix=f"/api/{settings.API_VERSION}")
 api_router.include_router(inventory_router)

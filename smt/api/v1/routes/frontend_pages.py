@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.params import Query
 from fastapi.templating import Jinja2Templates
@@ -12,7 +14,23 @@ from smt.services.settings import SettingsService
 
 router = APIRouter()
 
-templates = Jinja2Templates(directory="/code/smt/templates")
+PACKAGE_DIR = Path(__file__).resolve().parents[3]
+STATIC_DIR = PACKAGE_DIR / "static"
+
+templates = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
+
+
+def static_url(path: str) -> str:
+    """Static asset URL stamped with the file mtime so browsers refetch it after a change."""
+    relative = path.lstrip("/")
+    try:
+        version = int((STATIC_DIR / relative).stat().st_mtime)
+    except OSError:
+        version = 0
+    return f"/static/{relative}?v={version}"
+
+
+templates.env.globals["static_url"] = static_url
 
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
