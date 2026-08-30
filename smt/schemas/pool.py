@@ -143,3 +143,14 @@ class OrderBook(BaseModel):
     buy_order_count: Optional[int] = None
     sell_levels: list[OrderBookLevel] = []
     buy_levels: list[OrderBookLevel] = []
+
+
+class PoolSummary(BaseModel):
+    total: int
+    ready: int
+    not_ready: int
+    trading_enabled: bool
+
+
+class TradingToggle(BaseModel):
+    enabled: bool

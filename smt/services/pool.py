@@ -24,6 +24,11 @@ class PoolService:
     async def list_marked_for_trading(self) -> Sequence[PoolItem]:
         return await self.pool_repo.list_marked_for_trading()
 
+    async def summary(self) -> dict:
+        items = await self.pool_repo.list_items()
+        ready = sum(1 for item in items if item.use_for_trading)
+        return {"total": len(items), "ready": ready, "not_ready": len(items) - ready}
+
     async def get_by_market_hash_name(self, market_hash_name: str) -> PoolItem:
         return await self.pool_repo.get_by_market_hash_name(market_hash_name)
 

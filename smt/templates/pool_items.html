@@ -9,6 +9,20 @@
 {% block content %}
 <h1 class="page-name">My Trading Pool</h1>
 
+<section class="pool-summary">
+    <div class="pool-counts">
+        <span>Items in the pool: <strong data-summary="total">{{ summary.total }}</strong></span>
+        <span class="count-ready">Ready to trade: <strong data-summary="ready">{{ summary.ready }}</strong></span>
+        <span class="count-not-ready">Not ready: <strong data-summary="not_ready">{{ summary.not_ready }}</strong></span>
+    </div>
+
+    <label class="switch" for="trading-toggle">
+        <input type="checkbox" id="trading-toggle" {% if trading_enabled %}checked{% endif %}>
+        <span class="switch-track"><span class="switch-knob"></span></span>
+        <span class="switch-text">Trading <strong id="trading-state">{{ "on" if trading_enabled else "off" }}</strong></span>
+    </label>
+</section>
+
 <form id="bulk-action-form">
     <div class="bulk-actions">
         <select name="action" id="bulk-action-select" required>

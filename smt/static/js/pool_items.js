@@ -168,3 +168,45 @@ async function pollUpdates() {
 
 pollHandle = setInterval(pollUpdates, POLL_INTERVAL);
 pollUpdates();
+
+// -- summary bar and the trading switch -----------------------------------
+const SUMMARY_INTERVAL = 20000;
+
+const tradingToggle = document.getElementById('trading-toggle');
+const tradingState = document.getElementById('trading-state');
+
+function applySummary(summary) {
+  document.querySelectorAll('[data-summary]').forEach(el => {
+    el.textContent = summary[el.dataset.summary];
+  });
+  tradingToggle.checked = summary.trading_enabled;
+  tradingState.textContent = summary.trading_enabled ? 'on' : 'off';
+}
+
+tradingToggle.addEventListener('change', async () => {
+  const enabled = tradingToggle.checked;
+
+  if (enabled && !SMT.confirmAction(
+    'Enable trading? The bot will place real buy orders and spend the money in your Steam wallet.')) {
+    tradingToggle.checked = false;
+    return;
+  }
+
+  try {
+    applySummary(await SMT.patch('/api/v1/pool/trading', {enabled: enabled}));
+    SMT.notify(enabled ? 'Trading enabled.' : 'Trading disabled.');
+  } catch (e) {
+    tradingToggle.checked = !enabled;
+    SMT.notify('Could not change the trading state: ' + e.message, 'error');
+  }
+});
+
+async function refreshSummary() {
+  try {
+    applySummary(await SMT.get('/api/v1/pool/summary'));
+  } catch (e) {
+    console.error('Could not refresh the summary', e);
+  }
+}
+
+setInterval(refreshSummary, SUMMARY_INTERVAL);

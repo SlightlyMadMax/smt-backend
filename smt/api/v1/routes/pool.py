@@ -11,12 +11,16 @@ from smt.schemas.pool import (
     PoolItemCreateRequest,
     PoolItemStatus,
     PoolItemUpdate,
+    PoolSummary,
     RemoveManyRequest,
     RemoveManyResponse,
     RemoveResponse,
+    TradingToggle,
 )
-from smt.services.dependencies import get_pool_service, get_steam_service
+from smt.schemas.settings import SettingsUpdate
+from smt.services.dependencies import get_pool_service, get_settings_service, get_steam_service
 from smt.services.pool import PoolService
+from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
 from smt.worker.arq import ARQService, get_arq_service
 
@@ -27,6 +31,25 @@ router = APIRouter(prefix="/pool", tags=["pool"])
 @router.get("/", response_model=list[PoolItem])
 async def read_pool(service: PoolService = Depends(get_pool_service)):
     return await service.list()
+
+
+@router.get("/summary", response_model=PoolSummary)
+async def read_pool_summary(
+    pool_service: PoolService = Depends(get_pool_service),
+    settings_service: SettingsService = Depends(get_settings_service),
+):
+    settings = await settings_service.get_settings()
+    return PoolSummary(**await pool_service.summary(), trading_enabled=not settings.emergency_stop)
+
+
+@router.patch("/trading", response_model=PoolSummary)
+async def set_trading_enabled(
+    payload: TradingToggle,
+    pool_service: PoolService = Depends(get_pool_service),
+    settings_service: SettingsService = Depends(get_settings_service),
+):
+    await settings_service.update_settings(SettingsUpdate(emergency_stop=not payload.enabled))
+    return PoolSummary(**await pool_service.summary(), trading_enabled=payload.enabled)
 
 
 @router.get("/status", response_model=list[PoolItemStatus])

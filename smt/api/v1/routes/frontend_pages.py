@@ -67,13 +67,16 @@ async def inventory_page(
 async def pool_page(
     request: Request,
     service: PoolService = Depends(get_pool_service),
+    settings_service: SettingsService = Depends(get_settings_service),
 ):
-    items = await service.list()
+    settings = await settings_service.get_settings()
     return templates.TemplateResponse(
         "pool_items.html",
         {
             "request": request,
-            "items": items,
+            "items": await service.list(),
+            "summary": await service.summary(),
+            "trading_enabled": not settings.emergency_stop,
         },
     )
 
