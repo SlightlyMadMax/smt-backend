@@ -113,6 +113,9 @@ class PositionService:
         pos = await self.repo.update(position_id, update_data)
         return pos
 
+    async def last_loss_at(self, pool_item_hash: str) -> Optional[datetime]:
+        return await self.repo.last_loss_at(pool_item_hash)
+
     async def realized_profit_since(self, since: datetime) -> Decimal:
         return await self.repo.realized_profit_since(since)
 

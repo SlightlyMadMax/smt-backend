@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Sequence
+from typing import Optional, Sequence
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import NoResultFound
@@ -57,6 +57,15 @@ class PositionRepo:
         )
         result = await self.session.execute(stmt)
         return Decimal(result.scalar_one())
+
+    async def last_loss_at(self, pool_item_hash: str) -> Optional[datetime]:
+        stmt = select(func.max(Position.sold_at)).where(
+            Position.pool_item_hash == pool_item_hash,
+            Position.status == PositionStatus.CLOSED,
+            Position.realized_profit < 0,
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def add(self, data: PositionCreate) -> Position:
         pos = Position(

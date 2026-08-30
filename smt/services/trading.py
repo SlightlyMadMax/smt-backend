@@ -267,6 +267,8 @@ class TradingService:
             logger.info("Open buy orders already reach the allowance, not opening new positions.")
             return
 
+        now = datetime.now(timezone.utc)
+
         for item in pool_items:
             if free_slots <= 0:
                 logger.info("Reached the concurrent trade limit, stopping.")
@@ -283,6 +285,14 @@ class TradingService:
                 logger.info(
                     f"Skipping {item.market_hash_name}: {committed} already committed reaches "
                     f"the per item limit of {settings.max_investment_per_item}."
+                )
+                continue
+
+            last_loss = await self.position_service.last_loss_at(item.market_hash_name)
+            if last_loss and now - last_loss < timedelta(hours=settings.cooldown_after_loss_hours):
+                logger.info(
+                    f"Skipping {item.market_hash_name}: it lost money at {last_loss}, "
+                    f"still inside the {settings.cooldown_after_loss_hours}h cooldown."
                 )
                 continue
 
