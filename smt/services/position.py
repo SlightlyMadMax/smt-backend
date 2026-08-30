@@ -95,6 +95,20 @@ class PositionService:
         pos = await self.repo.update(position_id, update_data)
         return pos
 
+    async def mark_as_cancelled(self, position_id: int) -> Position:
+        """
+        Transition an OPEN Position to CANCELLED.
+
+        Used when the buy order is gone from Steam and no matching item arrived,
+        which means the order expired or was cancelled rather than filled.
+        """
+        pos = await self.get(position_id)
+        if pos.status != PositionStatus.OPEN:
+            raise ValueError("Can only cancel OPEN positions")
+        update_data = PositionUpdate(status=PositionStatus.CANCELLED.value)
+        pos = await self.repo.update(position_id, update_data)
+        return pos
+
     async def get(self, position_id: int) -> Position:
         pos = await self.repo.get_by_id(position_id)
         return pos

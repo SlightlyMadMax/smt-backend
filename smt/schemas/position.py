@@ -12,6 +12,7 @@ class PositionStatus(Enum):
     LISTING_PENDING = "LISTING_PENDING"
     LISTED = "LISTED"
     CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
 
 
 class PositionBase(BaseModel):
