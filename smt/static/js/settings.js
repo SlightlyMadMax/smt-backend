@@ -1,64 +1,43 @@
-document.getElementById('settings-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+const NUMERIC_FIELDS = [
+  'min_profit_threshold', 'min_profit_percentage', 'max_investment_per_item',
+  'buy_percentile', 'sell_percentile', 'min_volume_24h', 'min_volume_7d',
+  'min_volatility_threshold', 'max_volatility_threshold', 'max_daily_loss',
+];
 
-    const formData = new FormData(e.target);
-    const settings = Object.fromEntries(formData.entries());
+const BOOLEAN_FIELDS = ['emergency_stop', 'cancel_untracked_orders'];
 
-    // Convert numeric fields
-    const numericFields = [
-        'min_profit_threshold', 'min_profit_percentage', 'max_investment_per_item',
-        'buy_percentile', 'sell_percentile', 'min_volume_24h', 'min_volume_7d',
-        'min_volatility_threshold', 'max_volatility_threshold', 'max_daily_loss'
-    ];
+function collectSettings(form) {
+  const formData = new FormData(form);
+  const settings = Object.fromEntries(formData.entries());
 
-    numericFields.forEach(field => {
-        if (settings[field]) {
-            settings[field] = parseFloat(settings[field]);
-        }
-    });
-
-    // Convert boolean
-    settings.emergency_stop = formData.has('emergency_stop');
-    settings.cancel_untracked_orders = formData.has('cancel_untracked_orders');
-
-    try {
-        const response = await fetch('/api/v1/settings/', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settings)
-        });
-
-        if (response.ok) {
-            showStatus('Settings saved successfully!', 'success');
-        } else {
-            const error = await response.text();
-            showStatus(`Error: ${error}`, 'error');
-        }
-    } catch (error) {
-        showStatus(`Network error: ${error.message}`, 'error');
+  NUMERIC_FIELDS.forEach(field => {
+    if (settings[field] !== undefined && settings[field] !== '') {
+      settings[field] = parseFloat(settings[field]);
     }
+  });
+  BOOLEAN_FIELDS.forEach(field => {
+    settings[field] = formData.has(field);
+  });
+
+  return settings;
+}
+
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await SMT.patch('/api/v1/settings/', collectSettings(e.target));
+    SMT.notify('Settings saved.');
+  } catch (error) {
+    SMT.notify(`Could not save settings: ${error.message}`, 'error');
+  }
 });
 
 document.getElementById('reset-btn').addEventListener('click', async () => {
-    if (!confirm('Reset all settings to defaults? This cannot be undone.')) return;
-
-    try {
-        const response = await fetch('/api/v1/settings/reset', { method: 'POST' });
-        if (response.ok) {
-            location.reload();
-        }
-    } catch (error) {
-        showStatus(`Error resetting settings: ${error.message}`, 'error');
-    }
+  if (!SMT.confirmAction('Reset all settings to defaults? This cannot be undone.')) return;
+  try {
+    await SMT.post('/api/v1/settings/reset');
+    location.reload();
+  } catch (error) {
+    SMT.notify(`Could not reset settings: ${error.message}`, 'error');
+  }
 });
-
-function showStatus(message, type) {
-    const statusEl = document.getElementById('settings-status');
-    statusEl.textContent = message;
-    statusEl.className = `status-message ${type}`;
-    statusEl.style.display = 'block';
-
-    setTimeout(() => {
-        statusEl.style.display = 'none';
-    }, 5000);
-}

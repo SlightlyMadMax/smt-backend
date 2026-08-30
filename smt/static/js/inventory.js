@@ -1,35 +1,39 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const refreshBtn = document.getElementById("refresh-btn");
-  const addSelectedBtn = document.getElementById("add-selected-btn");
-  const grid = document.querySelector(".inventory-grid");
+document.addEventListener('DOMContentLoaded', () => {
+  const refreshBtn = document.getElementById('refresh-btn');
+  const addSelectedBtn = document.getElementById('add-selected-btn');
+  const grid = document.querySelector('.inventory-grid');
 
-  refreshBtn.addEventListener("click", async () => {
+  const selectedIds = () =>
+    Array.from(grid.querySelectorAll('input[name="asset_ids"]:checked')).map(cb => cb.value);
+
+  refreshBtn.addEventListener('click', async () => {
+    const game = new URLSearchParams(location.search).get('game');
     refreshBtn.disabled = true;
-    const game = new URLSearchParams(location.search).get("game");
-    await fetch(`api/v1/inventory/refresh?game=${game}`, {method: "PUT"});
-    location.reload();
+    try {
+      await SMT.request(`/api/v1/inventory/refresh?game=${encodeURIComponent(game)}`, {method: 'PUT'});
+      location.reload();
+    } catch (e) {
+      SMT.notify(`Could not refresh the inventory: ${e.message}`, 'error');
+      refreshBtn.disabled = false;
+    }
   });
 
-  grid.addEventListener("change", () => {
-    const anyChecked = grid.querySelectorAll('input[name="asset_ids"]:checked').length > 0;
-    addSelectedBtn.disabled = !anyChecked;
+  grid.addEventListener('change', () => {
+    addSelectedBtn.disabled = selectedIds().length === 0;
   });
 
-  addSelectedBtn.addEventListener("click", async () => {
-    const checked = Array.from(grid.querySelectorAll('input[name="asset_ids"]:checked'));
-    const asset_ids = checked.map(cb => cb.value);
+  addSelectedBtn.addEventListener('click', async () => {
+    const asset_ids = selectedIds();
+    if (asset_ids.length === 0) return;
 
-    const resp = await fetch("/api/v1/pool/add-multiple", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({asset_ids})
-    });
-
-    if (resp.ok) {
-      window.location.href = "/pool";
-    } else {
-      const err = await resp.text();
-      alert("Failed to add items: " + err);
+    addSelectedBtn.disabled = true;
+    try {
+      const result = await SMT.post('/api/v1/pool/add-multiple', {asset_ids});
+      SMT.notify(`Added ${result.count} item(s) to the pool.`);
+      window.location.href = '/pool';
+    } catch (e) {
+      SMT.notify(`Could not add items: ${e.message}`, 'error');
+      addSelectedBtn.disabled = false;
     }
   });
 });

@@ -1,222 +1,186 @@
 const POLL_INTERVAL = 3000;
 const MAX_ATTEMPTS = 10;
-const refreshingBaseline = {};
+const LOADING_MARKUP = '<em>Loading…</em>';
+const LOADING_TEXT = 'Loading…';
+
+const POLL_FIELDS = [
+  ['.poll-buy-price', 'optimal_buy_price'],
+  ['.poll-sell-price', 'optimal_sell_price'],
+  ['.poll-current-price', 'current_lowest_price'],
+  ['.poll-buy-order', 'current_highest_buy_order'],
+  ['.poll-volume', 'current_volume24h'],
+  ['.poll-volatility', 'volatility'],
+  ['.poll-profit', 'potential_profit'],
+];
 
 const applyBtn = document.querySelector('.bulk-actions button');
-const checkboxes = Array.from(document.querySelectorAll('.row-checkbox'));
 const bulkForm = document.getElementById('bulk-action-form');
-const selectAll = document.getElementById('select-all');
 const actionSelect = document.getElementById('bulk-action-select');
+const selectAll = document.getElementById('select-all');
+const checkboxes = Array.from(document.querySelectorAll('.row-checkbox'));
 
+const refreshingBaseline = {};
 let attemptCount = 0;
 let pollHandle;
 
-// ── ENABLE/DISABLE APPLY BUTTON ─────────────────────────────────────────
+// ── selection ────────────────────────────────────────────────────────────
+function selectedHashes() {
+  return checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+}
+
 function updateApplyState() {
-  applyBtn.disabled = !checkboxes.some(cb => cb.checked);
+  applyBtn.disabled = selectedHashes().length === 0;
 }
 
 checkboxes.forEach(cb => cb.addEventListener('change', updateApplyState));
 
 selectAll.addEventListener('change', ev => {
-  const checked = ev.target.checked;
-  checkboxes.forEach(cb => cb.checked = checked);
+  checkboxes.forEach(cb => (cb.checked = ev.target.checked));
   updateApplyState();
 });
 
+function clearSelection() {
+  selectAll.checked = false;
+  checkboxes.forEach(cb => (cb.checked = false));
+  updateApplyState();
+}
+
 updateApplyState();
 
-// ── PER‐ROW MAX_LISTED UPDATE ────────────────────────────────
+// ── per row max_listed ───────────────────────────────────────────────────
 document.querySelectorAll('.update-form').forEach(form => {
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
     const field = form.querySelector('input[name="max_listed"]');
-    const payload = { max_listed: Number(field.value) };
-    const res = await fetch(form.action, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      location.reload();
-    } else {
-      console.error('Failed to update max_listed', await res.text());
+    try {
+      await SMT.patch(form.action, {max_listed: Number(field.value)});
+      SMT.notify('Saved.');
+    } catch (e) {
+      SMT.notify(`Could not update: ${e.message}`, 'error');
     }
   });
 });
 
-// ── BULK‐ACTION SUBMIT HANDLER ───────────────────────────────────────────
-bulkForm.addEventListener('submit', async ev => {
-  ev.preventDefault();
+// ── bulk actions ─────────────────────────────────────────────────────────
+async function removeItems(hashes) {
+  const confirmed = SMT.confirmAction(
+    `Remove ${hashes.length} item(s) from the pool? Their price history will be deleted too.`
+  );
+  if (!confirmed) return;
 
-  const action = actionSelect.value;
-  const hashes = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
-  if (!action || hashes.length === 0) return;
-
-  if (action === 'remove') {
-    const res = await fetch('/api/v1/pool', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ market_hash_names: hashes })
-    });
-
-    if (res.ok) {
-      hashes.forEach(h => {
-        const row = document.querySelector(`tr[data-hash="${h}"]`);
-        if (row) row.remove();
-      });
-      selectAll.checked = false;
-      updateApplyState();
-    } else {
-      console.error('Bulk remove failed:', await res.text());
-    }
-
-  } else if (action === 'refresh') {
-    hashes.forEach(h => {
-      const timeEl = document.querySelector(`.poll-updated-at[data-hash="${h}"]`);
-      refreshingBaseline[h] = timeEl?.textContent || null;
-    });
-    hashes.forEach(h => {
-      const selector = `
-        .poll-current-price[data-hash="${h}"],
-        .poll-buy-order[data-hash="${h}"],
-        .poll-buy-price[data-hash="${h}"],
-        .poll-sell-price[data-hash="${h}"],
-        .poll-volume[data-hash="${h}"],
-        .poll-volatility[data-hash="${h}"],
-        .poll-profit[data-hash="${h}"],
-        .poll-updated-at[data-hash="${h}"]
-      `;
-      document.querySelectorAll(selector).forEach(el => el.innerHTML = '<em>Loading…</em>');
-    });
-
-    attemptCount = 0;
-    if (pollHandle) clearInterval(pollHandle);
-    pollHandle = setInterval(pollUpdates, POLL_INTERVAL);
-    pollUpdates();
-
-    fetch('/api/v1/pool/refresh-many', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ market_hash_names: hashes })
-    })
-    .then(res => {
-      if (!res.ok) console.error('Bulk refresh failed:', res.status, res.statusText);
-    });
-
-    selectAll.checked = false;
-    checkboxes.forEach(cb => cb.checked = false);
-    updateApplyState();
+  try {
+    const result = await SMT.remove('/api/v1/pool/', {market_hash_names: hashes});
+    hashes.forEach(h => document.querySelector(`tr[data-hash="${CSS.escape(h)}"]`)?.remove());
+    clearSelection();
+    SMT.notify(result.message);
+  } catch (e) {
+    SMT.notify(`Could not remove items: ${e.message}`, 'error');
   }
-});
-
-// ── POLLING LOGIC ────────────────────────────────────────────────────────
-async function fetchStatuses(hashes) {
-  const qs = hashes.map(encodeURIComponent).join(',');
-  const res = await fetch(`/api/v1/pool/status?market_hash_names=${qs}`);
-  if (!res.ok) {
-    console.error('Status fetch failed', res.status);
-    return null;
-  }
-  return res.json();
 }
 
-function formatDatetime(dateString) {
-  const d = new Date(dateString);
-  return d.getUTCFullYear() + "-" +
-    String(d.getUTCMonth() + 1).padStart(2,'0') + "-" +
-    String(d.getUTCDate()).padStart(2,'0') + " " +
-    String(d.getUTCHours()).padStart(2,'0') + ":" +
-    String(d.getUTCMinutes()).padStart(2,'0');
+function markPending(hashes) {
+  hashes.forEach(h => {
+    const timeEl = document.querySelector(`.poll-updated-at[data-hash="${CSS.escape(h)}"]`);
+    refreshingBaseline[h] = timeEl ? timeEl.textContent : null;
+
+    const selectors = [...POLL_FIELDS.map(([sel]) => sel), '.poll-updated-at']
+      .map(sel => `${sel}[data-hash="${CSS.escape(h)}"]`)
+      .join(',');
+    document.querySelectorAll(selectors).forEach(el => (el.innerHTML = LOADING_MARKUP));
+  });
+}
+
+async function refreshItems(hashes) {
+  markPending(hashes);
+  attemptCount = 0;
+  if (pollHandle) clearInterval(pollHandle);
+  pollHandle = setInterval(pollUpdates, POLL_INTERVAL);
+  pollUpdates();
+
+  try {
+    await SMT.post('/api/v1/pool/refresh-many', {market_hash_names: hashes});
+  } catch (e) {
+    SMT.notify(`Could not queue the refresh: ${e.message}`, 'error');
+  }
+  clearSelection();
+}
+
+bulkForm.addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const hashes = selectedHashes();
+  if (!actionSelect.value || hashes.length === 0) return;
+
+  if (actionSelect.value === 'remove') await removeItems(hashes);
+  else if (actionSelect.value === 'refresh') await refreshItems(hashes);
+});
+
+// ── polling ──────────────────────────────────────────────────────────────
+function formatDatetime(value) {
+  const d = new Date(value);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+function pendingElements() {
+  const selectors = [...POLL_FIELDS.map(([sel]) => sel), '.poll-updated-at'].join(',');
+  return Array.from(document.querySelectorAll(selectors))
+    .filter(el => el.textContent.trim() === LOADING_TEXT);
+}
+
+function giveUpOnPending() {
+  pendingElements().forEach(el => (el.textContent = '–'));
+  SMT.notify('The refresh did not finish in time. Check that the worker is running.', 'error');
+}
+
+function applyStatus(item) {
+  const name = item.market_hash_name;
+  const baseline = refreshingBaseline[name];
+
+  if (baseline !== undefined) {
+    if (baseline && item.updated_at && item.updated_at.slice(0, 16) === baseline.trim().replace(' ', 'T')) {
+      return;
+    }
+    delete refreshingBaseline[name];
+  }
+
+  POLL_FIELDS.forEach(([selector, field]) => {
+    if (item[field] == null) return;
+    const el = document.querySelector(`${selector}[data-hash="${CSS.escape(name)}"]`);
+    if (el) el.textContent = item[field];
+  });
+
+  if (item.updated_at) {
+    const el = document.querySelector(`.poll-updated-at[data-hash="${CSS.escape(name)}"]`);
+    if (el) el.textContent = formatDatetime(item.updated_at);
+  }
+
+  const row = document.querySelector(`tr[data-hash="${CSS.escape(name)}"]`);
+  if (row) {
+    row.classList.toggle('state-positive', item.use_for_trading === true);
+    row.classList.toggle('state-negative', item.use_for_trading !== true);
+  }
 }
 
 async function pollUpdates() {
   attemptCount++;
+  const pending = pendingElements();
 
-  const selectors = [
-    '.poll-current-price',
-    '.poll-buy-order',
-    '.poll-buy-price',
-    '.poll-sell-price',
-    '.poll-volume',
-    '.poll-volatility',
-    '.poll-profit',
-    '.poll-updated-at'
-  ];
-  const pendingEls = selectors
-    .flatMap(sel => Array.from(document.querySelectorAll(sel)))
-    .filter(el => el.textContent.trim() === 'Loading…');
-
-  if (pendingEls.length === 0 || attemptCount > MAX_ATTEMPTS) {
+  if (pending.length === 0 || attemptCount > MAX_ATTEMPTS) {
     clearInterval(pollHandle);
-
-    if (attemptCount > MAX_ATTEMPTS) {
-      selectors.forEach(sel =>
-        document.querySelectorAll(sel)
-          .forEach(el => {
-            if (el.textContent.trim() === 'Loading…') {
-              el.textContent = '–';
-            }
-          })
-      );
-    }
+    if (attemptCount > MAX_ATTEMPTS) giveUpOnPending();
     return;
   }
 
-  const hashes = Array.from(new Set(pendingEls.map(el => el.dataset.hash)));
-  const statuses = await fetchStatuses(hashes);
-  if (!statuses) return;
-
-  statuses.forEach(item => {
-    const {
-      market_hash_name: name,
-      current_lowest_price: curr,
-      current_highest_buy_order: topBuy,
-      current_volume24h: vol,
-      updated_at: ts,
-      optimal_buy_price: buy,
-      optimal_sell_price: sell,
-      volatility: sigma,
-      potential_profit: prof,
-      use_for_trading: flag
-    } = item;
-
-    if (refreshingBaseline.hasOwnProperty(name)) {
-      const baselineRaw = refreshingBaseline[name].trim();
-      const baselineNorm = baselineRaw.replace(' ', 'T');
-      const tsNorm = ts.slice(0, 16);
-
-      if (tsNorm === baselineNorm) {
-        return;
-      }
-      delete refreshingBaseline[name];
-    }
-
-    function maybeSet(sel, attr, value) {
-      if (value == null) return;
-      const el = document.querySelector(`${sel}[${attr}="${name}"]`);
-      if (el) el.textContent = value;
-    }
-
-    maybeSet('.poll-current-price', 'data-hash', curr);
-    maybeSet('.poll-buy-order', 'data-hash', topBuy);
-    maybeSet('.poll-buy-price', 'data-hash', buy);
-    maybeSet('.poll-sell-price', 'data-hash', sell);
-    maybeSet('.poll-volume', 'data-hash', vol);
-    maybeSet('.poll-volatility', 'data-hash', sigma);
-    maybeSet('.poll-profit', 'data-hash', prof);
-
-    if (ts) {
-      const timeEl = document.querySelector(`.poll-updated-at[data-hash="${name}"]`);
-      if (timeEl) timeEl.textContent = formatDatetime(ts);
-    }
-
-    const row = document.querySelector(`tr[data-hash="${name}"]`);
-    if (row) {
-      row.classList.toggle('state-positive', flag === true);
-      row.classList.toggle('state-negative', flag !== true);
-    }
-  });
+  const hashes = Array.from(new Set(pending.map(el => el.dataset.hash)));
+  try {
+    const statuses = await SMT.get(
+      `/api/v1/pool/status?market_hash_names=${hashes.map(encodeURIComponent).join(',')}`
+    );
+    statuses.forEach(applyStatus);
+  } catch (e) {
+    console.error('Status poll failed', e);
+  }
 }
 
 pollHandle = setInterval(pollUpdates, POLL_INTERVAL);
