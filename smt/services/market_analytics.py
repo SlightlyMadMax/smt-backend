@@ -11,6 +11,7 @@ from smt.utils.steam import calculate_fees
 
 
 OUTLIER_PRICE_FACTOR = Decimal("5")
+PRICE_DRIFT_FACTOR = Decimal("2")
 
 
 class MarketAnalyticsService:
@@ -37,6 +38,27 @@ class MarketAnalyticsService:
 
         low, high = median / factor, median * factor
         return [r for r in records if low <= r.price <= high]
+
+    @staticmethod
+    def history_describes_current_market(
+        records: List[PriceHistoryRecord],
+        current_price: Optional[Decimal],
+        factor: Decimal = PRICE_DRIFT_FACTOR,
+    ) -> bool:
+        """
+        Whether the price history says anything about what can be bought right now.
+
+        Some market names cover goods that trade at wildly different prices, so their
+        history is centred far from the current asking price and the percentiles taken
+        from it describe nothing purchasable. Without a current price there is nothing
+        to compare against, and the order book check before each order still applies.
+        """
+        if not records or current_price is None or current_price <= 0:
+            return True
+
+        median = statistics.median(r.price for r in records)
+        drift = median / current_price
+        return 1 / factor <= drift <= factor
 
     async def compute_weighted_percentile_targets(self, records: List[PriceHistoryRecord]) -> Tuple[Decimal, Decimal]:
         settings = await self.settings_service.get_settings()

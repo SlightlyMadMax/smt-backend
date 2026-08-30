@@ -173,3 +173,47 @@ class TestRefreshCurrentStats:
         await refresh_service.refresh_current_stats("item")
 
         refresh_service.pool_service.update.assert_awaited_once()
+
+
+def history_record(price: str, volume: int = 10):
+    return SimpleNamespace(price=Decimal(price), volume=volume, recorded_at=None)
+
+
+@pytest.fixture
+def indicator_service(refresh_service):
+    refresh_service.settings_service.get_settings.return_value = SimpleNamespace(analysis_window_days=7)
+    refresh_service.analytics_service.filter_price_outliers = lambda records: records
+    refresh_service.analytics_service.compute_weighted_percentile_targets.return_value = (
+        Decimal("6.21"),
+        Decimal("8.01"),
+    )
+    refresh_service.analytics_service.compute_volume_weighted_volatility.return_value = Decimal("0.095")
+    refresh_service.analytics_service.compute_net_and_profit.return_value = (Decimal("6.98"), Decimal("0.77"))
+    refresh_service.analytics_service.decide_trade_flag.return_value = True
+    refresh_service.price_history_service.list.return_value = [history_record("6.90"), history_record("6.95")]
+    return refresh_service
+
+
+@pytest.mark.asyncio
+class TestIndicatorDriftGuard:
+    async def test_keeps_the_flag_when_history_matches_the_market(self, indicator_service):
+        indicator_service.pool_service.get_many.return_value = [
+            SimpleNamespace(market_hash_name="item", current_volume24h=1000, current_lowest_price=Decimal("6.82"))
+        ]
+        indicator_service.analytics_service.history_describes_current_market = lambda records, price: True
+
+        await indicator_service.refresh_indicators(["item"])
+
+        payload = indicator_service.pool_service.update.await_args.args[1]
+        assert payload.use_for_trading is True
+
+    async def test_clears_the_flag_when_history_is_far_from_the_market(self, indicator_service):
+        indicator_service.pool_service.get_many.return_value = [
+            SimpleNamespace(market_hash_name="item", current_volume24h=1000, current_lowest_price=Decimal("5.18"))
+        ]
+        indicator_service.analytics_service.history_describes_current_market = lambda records, price: False
+
+        await indicator_service.refresh_indicators(["item"])
+
+        payload = indicator_service.pool_service.update.await_args.args[1]
+        assert payload.use_for_trading is False

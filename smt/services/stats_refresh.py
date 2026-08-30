@@ -107,6 +107,13 @@ class StatsRefreshService:
             net_sell, profit = await self.analytics_service.compute_net_and_profit(opt_sell, opt_buy)
             flag = await self.analytics_service.decide_trade_flag(profit, item.current_volume24h, sigma)
 
+            if flag and not self.analytics_service.history_describes_current_market(clean, item.current_lowest_price):
+                logger.warning(
+                    f"{item.market_hash_name}: the price history is centred far from the current price, "
+                    f"so its targets are not usable. Not trading it."
+                )
+                flag = False
+
             await self._persist_indicators(item.market_hash_name, opt_buy, opt_sell, sigma, profit, flag)
 
     async def _persist_indicators(

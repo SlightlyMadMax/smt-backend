@@ -329,3 +329,33 @@ class TestFilterPriceOutliers:
         )
 
         assert raw > clean
+
+
+class TestHistoryDescribesCurrentMarket:
+    def test_accepts_history_around_the_current_price(self, market_analytics_service):
+        records = [make_record(h, "6.90", 10) for h in range(4)]
+
+        assert market_analytics_service.history_describes_current_market(records, Decimal("6.82"))
+
+    def test_rejects_history_far_above_the_current_price(self, market_analytics_service):
+        records = [make_record(h, "1141.08", 10) for h in range(4)]
+
+        assert not market_analytics_service.history_describes_current_market(records, Decimal("5.18"))
+
+    def test_rejects_history_far_below_the_current_price(self, market_analytics_service):
+        records = [make_record(h, "1.00", 10) for h in range(4)]
+
+        assert not market_analytics_service.history_describes_current_market(records, Decimal("50.00"))
+
+    def test_accepts_a_move_inside_the_factor(self, market_analytics_service):
+        records = [make_record(h, "10.00", 10) for h in range(4)]
+
+        assert market_analytics_service.history_describes_current_market(records, Decimal("6.00"))
+
+    def test_cannot_judge_without_a_current_price(self, market_analytics_service):
+        records = [make_record(h, "1141.08", 10) for h in range(4)]
+
+        assert market_analytics_service.history_describes_current_market(records, None)
+
+    def test_cannot_judge_without_history(self, market_analytics_service):
+        assert market_analytics_service.history_describes_current_market([], Decimal("6.82"))
