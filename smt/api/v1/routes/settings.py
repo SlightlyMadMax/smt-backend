@@ -66,6 +66,7 @@ async def reset_to_defaults(service: SettingsService = Depends(get_settings_serv
         price_refresh_interval_minutes=30,
         stats_refresh_interval_minutes=60,
         emergency_stop=False,
+        cancel_untracked_orders=False,
         max_daily_loss=Decimal("100.00"),
     )
     return await service.update_settings(default_update)

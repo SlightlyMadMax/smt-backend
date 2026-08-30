@@ -98,6 +98,14 @@
             </div>
 
             <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="cancel_untracked_orders" {% if settings.cancel_untracked_orders %}checked{% endif %}>
+                    Cancel Untracked Orders
+                </label>
+                <small>Cancel buy orders and listings on Steam that no position accounts for</small>
+            </div>
+
+            <div class="form-group">
                 <label for="max_daily_loss">Max Daily Loss (₽)</label>
                 <input type="number" step="0.01" min="0" name="max_daily_loss" value="{{ settings.max_daily_loss }}" required>
                 <small>Stop trading if daily losses exceed this amount</small>

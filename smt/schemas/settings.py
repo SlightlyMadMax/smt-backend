@@ -23,6 +23,7 @@ class SettingsResponse(BaseModel):
     price_refresh_interval_minutes: int
     stats_refresh_interval_minutes: int
     emergency_stop: bool
+    cancel_untracked_orders: bool
     max_daily_loss: Decimal
     updated_at: datetime
 
@@ -44,4 +45,5 @@ class SettingsUpdate(BaseModel):
     price_refresh_interval_minutes: Optional[int] = Field(None, ge=5)
     stats_refresh_interval_minutes: Optional[int] = Field(None, ge=10)
     emergency_stop: Optional[bool] = None
+    cancel_untracked_orders: Optional[bool] = None
     max_daily_loss: Optional[Decimal] = Field(None, ge=0)

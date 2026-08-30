@@ -19,6 +19,7 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
 
     // Convert boolean
     settings.emergency_stop = formData.has('emergency_stop');
+    settings.cancel_untracked_orders = formData.has('cancel_untracked_orders');
 
     try {
         const response = await fetch('/api/v1/settings/', {

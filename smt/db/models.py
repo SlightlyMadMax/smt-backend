@@ -122,6 +122,7 @@ class TradingSettings(TimeStampedModel, Base):
     price_refresh_interval_minutes: Mapped[int] = mapped_column(Integer, default=30)
     stats_refresh_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
     emergency_stop: Mapped[bool] = mapped_column(Boolean, default=False)
+    cancel_untracked_orders: Mapped[bool] = mapped_column(Boolean, default=False)
     max_daily_loss: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("100.00"))
 
     def __repr__(self):
