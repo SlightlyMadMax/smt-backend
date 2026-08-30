@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from steampy.models import GameOptions
 
@@ -38,18 +38,18 @@ class TradingService:
             assets = await self._snapshot_all_items()
             listings = await self.steam_service.get_my_market_listings()
             buy_orders = list(listings.get("buy_orders", {}).values())
-            await self._sync_open_to_bought(assets, buy_orders)
-
-            await self._list_bought_positions()
-
             sell_listings = list(listings.get("sell_listings", {}).values())
+
+            await self._sync_open_to_bought(assets, buy_orders)
+            await self._resolve_pending_listings(sell_listings)
             await self._sync_listed_to_closed(sell_listings)
+            await self._list_bought_positions()
 
             settings = await self.settings_service.get_settings()
             if not settings.emergency_stop:
                 await self._open_new_positions()
-        except Exception as e:
-            logger.error(f"Error in trading cycle: {e}")
+        except Exception:
+            logger.exception("Error in trading cycle")
 
         logger.info(f"Trading cycle complete in {time.monotonic() - start:.2f} s.")
 
@@ -105,15 +105,37 @@ class TradingService:
             logger.info(
                 f"Placing a sell order for Position {pos.id}, market_hash_name: {pos.pool_item_hash}, price: {pos.sell_price} rub."
             )
-            sell_id = await self.steam_service.create_sell_order(
+            await self.steam_service.create_sell_order(
                 asset_id=pos.asset_id,
                 game=GameOptions(pos.pool_item.app_id, pos.pool_item.context_id),
                 price=pos.sell_price,
             )
-            await self.position_service.mark_as_listed(
-                position_id=pos.id,
-                sell_order_id=sell_id,
-            )
+            await self.position_service.mark_as_listing_pending(position_id=pos.id)
+
+    @staticmethod
+    def _listing_asset_id(listing: dict) -> Optional[str]:
+        return (listing.get("description") or {}).get("id")
+
+    async def _resolve_pending_listings(self, listings: List) -> None:
+        """Attach the Steam listing id to LISTING_PENDING positions by matching on asset_id."""
+        pending_positions = await self.position_service.list_by_status(PositionStatus.LISTING_PENDING)
+        if not pending_positions:
+            return
+
+        asset_to_listing = {
+            asset_id: li.get("listing_id")
+            for li in listings
+            if not li.get("need_confirmation") and (asset_id := self._listing_asset_id(li))
+        }
+
+        for pos in pending_positions:
+            listing_id = asset_to_listing.get(pos.asset_id)
+            if not listing_id:
+                logger.warning(f"Position {pos.id}: no active listing found yet for asset {pos.asset_id}.")
+                continue
+
+            logger.info(f"Position {pos.id}: resolved listing {listing_id} for asset {pos.asset_id}.")
+            await self.position_service.mark_as_listed(position_id=pos.id, sell_order_id=listing_id)
 
     async def _sync_listed_to_closed(
         self,
@@ -121,9 +143,12 @@ class TradingService:
     ) -> None:
         """Mark LISTED positions as CLOSED when sell orders disappear."""
         listed_positions = await self.position_service.list_by_status(PositionStatus.LISTED)
+        active_listing_ids = {li.get("listing_id") for li in listings}
         for pos in listed_positions:
-            still_active = any(li.get("listing_id") == pos.sell_order_id for li in listings)
-            if not still_active:
+            if not pos.sell_order_id:
+                logger.warning(f"Position {pos.id} is LISTED without a listing id, skipping.")
+                continue
+            if pos.sell_order_id not in active_listing_ids:
                 logger.info(f"Sell order {pos.sell_order_id} for Position {pos.id} disappeared, closing position.")
                 await self.position_service.close(position_id=pos.id)
 

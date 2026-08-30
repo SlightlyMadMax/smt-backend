@@ -27,11 +27,16 @@ class PositionService:
         return await self.repo.list_by_status(status=status)
 
     async def list_active(self) -> List[Position]:
-        open_ = await self.list_by_status(status=PositionStatus.OPEN)
-        bought = await self.list_by_status(status=PositionStatus.BOUGHT)
-        listed = await self.list_by_status(status=PositionStatus.LISTED)
+        active: List[Position] = []
+        for status in (
+            PositionStatus.OPEN,
+            PositionStatus.BOUGHT,
+            PositionStatus.LISTING_PENDING,
+            PositionStatus.LISTED,
+        ):
+            active.extend(await self.list_by_status(status=status))
 
-        return list(open_) + list(bought) + list(listed)
+        return active
 
     async def mark_as_bought(self, position_id: int, asset_id: str, bought_at: Optional[datetime] = None) -> Position:
         """
@@ -45,19 +50,29 @@ class PositionService:
         pos = await self.repo.update(position_id, update_data)
         return pos
 
-    async def mark_as_listed(
-        self, position_id: int, sell_order_id: str, listed_at: Optional[datetime] = None
-    ) -> Position:
+    async def mark_as_listing_pending(self, position_id: int, listed_at: Optional[datetime] = None) -> Position:
         """
-        Transition a Position from BOUGHT to LISTED.
+        Transition a Position from BOUGHT to LISTING_PENDING.
+
+        Steam does not return a listing id when a sell order is created, so the
+        position waits here until the listing shows up in the account listings.
         """
         pos = await self.get(position_id)
         if pos.status != PositionStatus.BOUGHT:
-            raise ValueError("Can only mark BOUGHT positions as LISTED")
+            raise ValueError("Can only mark BOUGHT positions as LISTING_PENDING")
         listed_at = listed_at or datetime.now(timezone.utc)
-        update_data = PositionUpdate(
-            sell_order_id=sell_order_id, status=PositionStatus.LISTED.value, listed_at=listed_at
-        )
+        update_data = PositionUpdate(status=PositionStatus.LISTING_PENDING.value, listed_at=listed_at)
+        pos = await self.repo.update(position_id, update_data)
+        return pos
+
+    async def mark_as_listed(self, position_id: int, sell_order_id: str) -> Position:
+        """
+        Transition a Position from LISTING_PENDING to LISTED once its listing id is known.
+        """
+        pos = await self.get(position_id)
+        if pos.status != PositionStatus.LISTING_PENDING:
+            raise ValueError("Can only mark LISTING_PENDING positions as LISTED")
+        update_data = PositionUpdate(sell_order_id=sell_order_id, status=PositionStatus.LISTED.value)
         pos = await self.repo.update(position_id, update_data)
         return pos
 

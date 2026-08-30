@@ -11,6 +11,7 @@ from steampy.models import Currency, GameOptions
 from tenacity import AsyncRetrying, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings
+from smt.exceptions import BuyOrderFailed, SellOrderFailed
 from smt.logger import get_logger
 from smt.utils.steam import calculate_fees, parse_steam_ts
 
@@ -119,21 +120,19 @@ class SteamService:
             Currency.RUB,
         )
         if not resp.get("success", False):
-            logger.error(f"Failed to create a buy order for {quantity} {market_hash_name}.")
-            raise Exception
+            logger.error(f"Failed to create a buy order for {quantity} {market_hash_name}. Response: {resp}")
+            raise BuyOrderFailed(f"Steam rejected the buy order for {market_hash_name}: {resp}")
         buy_order_id = resp.get("buy_orderid")
         logger.info(f"Buy order with id {buy_order_id} successfully created.")
         return buy_order_id
 
     @requires_login
-    async def create_sell_order(self, asset_id: str, game: GameOptions, price: Decimal) -> str:
+    async def create_sell_order(self, asset_id: str, game: GameOptions, price: Decimal) -> None:
         logger.debug(f"Creating a sell order for {asset_id} at {price} rub.")
         kopecks = int((price * 100).to_integral_value())
         net_received = str(calculate_fees(gross=kopecks)["net_received"])
         resp = await to_thread.run_sync(self.client.market.create_sell_order, asset_id, game, net_received)
         if not resp.get("success", False):
-            logger.error(f"Failed to create a sell order for {asset_id} at {price} rub.")
-            raise Exception
-        sell_order_id = resp.get("sell_orderid")
-        logger.info(f"Sell order with id {sell_order_id} successfully created.")
-        return sell_order_id
+            logger.error(f"Failed to create a sell order for {asset_id} at {price} rub. Response: {resp}")
+            raise SellOrderFailed(f"Steam rejected the sell order for {asset_id}: {resp}")
+        logger.info(f"Sell order for {asset_id} accepted by Steam. Response: {resp}")
