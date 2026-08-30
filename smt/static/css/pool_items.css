@@ -82,3 +82,161 @@
     flex-wrap: wrap;
   }
 }
+
+/* details panel */
+
+.details-row > td {
+  background: var(--color-surface);
+  padding: 0;
+}
+
+.details-panel {
+  padding: var(--gap);
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 2fr) minmax(240px, 1fr) minmax(220px, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+
+.details-grid h4 {
+  font-size: 0.95rem;
+  margin-bottom: var(--gap-sm);
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.details-grid h4 small {
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+.details-empty {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.price-chart {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 1.5;
+}
+
+.chart-level {
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.chart-level.chart-buy {
+  stroke: var(--color-success);
+}
+
+.chart-level.chart-sell {
+  stroke: var(--color-danger);
+}
+
+.chart-label,
+.chart-axis {
+  font-size: 9px;
+  fill: var(--color-muted);
+}
+
+.chart-label.chart-buy {
+  fill: var(--color-success);
+}
+
+.chart-label.chart-sell {
+  fill: var(--color-danger);
+}
+
+.details-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--gap-sm);
+  margin-top: var(--gap);
+}
+
+.details-stats dt {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.details-stats dd {
+  font-weight: 600;
+}
+
+.depth {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap-sm);
+}
+
+.depth-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.depth-list li {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr 2.5rem;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.depth-bar {
+  display: block;
+  background: var(--color-surface-alt);
+  border-radius: 2px;
+  height: 0.7rem;
+}
+
+.depth-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.depth-bar i.depth-sell {
+  background: var(--color-danger);
+}
+
+.depth-bar i.depth-buy {
+  background: var(--color-success);
+}
+
+.depth-qty {
+  text-align: right;
+  color: var(--color-muted);
+}
+
+.details-form .form-group {
+  margin-bottom: 0.75rem;
+}
+
+.details-form .form-actions {
+  margin-top: var(--gap-sm);
+  justify-content: flex-start;
+}
+
+@media (max-width: 1100px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-note {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin-top: 0.25rem;
+}

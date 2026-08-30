@@ -4,12 +4,9 @@ const LOADING_MARKUP = '<em>Loading…</em>';
 const LOADING_TEXT = 'Loading…';
 
 const POLL_FIELDS = [
-  ['.poll-buy-price', 'optimal_buy_price'],
-  ['.poll-sell-price', 'optimal_sell_price'],
+  ['.poll-buy-price', 'effective_buy_price'],
+  ['.poll-sell-price', 'effective_sell_price'],
   ['.poll-current-price', 'current_lowest_price'],
-  ['.poll-buy-order', 'current_highest_buy_order'],
-  ['.poll-volume', 'current_volume24h'],
-  ['.poll-volatility', 'volatility'],
   ['.poll-profit', 'potential_profit'],
 ];
 
@@ -46,20 +43,6 @@ function clearSelection() {
 }
 
 updateApplyState();
-
-// ── per row max_listed ───────────────────────────────────────────────────
-document.querySelectorAll('.update-form').forEach(form => {
-  form.addEventListener('submit', async ev => {
-    ev.preventDefault();
-    const field = form.querySelector('input[name="max_listed"]');
-    try {
-      await SMT.patch(form.action, {max_listed: Number(field.value)});
-      SMT.notify('Saved.');
-    } catch (e) {
-      SMT.notify(`Could not update: ${e.message}`, 'error');
-    }
-  });
-});
 
 // ── bulk actions ─────────────────────────────────────────────────────────
 async function removeItems(hashes) {
