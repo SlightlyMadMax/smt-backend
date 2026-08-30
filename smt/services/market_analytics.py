@@ -32,13 +32,14 @@ class MarketAnalyticsService:
         Return the volume weighted median price and the traded volume within `window`.
 
         The window ends at the newest record rather than at the current time, because
-        Steam publishes price history with a lag.
+        Steam publishes price history with a lag. Records are hourly buckets and the
+        bound is exclusive, so a 24 hour window covers 24 buckets, not 25.
         """
         if not records:
             return None, None
 
         latest = max(r.recorded_at for r in records)
-        recent = [r for r in records if latest - r.recorded_at <= window]
+        recent = [r for r in records if latest - r.recorded_at < window]
         if not recent:
             return None, None
 

@@ -281,3 +281,10 @@ class TestComputeRecentStats:
         records = [make_record(0, "10.00", 0), make_record(1, "20.00", 0)]
 
         assert await market_analytics_service.compute_recent_stats(records) == (None, 0)
+
+    async def test_window_bound_is_exclusive(self, market_analytics_service):
+        records = [make_record(h, "10.00", 1) for h in range(0, 25)]
+
+        _, volume = await market_analytics_service.compute_recent_stats(records)
+
+        assert volume == 24
