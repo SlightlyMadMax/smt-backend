@@ -180,6 +180,16 @@ class SteamService:
         return await to_thread.run_sync(self.client.market.get_my_market_listings)
 
     @requires_login
+    async def cancel_buy_order(self, buy_order_id: str) -> None:
+        logger.info(f"Cancelling buy order {buy_order_id}.")
+        await to_thread.run_sync(self.client.market.cancel_buy_order, buy_order_id)
+
+    @requires_login
+    async def cancel_sell_listing(self, listing_id: str) -> None:
+        logger.info(f"Cancelling sell listing {listing_id}.")
+        await to_thread.run_sync(self.client.market.cancel_sell_order, listing_id)
+
+    @requires_login
     async def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
         logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
         kopecks = int((price * 100).to_integral_value())

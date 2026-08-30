@@ -44,12 +44,14 @@ class TradingService:
             buy_orders = list(listings.get("buy_orders", {}).values())
             sell_listings = list(listings.get("sell_listings", {}).values())
 
+            settings = await self.settings_service.get_settings()
+            await self._reconcile_orders(buy_orders, sell_listings, settings.cancel_untracked_orders)
+
             await self._sync_open_to_bought(assets, buy_orders)
             await self._resolve_pending_listings(sell_listings)
             await self._sync_listed_to_closed(sell_listings)
             await self._list_bought_positions()
 
-            settings = await self.settings_service.get_settings()
             if not settings.emergency_stop:
                 await self._open_new_positions()
         except Exception:
@@ -75,6 +77,41 @@ class TradingService:
         for app_id, ctx_id in games:
             all_assets[(app_id, ctx_id)] = await self.inventory_service.sync_snapshot(GameOptions(app_id, ctx_id))
         return all_assets
+
+    async def _reconcile_orders(self, buy_orders: list, sell_listings: list, cancel: bool) -> None:
+        """
+        Report Steam orders and listings that no active position accounts for.
+
+        An order that is live on Steam while its position is already CANCELLED or CLOSED
+        means the two views drifted apart, which is how duplicate orders appear.
+        """
+        active = await self.position_service.list_active()
+        known_order_ids = {pos.buy_order_id for pos in active if pos.buy_order_id}
+        known_listing_ids = {pos.sell_order_id for pos in active if pos.sell_order_id}
+        known_asset_ids = {pos.asset_id for pos in active if pos.asset_id}
+
+        for order in buy_orders:
+            order_id = order.get("order_id")
+            if not order_id or order_id in known_order_ids:
+                continue
+            logger.warning(
+                f"Untracked buy order {order_id} on Steam: {order.get('quantity')} x "
+                f"{order.get('item_name')} at {order.get('price')}. No active position refers to it."
+            )
+            if cancel:
+                await self.steam_service.cancel_buy_order(order_id)
+
+        for listing in sell_listings:
+            listing_id = listing.get("listing_id")
+            asset_id = self._listing_asset_id(listing)
+            if not listing_id or listing_id in known_listing_ids or asset_id in known_asset_ids:
+                continue
+            logger.warning(
+                f"Untracked sell listing {listing_id} on Steam for asset {asset_id}. "
+                f"No active position refers to it."
+            )
+            if cancel:
+                await self.steam_service.cancel_sell_listing(listing_id)
 
     async def _sync_open_to_bought(
         self, assets: Dict[Tuple[str, str], Dict[str, List[Item]]], buy_orders: list

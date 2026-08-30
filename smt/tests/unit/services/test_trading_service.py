@@ -277,3 +277,59 @@ class TestOpenNewPositions:
 
         assert trading_service.steam_service.get_order_book.await_count == 1
         assert trading_service.steam_service.create_buy_order.await_count == 3
+
+
+@pytest.mark.asyncio
+class TestReconcileOrders:
+    async def test_ignores_orders_owned_by_an_active_position(self, trading_service, position_service):
+        position_service.list_active.return_value = [make_position(1, PositionStatus.OPEN)]
+
+        await trading_service._reconcile_orders([{"order_id": "BUY-1"}], [], cancel=False)
+
+        trading_service.steam_service.cancel_buy_order.assert_not_awaited()
+
+    async def test_reports_an_order_no_active_position_owns(self, trading_service, position_service):
+        position_service.list_active.return_value = []
+
+        await trading_service._reconcile_orders([{"order_id": "BUY-99"}], [], cancel=False)
+
+        trading_service.steam_service.cancel_buy_order.assert_not_awaited()
+
+    async def test_cancels_untracked_orders_when_asked(self, trading_service, position_service):
+        position_service.list_active.return_value = []
+
+        await trading_service._reconcile_orders([{"order_id": "BUY-99"}], [], cancel=True)
+
+        trading_service.steam_service.cancel_buy_order.assert_awaited_once_with("BUY-99")
+
+    async def test_a_cancelled_position_no_longer_shields_its_order(self, trading_service, position_service):
+        position_service.list_active.return_value = []
+
+        await trading_service._reconcile_orders([{"order_id": "BUY-1"}], [], cancel=True)
+
+        trading_service.steam_service.cancel_buy_order.assert_awaited_once_with("BUY-1")
+
+    async def test_listing_matched_by_asset_is_left_alone(self, trading_service, position_service):
+        position_service.list_active.return_value = [
+            make_position(1, PositionStatus.LISTING_PENDING, asset_id="ASSET-1")
+        ]
+
+        await trading_service._reconcile_orders([], [make_listing("LISTING-9", "ASSET-1")], cancel=True)
+
+        trading_service.steam_service.cancel_sell_listing.assert_not_awaited()
+
+    async def test_listing_matched_by_id_is_left_alone(self, trading_service, position_service):
+        position_service.list_active.return_value = [
+            make_position(1, PositionStatus.LISTED, asset_id="OTHER", sell_order_id="LISTING-9")
+        ]
+
+        await trading_service._reconcile_orders([], [make_listing("LISTING-9", "ASSET-1")], cancel=True)
+
+        trading_service.steam_service.cancel_sell_listing.assert_not_awaited()
+
+    async def test_cancels_an_untracked_listing_when_asked(self, trading_service, position_service):
+        position_service.list_active.return_value = []
+
+        await trading_service._reconcile_orders([], [make_listing("LISTING-9", "ASSET-1")], cancel=True)
+
+        trading_service.steam_service.cancel_sell_listing.assert_awaited_once_with("LISTING-9")
