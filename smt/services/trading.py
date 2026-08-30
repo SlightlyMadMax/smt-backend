@@ -1,5 +1,6 @@
 import time
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from steampy.models import GameOptions
@@ -221,14 +222,44 @@ class TradingService:
                 await self.position_service.close(position_id=pos.id)
 
     async def _open_new_positions(self) -> None:
-        """Submit new buy orders for PoolItems flagged for trading if none are open."""
+        """Submit new buy orders for PoolItems flagged for trading, within the configured limits."""
+        settings = await self.settings_service.get_settings()
         pool_items = await self.pool_item_service.list_marked_for_trading()
         existing = await self.position_service.list_active()
 
+        free_slots = settings.max_concurrent_trades - len(existing)
+        if free_slots <= 0:
+            logger.info(
+                f"Not opening new positions: {len(existing)} active positions already reach "
+                f"the limit of {settings.max_concurrent_trades}."
+            )
+            return
+
+        try:
+            balance = await self.steam_service.get_wallet_balance()
+        except Exception as e:
+            logger.warning(f"Not opening new positions, the wallet balance is unknown: {e!r}")
+            return
+
+        logger.info(f"Opening positions with {balance} in the wallet and {free_slots} free slots.")
+
         for item in pool_items:
+            if free_slots <= 0:
+                logger.info("Reached the concurrent trade limit, stopping.")
+                break
+
             existing_positions = [p for p in existing if p.pool_item_hash == item.market_hash_name]
-            to_create = item.max_listed - len(existing_positions)
+            to_create = min(item.max_listed - len(existing_positions), free_slots)
             if to_create <= 0:
+                continue
+
+            committed = sum((p.buy_price for p in existing_positions), Decimal("0"))
+            budget_left = settings.max_investment_per_item - committed
+            if budget_left <= 0:
+                logger.info(
+                    f"Skipping {item.market_hash_name}: {committed} already committed reaches "
+                    f"the per item limit of {settings.max_investment_per_item}."
+                )
                 continue
 
             buy_price = item.effective_buy_price
@@ -257,6 +288,19 @@ class TradingService:
                 continue
 
             for _ in range(to_create):
+                if buy_price > balance:
+                    logger.info(
+                        f"Skipping {item.market_hash_name}: {buy_price} exceeds the remaining wallet balance {balance}."
+                    )
+                    break
+
+                if buy_price > budget_left:
+                    logger.info(
+                        f"Skipping {item.market_hash_name}: {buy_price} exceeds the remaining per item "
+                        f"budget {budget_left}."
+                    )
+                    break
+
                 logger.info(
                     f"Creating a buy order for {item.market_hash_name}, price: {buy_price} "
                     f"(top bid {book['highest_buy_order']}, cheapest listing {lowest_ask})."
@@ -274,3 +318,7 @@ class TradingService:
                     sell_price=item.effective_sell_price,
                 )
                 await self.position_service.add(create)
+
+                balance -= buy_price
+                budget_left -= buy_price
+                free_slots -= 1

@@ -23,6 +23,7 @@ def make_position(position_id: int, status: PositionStatus, asset_id=None, sell_
         pool_item=SimpleNamespace(app_id="730", context_id="2"),
         asset_id=asset_id,
         sell_order_id=sell_order_id,
+        buy_price=Decimal("10.00"),
         sell_price=Decimal("15.00"),
         status=status,
         created_at=created_at or (NOW - CANCEL_GRACE_PERIOD - timedelta(minutes=1)),
@@ -48,15 +49,27 @@ def position_service():
     return service
 
 
+def make_settings(max_concurrent_trades=10, max_investment_per_item=Decimal("50.00")):
+    return SimpleNamespace(
+        max_concurrent_trades=max_concurrent_trades,
+        max_investment_per_item=max_investment_per_item,
+        emergency_stop=False,
+        cancel_untracked_orders=False,
+    )
+
+
 @pytest.fixture
 def trading_service(position_service):
-    return TradingService(
+    service = TradingService(
         steam_service=AsyncMock(),
         inventory_service=AsyncMock(),
         position_service=position_service,
         pool_item_service=AsyncMock(),
         settings_service=AsyncMock(),
     )
+    service.settings_service.get_settings.return_value = make_settings()
+    service.steam_service.get_wallet_balance.return_value = Decimal("1000.00")
+    return service
 
 
 @pytest.mark.asyncio
@@ -333,3 +346,102 @@ class TestReconcileOrders:
         await trading_service._reconcile_orders([], [make_listing("LISTING-9", "ASSET-1")], cancel=True)
 
         trading_service.steam_service.cancel_sell_listing.assert_awaited_once_with("LISTING-9")
+
+
+@pytest.mark.asyncio
+class TestOpenNewPositionsLimits:
+    async def test_stops_when_all_trade_slots_are_taken(self, trading_service, position_service):
+        trading_service.settings_service.get_settings.return_value = make_settings(max_concurrent_trades=2)
+        position_service.list_active.return_value = [
+            make_position(1, PositionStatus.OPEN),
+            make_position(2, PositionStatus.LISTED),
+        ]
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item()]
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.get_wallet_balance.assert_not_awaited()
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
+
+    async def test_free_slots_cap_how_many_orders_are_placed(self, trading_service, position_service):
+        trading_service.settings_service.get_settings.return_value = make_settings(max_concurrent_trades=2)
+        position_service.list_active.return_value = [make_position(1, PositionStatus.OPEN)]
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [
+            make_pool_item(buy=Decimal("6.00"), max_listed=5)
+        ]
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        assert trading_service.steam_service.create_buy_order.await_count == 1
+
+    async def test_does_not_spend_more_than_the_wallet_holds(self, trading_service, position_service):
+        position_service.list_active.return_value = []
+        trading_service.steam_service.get_wallet_balance.return_value = Decimal("13.00")
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [
+            make_pool_item(buy=Decimal("6.00"), max_listed=5)
+        ]
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        assert trading_service.steam_service.create_buy_order.await_count == 2
+
+    async def test_skips_everything_when_the_balance_is_unknown(self, trading_service, position_service):
+        position_service.list_active.return_value = []
+        trading_service.steam_service.get_wallet_balance.side_effect = RuntimeError("no session")
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item()]
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
+
+    async def test_respects_the_per_item_budget(self, trading_service, position_service):
+        trading_service.settings_service.get_settings.return_value = make_settings(
+            max_investment_per_item=Decimal("18.00")
+        )
+        position_service.list_active.return_value = []
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [
+            make_pool_item(buy=Decimal("6.00"), max_listed=5)
+        ]
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        assert trading_service.steam_service.create_buy_order.await_count == 3
+
+    async def test_counts_money_already_committed_to_the_item(self, trading_service, position_service):
+        trading_service.settings_service.get_settings.return_value = make_settings(
+            max_investment_per_item=Decimal("18.00")
+        )
+        held = make_position(1, PositionStatus.OPEN)
+        held.buy_price = Decimal("12.00")
+        position_service.list_active.return_value = [held]
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [
+            make_pool_item(buy=Decimal("6.00"), max_listed=5)
+        ]
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        assert trading_service.steam_service.create_buy_order.await_count == 1
+
+    async def test_skips_the_item_when_its_budget_is_already_spent(self, trading_service, position_service):
+        trading_service.settings_service.get_settings.return_value = make_settings(
+            max_investment_per_item=Decimal("10.00")
+        )
+        held = make_position(1, PositionStatus.OPEN)
+        held.buy_price = Decimal("10.00")
+        position_service.list_active.return_value = [held]
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [
+            make_pool_item(buy=Decimal("6.00"), max_listed=5)
+        ]
+
+        await trading_service._open_new_positions()
+
+        trading_service.steam_service.get_order_book.assert_not_awaited()
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
