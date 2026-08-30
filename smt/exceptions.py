@@ -16,3 +16,7 @@ class SellOrderFailed(SteamOperationFailed):
 
 class ListingNotResolved(SteamOperationFailed):
     """A sell order was placed but its listing id could not be found yet."""
+
+
+class OrderBookUnavailable(SteamOperationFailed):
+    """Steam did not return an order book for the requested item."""

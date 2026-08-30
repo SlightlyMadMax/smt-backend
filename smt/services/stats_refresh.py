@@ -3,9 +3,12 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import List
 
+import httpx
 from sqlalchemy.exc import NoResultFound
 from steampy.models import GameOptions
 
+from smt.exceptions import OrderBookUnavailable
+from smt.logger import get_logger
 from smt.schemas.pool import PoolItemUpdate
 from smt.schemas.price_history import PriceHistoryRecordCreate
 from smt.services.market_analytics import MarketAnalyticsService
@@ -13,6 +16,11 @@ from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService
 from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
+
+
+logger = get_logger("services.stats_refresh")
+
+RECENT_STATS_LOOKBACK = timedelta(days=2)
 
 
 class StatsRefreshService:
@@ -67,17 +75,20 @@ class StatsRefreshService:
         except NoResultFound:
             return
 
-        game_opt = GameOptions(item.app_id, item.context_id)
-        snap = await self.steam.get_price(market_hash_name=market_hash_name, game=game_opt)
+        since = datetime.now(UTC) - RECENT_STATS_LOOKBACK
+        records = list(await self.price_history_service.list(market_hash_name, since=since))
+        median, volume = await self.analytics_service.compute_recent_stats(records)
 
-        await self.pool_service.update(
-            market_hash_name,
-            PoolItemUpdate(
-                current_lowest_price=snap["lowest_price"],
-                current_median_price=snap["median_price"],
-                current_volume24h=snap["volume"],
-            ),
-        )
+        values: dict = {"current_median_price": median, "current_volume24h": volume}
+
+        try:
+            book = await self.steam.get_order_book(market_hash_name=market_hash_name, app_id=item.app_id)
+            values["current_lowest_price"] = book["lowest_sell_order"]
+            values["current_highest_buy_order"] = book["highest_buy_order"]
+        except (OrderBookUnavailable, httpx.HTTPError) as e:
+            logger.warning(f"Could not fetch the order book for {market_hash_name}: {e}")
+
+        await self.pool_service.update(market_hash_name, PoolItemUpdate(**values))
 
     async def refresh_indicators(self, names: List[str]) -> None:
         settings = await self.settings_service.get_settings()

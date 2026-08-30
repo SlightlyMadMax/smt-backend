@@ -4,6 +4,7 @@ from decimal import Decimal
 from functools import wraps
 from typing import Optional
 
+import httpx
 from anyio import to_thread
 from steampy.client import SteamClient
 from steampy.exceptions import LoginRequired
@@ -11,12 +12,22 @@ from steampy.models import Currency, GameOptions
 from tenacity import AsyncRetrying, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings
-from smt.exceptions import BuyOrderFailed, SellOrderFailed
+from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed
 from smt.logger import get_logger
 from smt.utils.steam import calculate_fees, parse_steam_ts
 
 
 logger = get_logger("services.steam")
+
+STEAM_COMMUNITY_URL = "https://steamcommunity.com"
+ORDER_BOOK_TIMEOUT = 30
+ORDER_BOOK_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+)
+
+
+def _to_decimal(value) -> Optional[Decimal]:
+    return None if value is None else Decimal(str(value))
 
 
 def requires_login(func):
@@ -91,11 +102,32 @@ class SteamService:
 
         return history
 
-    @requires_login
-    async def get_price(self, market_hash_name: str, game: GameOptions) -> dict:
-        logger.debug(f"Fetching current price and volume for {market_hash_name}.")
-        resp = await to_thread.run_sync(self.client.market.fetch_price, market_hash_name, game, Currency.RUB, "RU")
-        return resp
+    async def get_order_book(self, market_hash_name: str, app_id: str) -> dict:
+        """
+        Fetch the current order book for an item.
+
+        This endpoint is public, so it needs neither a Steam session nor an item id.
+        Prices come back rounded to whole currency units, and the currency itself is
+        decided by Steam from the caller's region and cannot be overridden.
+        """
+        logger.debug(f"Fetching order book for {market_hash_name}.")
+        params = {"q": "Load", "qp": json.dumps([int(app_id), market_hash_name], separators=(",", ":"))}
+
+        async with httpx.AsyncClient(timeout=ORDER_BOOK_TIMEOUT, headers={"User-Agent": ORDER_BOOK_USER_AGENT}) as c:
+            resp = await c.get(f"{STEAM_COMMUNITY_URL}/market/orderbook", params=params)
+
+        resp.raise_for_status()
+        payload = resp.json().get("data") or {}
+        if not payload.get("success"):
+            raise OrderBookUnavailable(f"Steam returned no order book for {market_hash_name}")
+
+        data = payload.get("data") or {}
+        return {
+            "lowest_sell_order": _to_decimal(data.get("amtMinSellOrder")),
+            "highest_buy_order": _to_decimal(data.get("amtMaxBuyOrder")),
+            "sell_order_count": data.get("cSellOrders"),
+            "buy_order_count": data.get("cBuyOrders"),
+        }
 
     @requires_login
     async def get_my_market_listings(self) -> dict:
