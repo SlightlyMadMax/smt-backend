@@ -10,7 +10,7 @@ class SettingsRepo:
         self.session = session
 
     async def get_current(self) -> TradingSettings:
-        stmt = select(TradingSettings).order_by(TradingSettings.updated_at.desc()).limit(1)
+        stmt = select(TradingSettings).order_by(TradingSettings.id).limit(1)
         result = await self.session.execute(stmt)
         settings = result.scalar_one_or_none()
 
