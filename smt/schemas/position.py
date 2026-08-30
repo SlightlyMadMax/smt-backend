@@ -27,6 +27,8 @@ class PositionCreate(PositionBase):
 
 class PositionUpdate(BaseModel):
     asset_id: Optional[str] = None
+    net_proceeds: Optional[Decimal] = None
+    realized_profit: Optional[Decimal] = None
     sell_order_id: Optional[str] = None
     status: Optional[PositionStatus] = None
     sold_at: Optional[datetime] = None
@@ -42,6 +44,8 @@ class Position(PositionBase):
     sell_order_id: Optional[str]
     sell_price: Decimal
     sold_at: Optional[datetime]
+    net_proceeds: Optional[Decimal]
+    realized_profit: Optional[Decimal]
     status: PositionStatus
     created_at: datetime
     updated_at: datetime

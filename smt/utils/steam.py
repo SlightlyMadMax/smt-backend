@@ -109,3 +109,9 @@ def calculate_fees(
         "total_fees": total_fees,
         "net_received": net_received,
     }
+
+
+def net_received(gross: Decimal) -> Decimal:
+    """What the seller receives after fees when the buyer pays `gross`."""
+    kopecks = int((gross * 100).to_integral_value())
+    return (Decimal(calculate_fees(kopecks)["net_received"]) / 100).quantize(Decimal("0.01"))

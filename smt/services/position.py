@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import List, Optional, Sequence
 
 from smt.db.models import Position, PositionStatus
 from smt.repositories.position import PositionRepo
 from smt.schemas.position import PositionCreate, PositionUpdate
+from smt.utils.steam import net_received
 
 
 class PositionService:
@@ -82,18 +84,30 @@ class PositionService:
         sold_at: Optional[datetime] = None,
     ) -> Position:
         """
-        Transition a LISTED Position to CLOSED: record sold_at timestamp.
+        Transition a LISTED Position to CLOSED and record what the sale returned.
+
+        The buyer paid `sell_price`; Steam and the publisher take their cut from it,
+        so the wallet receives less. Both numbers are stored rather than recomputed
+        later, because the fee model can change.
         """
         pos = await self.get(position_id)
         if pos.status != PositionStatus.LISTED:
             raise ValueError("Can only close positions that are LISTED")
+
         sold_at = sold_at or datetime.now(timezone.utc)
+        net_proceeds = net_received(pos.sell_price)
+
         update_data = PositionUpdate(
             status=PositionStatus.CLOSED.value,
             sold_at=sold_at,
+            net_proceeds=net_proceeds,
+            realized_profit=net_proceeds - pos.buy_price,
         )
         pos = await self.repo.update(position_id, update_data)
         return pos
+
+    async def realized_profit_since(self, since: datetime) -> Decimal:
+        return await self.repo.realized_profit_since(since)
 
     async def mark_as_cancelled(self, position_id: int) -> Position:
         """

@@ -1,6 +1,8 @@
+from datetime import datetime
+from decimal import Decimal
 from typing import Sequence
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -30,6 +32,14 @@ class PositionRepo:
         stmt = select(Position).options(selectinload(Position.pool_item)).where(Position.status == status)
         result = await self.session.execute(stmt)
         return result.scalars().all()
+
+    async def realized_profit_since(self, since: datetime) -> Decimal:
+        stmt = select(func.coalesce(func.sum(Position.realized_profit), 0)).where(
+            Position.status == PositionStatus.CLOSED,
+            Position.sold_at >= since,
+        )
+        result = await self.session.execute(stmt)
+        return Decimal(result.scalar_one())
 
     async def add(self, data: PositionCreate) -> Position:
         pos = Position(
