@@ -326,3 +326,24 @@ button:disabled,
   background: var(--color-negative-bg);
   color: var(--color-negative-text);
 }
+
+/* wallet readout in the header */
+
+.wallet {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gap-sm);
+  color: #fff;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.wallet-label {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+.wallet.wallet-stale strong {
+  opacity: 0.5;
+}

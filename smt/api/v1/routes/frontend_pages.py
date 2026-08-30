@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request
 from fastapi.params import Query
 from fastapi.templating import Jinja2Templates
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, RedirectResponse
 
 from smt.schemas.inventory import GAME_MAP, GameName
 from smt.schemas.position import PositionStatus
@@ -40,9 +40,9 @@ def static_url(path: str) -> str:
 templates.env.globals["static_url"] = static_url
 
 
-@router.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+@router.get("/", include_in_schema=False)
+async def home() -> RedirectResponse:
+    return RedirectResponse("/pool")
 
 
 @router.get("/inventory", response_class=HTMLResponse, include_in_schema=False)

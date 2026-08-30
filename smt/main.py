@@ -13,6 +13,7 @@ from smt.api.v1.routes import (
     positions_router,
     price_history_router,
     settings_router,
+    steam_router,
 )
 from smt.api.v1.routes.frontend_pages import STATIC_DIR
 from smt.core.config import get_settings
@@ -52,6 +53,7 @@ api_router.include_router(pool_router)
 api_router.include_router(positions_router)
 api_router.include_router(price_history_router)
 api_router.include_router(settings_router)
+api_router.include_router(steam_router)
 
 app.include_router(api_router)
 app.include_router(frontend_router)

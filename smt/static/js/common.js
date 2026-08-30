@@ -69,3 +69,21 @@
     confirmAction,
   };
 })(window);
+
+// the wallet readout lives in the header on every page
+document.addEventListener('DOMContentLoaded', async () => {
+  const el = document.getElementById('wallet-balance');
+  if (!el) return;
+
+  try {
+    const wallet = await SMT.get('/api/v1/steam/wallet');
+    el.textContent = wallet.balance == null ? 'unavailable' : wallet.balance;
+    el.closest('.wallet').classList.toggle('wallet-stale', wallet.stale);
+    if (wallet.stale) {
+      el.closest('.wallet').title = 'Steam did not answer; this is the last known balance';
+    }
+  } catch (e) {
+    el.textContent = 'unavailable';
+    el.closest('.wallet').classList.add('wallet-stale');
+  }
+});
