@@ -21,13 +21,12 @@ logger = get_logger("services.steam")
 
 STEAM_COMMUNITY_URL = "https://steamcommunity.com"
 ORDER_BOOK_TIMEOUT = 30
-ORDER_BOOK_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-)
+ACCOUNT_CURRENCY = Currency.RUB
 
 
-def _to_decimal(value) -> Optional[Decimal]:
-    return None if value is None else Decimal(str(value))
+def _from_minor_units(value) -> Optional[Decimal]:
+    """Steam quotes order book prices in minor units, e.g. 682 for 6.82 RUB."""
+    return None if value is None else (Decimal(value) / 100).quantize(Decimal("0.01"))
 
 
 def requires_login(func):
@@ -102,19 +101,20 @@ class SteamService:
 
         return history
 
+    @requires_login
     async def get_order_book(self, market_hash_name: str, app_id: str) -> dict:
         """
         Fetch the current order book for an item.
 
-        This endpoint is public, so it needs neither a Steam session nor an item id.
-        Prices come back rounded to whole currency units, and the currency itself is
-        decided by Steam from the caller's region and cannot be overridden.
+        The session cookies decide the currency: without them Steam answers in EUR
+        instead of the wallet currency, so this must run authenticated.
         """
         logger.debug(f"Fetching order book for {market_hash_name}.")
         params = {"q": "Load", "qp": json.dumps([int(app_id), market_hash_name], separators=(",", ":"))}
+        cookies = self.client._session.cookies.get_dict(domain="steamcommunity.com")
 
-        async with httpx.AsyncClient(timeout=ORDER_BOOK_TIMEOUT, headers={"User-Agent": ORDER_BOOK_USER_AGENT}) as c:
-            resp = await c.get(f"{STEAM_COMMUNITY_URL}/market/orderbook", params=params)
+        async with httpx.AsyncClient(timeout=ORDER_BOOK_TIMEOUT) as client:
+            resp = await client.get(f"{STEAM_COMMUNITY_URL}/market/orderbook", params=params, cookies=cookies)
 
         resp.raise_for_status()
         payload = resp.json().get("data") or {}
@@ -122,9 +122,15 @@ class SteamService:
             raise OrderBookUnavailable(f"Steam returned no order book for {market_hash_name}")
 
         data = payload.get("data") or {}
+        currency = data.get("eCurrency")
+        if currency != ACCOUNT_CURRENCY:
+            raise OrderBookUnavailable(
+                f"Order book for {market_hash_name} is priced in currency {currency}, expected {ACCOUNT_CURRENCY}"
+            )
+
         return {
-            "lowest_sell_order": _to_decimal(data.get("amtMinSellOrder")),
-            "highest_buy_order": _to_decimal(data.get("amtMaxBuyOrder")),
+            "lowest_sell_order": _from_minor_units(data.get("amtMinSellOrder")),
+            "highest_buy_order": _from_minor_units(data.get("amtMaxBuyOrder")),
             "sell_order_count": data.get("cSellOrders"),
             "buy_order_count": data.get("cBuyOrders"),
         }
@@ -144,7 +150,7 @@ class SteamService:
             str(kopecks),
             quantity,
             game,
-            Currency.RUB,
+            ACCOUNT_CURRENCY,
         )
         if not resp.get("success", False):
             logger.error(f"Failed to create a buy order for {quantity} {market_hash_name}. Response: {resp}")

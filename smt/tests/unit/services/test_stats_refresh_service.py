@@ -8,22 +8,24 @@ import pytest
 from smt.exceptions import OrderBookUnavailable
 from smt.services import steam as steam_module
 from smt.services.stats_refresh import StatsRefreshService
-from smt.services.steam import SteamService
+from smt.services.steam import ACCOUNT_CURRENCY, SteamService
 
 
-ORDER_BOOK_OK = {
-    "data": {
-        "success": True,
+def order_book_payload(currency=int(ACCOUNT_CURRENCY), min_sell=682, max_buy=668):
+    return {
         "data": {
-            "amtMinSellOrder": 196,
-            "amtMaxBuyOrder": 195,
-            "cSellOrders": 38170,
-            "cBuyOrders": 528386,
-            "rgCompactSellOrders": [196, 443, 197, 749],
-            "rgCompactBuyOrders": [195, 2228, 193, 18883],
-        },
+            "success": True,
+            "data": {
+                "eCurrency": currency,
+                "amtMinSellOrder": min_sell,
+                "amtMaxBuyOrder": max_buy,
+                "cSellOrders": 38170,
+                "cBuyOrders": 528386,
+                "rgCompactSellOrders": [min_sell, 443],
+                "rgCompactBuyOrders": [max_buy, 2228],
+            },
+        }
     }
-}
 
 
 class FakeResponse:
@@ -53,35 +55,52 @@ class FakeAsyncClient:
     async def __aexit__(self, *exc_info):
         return False
 
-    async def get(self, url, params=None):
-        self.calls.append((url, params))
+    async def get(self, url, params=None, cookies=None):
+        self.calls.append((url, params, cookies))
         return self._response
 
 
 @pytest.fixture
 def steam_service():
     with patch.object(SteamService, "__init__", lambda self, settings=None: None):
-        return SteamService()
+        service = SteamService()
+    service.client = SimpleNamespace(_session=SimpleNamespace(cookies=SimpleNamespace(get_dict=lambda domain: {})))
+    service._ensure_login = AsyncMock()
+    return service
 
 
 @pytest.mark.asyncio
 class TestGetOrderBook:
-    async def test_parses_the_order_book(self, steam_service):
-        fake = FakeAsyncClient(FakeResponse(ORDER_BOOK_OK))
+    async def test_converts_minor_units_to_currency(self, steam_service):
+        fake = FakeAsyncClient(FakeResponse(order_book_payload()))
         with patch.object(steam_module.httpx, "AsyncClient", fake):
-            book = await steam_service.get_order_book("Mann Co. Supply Crate Key", "440")
+            book = await steam_service.get_order_book("Secret Saxton", "440")
 
-        assert book["lowest_sell_order"] == Decimal("196")
-        assert book["highest_buy_order"] == Decimal("195")
+        assert book["lowest_sell_order"] == Decimal("6.82")
+        assert book["highest_buy_order"] == Decimal("6.68")
         assert book["sell_order_count"] == 38170
         assert book["buy_order_count"] == 528386
 
+    async def test_rejects_a_foreign_currency(self, steam_service):
+        fake = FakeAsyncClient(FakeResponse(order_book_payload(currency=3, min_sell=8, max_buy=6)))
+        with patch.object(steam_module.httpx, "AsyncClient", fake):
+            with pytest.raises(OrderBookUnavailable, match="currency 3"):
+                await steam_service.get_order_book("Secret Saxton", "440")
+
+    async def test_sends_session_cookies(self, steam_service):
+        steam_service.client._session.cookies.get_dict = lambda domain: {"steamLoginSecure": "token"}
+        fake = FakeAsyncClient(FakeResponse(order_book_payload()))
+        with patch.object(steam_module.httpx, "AsyncClient", fake):
+            await steam_service.get_order_book("Secret Saxton", "440")
+
+        assert fake.calls[0][2] == {"steamLoginSecure": "token"}
+
     async def test_sends_appid_and_name_as_qp(self, steam_service):
-        fake = FakeAsyncClient(FakeResponse(ORDER_BOOK_OK))
+        fake = FakeAsyncClient(FakeResponse(order_book_payload()))
         with patch.object(steam_module.httpx, "AsyncClient", fake):
             await steam_service.get_order_book("Mann Co. Supply Crate Key", "440")
 
-        _, params = fake.calls[0]
+        _, params, _ = fake.calls[0]
         assert params["q"] == "Load"
         assert params["qp"] == '[440,"Mann Co. Supply Crate Key"]'
 
@@ -113,8 +132,8 @@ def refresh_service():
 class TestRefreshCurrentStats:
     async def test_writes_all_four_fields(self, refresh_service):
         refresh_service.steam.get_order_book.return_value = {
-            "lowest_sell_order": Decimal("196"),
-            "highest_buy_order": Decimal("195"),
+            "lowest_sell_order": Decimal("6.82"),
+            "highest_buy_order": Decimal("6.68"),
             "sell_order_count": 1,
             "buy_order_count": 2,
         }
@@ -124,8 +143,8 @@ class TestRefreshCurrentStats:
         payload = refresh_service.pool_service.update.await_args.args[1]
         assert payload.current_median_price == Decimal("195.07")
         assert payload.current_volume24h == 58919
-        assert payload.current_lowest_price == Decimal("196")
-        assert payload.current_highest_buy_order == Decimal("195")
+        assert payload.current_lowest_price == Decimal("6.82")
+        assert payload.current_highest_buy_order == Decimal("6.68")
 
     async def test_still_stores_history_stats_when_the_order_book_fails(self, refresh_service):
         refresh_service.steam.get_order_book.side_effect = OrderBookUnavailable("gone")
