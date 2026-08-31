@@ -1,9 +1,4 @@
-"""
-These run against the Redis the application actually uses.
-
-The point of moving the rate limiter and the login cooldown out of process memory is
-that several processes share them, and a fake client would not prove that.
-"""
+"""These run against the Redis the application actually uses."""
 
 import asyncio
 import datetime

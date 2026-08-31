@@ -13,12 +13,7 @@ RETENTION = timedelta(days=30)
 
 
 class ActionLogService:
-    """
-    Records what the bot did so the dashboard can show it.
-
-    Only events are recorded, never states: writing down every skipped item on every
-    cycle would bury the handful of entries that matter under thousands of repeats.
-    """
+    """Records what the bot did so the dashboard can show it."""
 
     def __init__(self, repo: ActionLogRepo):
         self.repo = repo
@@ -40,7 +35,6 @@ class ActionLogService:
                 position_id=position_id,
             )
         except Exception as e:
-            # the journal must never be the reason a trade fails
             logger.error(f"Could not record the {kind.value} action: {e!r}")
 
     async def list(

@@ -4,16 +4,7 @@ import uuid
 
 
 class RedisRateLimiter:
-    """
-    Sliding window shared by every process that talks to Steam.
-
-    Holding the window in Redis rather than in the process matters twice over: the web
-    app and the worker draw from one budget instead of a full one each, and a restart no
-    longer forgets the calls already spent.
-
-    The check and the reservation happen inside one Lua script so two processes cannot
-    both see the last free slot.
-    """
+    """Sliding window shared by every process that talks to Steam."""
 
     ACQUIRE = """
     local key = KEYS[1]

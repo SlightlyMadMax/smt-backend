@@ -37,13 +37,7 @@ class MarketAnalyticsService:
     def filter_price_outliers(
         records: List[PriceHistoryRecord], factor: Decimal = OUTLIER_PRICE_FACTOR
     ) -> List[PriceHistoryRecord]:
-        """
-        Drop records whose price is more than `factor` times away from the median.
-
-        Steam price history occasionally contains points one or two orders of magnitude
-        off the real price, which distorts volatility far more than it distorts a volume
-        weighted percentile.
-        """
+        """Drop records whose price is more than `factor` times away from the median."""
         if not records:
             return []
 
@@ -60,14 +54,7 @@ class MarketAnalyticsService:
         current_price: Optional[Decimal],
         factor: Decimal = PRICE_DRIFT_FACTOR,
     ) -> bool:
-        """
-        Whether the price history says anything about what can be bought right now.
-
-        Some market names cover goods that trade at wildly different prices, so their
-        history is centred far from the current asking price and the percentiles taken
-        from it describe nothing purchasable. Without a current price there is nothing
-        to compare against, and the order book check before each order still applies.
-        """
+        """Whether the price history says anything about what can be bought right now."""
         if not records or current_price is None or current_price <= 0:
             return True
 
@@ -90,13 +77,7 @@ class MarketAnalyticsService:
     async def compute_recent_stats(
         records: List[PriceHistoryRecord], window: timedelta = timedelta(hours=24)
     ) -> Tuple[Optional[Decimal], Optional[int]]:
-        """
-        Return the volume weighted median price and the traded volume within `window`.
-
-        The window ends at the newest record rather than at the current time, because
-        Steam publishes price history with a lag. Records are hourly buckets and the
-        bound is exclusive, so a 24 hour window covers 24 buckets, not 25.
-        """
+        """Return the volume weighted median price and the traded volume within `window`."""
         if not records:
             return None, None
 
@@ -141,13 +122,7 @@ class MarketAnalyticsService:
     def simulate_round_trips(
         records: List[PriceHistoryRecord], buy_target: Decimal, sell_target: Decimal
     ) -> Tuple[int, Optional[Decimal]]:
-        """
-        Replay the history the way the bot would trade it.
-
-        Fills are assumed at the targets, because that is where the limit orders sit;
-        entering at the bottom of a dip would flatter the result. Returns how many round
-        trips completed and the median hours a position stayed open.
-        """
+        """Replay the history the way the bot would trade it."""
         ordered = sorted(records, key=lambda r: r.recorded_at)
         holding = False
         entered_at = None
@@ -170,10 +145,7 @@ class MarketAnalyticsService:
     def project_return_on_capital(
         profit_per_trade: Decimal, round_trips: int, buy_target: Decimal, window_days: int
     ) -> Optional[Decimal]:
-        """
-        Return over the window, scaled to 30 days so the threshold means the same thing
-        whichever analysis window is configured.
-        """
+        """Return over the window, scaled to 30 days so the threshold means the same thing whichever analysis window is configured."""
         if buy_target <= 0 or window_days <= 0:
             return None
 

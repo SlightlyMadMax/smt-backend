@@ -66,16 +66,12 @@ class PoolItem(TimeStampedModel, Base):
 
     @property
     def effective_buy_price(self) -> Decimal | None:
-        """
-        Return manual override if set, else optimal buy price.
-        """
+        """Return manual override if set, else optimal buy price."""
         return self.manual_buy_price or self.optimal_buy_price
 
     @property
     def effective_sell_price(self) -> Decimal | None:
-        """
-        Return manual override if set, else optimal sell price.
-        """
+        """Return manual override if set, else optimal sell price."""
         return self.manual_sell_price or self.optimal_sell_price
 
     @property
@@ -166,12 +162,7 @@ class Position(TimeStampedModel, Base):
 
 
 class ActionLog(Base):
-    """
-    What the bot did, as a stream of events.
-
-    `market_hash_name` deliberately carries no foreign key: removing an item from the
-    pool must not erase the record of the trades it took part in.
-    """
+    """What the bot did, as a stream of events."""
 
     __tablename__ = "action_log"
     __table_args__ = (Index("ix_action_log_occurred_at", "occurred_at"),)

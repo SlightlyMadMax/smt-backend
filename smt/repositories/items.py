@@ -25,12 +25,7 @@ class ItemRepo:
         return res.scalars().all()
 
     async def sync_for_game(self, app_id: str, context_id: str, items: List[Item]) -> set[str]:
-        """
-        Bring the stored inventory for a game in line with `items`.
-
-        Rows for assets that are still present keep their original `first_seen_at`.
-        Returns the ids of the assets that were not stored before.
-        """
+        """Bring the stored inventory for a game in line with `items`."""
         existing = {item.id: item for item in await self.list_by_game(app_id, context_id)}
         incoming_ids = {item.id for item in items}
 

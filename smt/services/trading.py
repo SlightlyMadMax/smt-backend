@@ -22,8 +22,6 @@ logger = get_logger("services.trading")
 
 CANCEL_GRACE_PERIOD = timedelta(minutes=10)
 
-# Steam allows active buy orders worth up to ten times the wallet balance, and does not
-# hold the funds until an order actually fills.
 OPEN_ORDER_EXPOSURE_MULTIPLIER = Decimal("10")
 
 
@@ -76,12 +74,7 @@ class TradingService:
     async def _snapshot_all_items(
         self,
     ) -> Dict[Tuple[str, str], Dict[str, List[Item]]]:
-        """
-        Refresh the stored inventory for every game in the pool.
-
-        Returns a mapping per game:
-          (app_id, context_id) -> { market_hash_name: [Item, ...] }
-        """
+        """Refresh the stored inventory for every game in the pool."""
         pool_items: Sequence[PoolItem] = await self.pool_item_service.list()
         games: Dict[Tuple[str, str], List[PoolItem]] = {}
         for item in pool_items:
@@ -93,12 +86,7 @@ class TradingService:
         return all_assets
 
     async def _reconcile_orders(self, buy_orders: list, sell_listings: list, cancel: bool) -> None:
-        """
-        Report Steam orders and listings that no active position accounts for.
-
-        An order that is live on Steam while its position is already CANCELLED or CLOSED
-        means the two views drifted apart, which is how duplicate orders appear.
-        """
+        """Report Steam orders and listings that no active position accounts for."""
         active = await self.position_service.list_active()
         known_order_ids = {pos.buy_order_id for pos in active if pos.buy_order_id}
         known_listing_ids = {pos.sell_order_id for pos in active if pos.sell_order_id}
@@ -143,13 +131,7 @@ class TradingService:
     async def _sync_open_to_bought(
         self, assets: Dict[Tuple[str, str], Dict[str, List[Item]]], buy_orders: list
     ) -> None:
-        """
-        Resolve OPEN positions whose buy order is no longer active on Steam.
-
-        A position is only matched against an asset that entered the inventory after
-        the position was opened, so items owned beforehand are never claimed. When no
-        such asset exists the order did not fill and the position is cancelled.
-        """
+        """Resolve OPEN positions whose buy order is no longer active on Steam."""
         open_positions = await self.position_service.list_by_status(PositionStatus.OPEN)
         active_buy_order_ids = {order["order_id"] for order in buy_orders if "order_id" in order}
         claimed = {pos.asset_id for pos in await self.position_service.list() if pos.asset_id}

@@ -1,11 +1,4 @@
-"""
-How a Steam session survives being handed to another process, checked without Steam.
-
-steampy has not been maintained for years and several of its assumptions have gone
-stale, so these tests pin down what it actually does rather than what it offers. They
-cover the local plumbing only; whether Steam accepts restored cookies can only be
-learned from Steam.
-"""
+"""How a Steam session survives being handed to another process, checked without Steam."""
 
 import pytest
 from steampy.client import SteamClient

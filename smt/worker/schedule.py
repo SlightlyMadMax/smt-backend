@@ -10,14 +10,7 @@ KEY_PREFIX = "smt:last_run:"
 
 
 async def due(redis, name: str, interval_minutes: int) -> bool:
-    """
-    Whether a periodic job should run now, given how long ago it last ran.
-
-    The cron entry only decides how often the question is asked; the interval that
-    answers it comes from the trading settings, so changing it in the interface takes
-    effect without restarting the worker. The timestamp lives in Redis rather than in
-    the process, so a restart does not turn every interval into "run immediately".
-    """
+    """Whether a periodic job should run now, given how long ago it last ran."""
     if interval_minutes <= 0:
         return True
 

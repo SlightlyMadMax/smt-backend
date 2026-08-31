@@ -74,9 +74,6 @@ def throttled(func):
 
 class SteamService:
     def __init__(self, settings: Settings):
-        # The credentials go in here rather than only into login(): is_session_alive()
-        # compares the account name against the page, so a client that adopted someone
-        # else's session still needs to know it.
         self.client = SteamClient(
             api_key=settings.STEAM_API_KEY,
             username=settings.STEAM_USERNAME,
@@ -121,13 +118,7 @@ class SteamService:
 
     @asynccontextmanager
     async def _login_lock(self):
-        """
-        Only one process may be logging in at a time.
-
-        Steam refuses a second session opened moments after the first, so two processes
-        starting together used to collide. Whoever loses the race waits and then finds
-        the session the winner published.
-        """
+        """Only one process may be logging in at a time."""
         token = uuid.uuid4().hex
         deadline = time.monotonic() + LOGIN_LOCK_WAIT
 
@@ -153,19 +144,7 @@ class SteamService:
         )
 
     async def _restore_shared_session(self) -> bool:
-        """
-        Adopt the session another process published, if it is still usable.
-
-        steampy's own set_login_cookies() cannot be used: it stores the cookies without a
-        domain and then reads the session id back with a domain filter, so the market
-        ends up wired with a null session id. Restoring each cookie with its domain keeps
-        that lookup working.
-
-        Liveness is checked with get_steam_id() rather than is_session_alive(), which
-        looks for the account name in a page that shows the persona name instead and so
-        calls a healthy session dead. Matching the id also proves the cookies belong to
-        the account we mean to trade with.
-        """
+        """Adopt the session another process published, if it is still usable."""
         raw = await self._redis.get(SESSION_KEY)
         if not raw:
             return False
@@ -192,22 +171,12 @@ class SteamService:
         except Exception as e:
             logger.info(f"Could not adopt the stored Steam session: {e!r}")
 
-        # Leave the stored session alone: failing to adopt it says nothing about whether
-        # it still works for the process that created it. Drop the cookies we injected
-        # though, because logging in over a stale steamLoginSecure confuses Steam.
         self.client._session.cookies.clear()
         self.client.was_login_executed = False
         return False
 
     async def _log_in(self) -> None:
-        """
-        One attempt, no retry.
-
-        Steam limits how often an account may log in, and a refusal comes back as a
-        response missing the fields steampy expects. Retrying that three times within
-        nine seconds spends the budget faster and digs the hole deeper; the growing
-        cooldown is the right answer instead.
-        """
+        """One attempt, no retry."""
         logger.info("Logging into Steam.")
         await self._limiter.acquire()
         await to_thread.run_sync(
@@ -220,15 +189,7 @@ class SteamService:
         logger.info("Steam login successful.")
 
     async def _ensure_login(self) -> None:
-        """
-        Make sure a usable Steam session is in place.
-
-        One session is shared through Redis by every process: Steam refuses a second
-        session opened right after the first, so each process minting its own is what
-        made logins fail. A refused login puts further attempts on a growing cooldown,
-        also shared, but a process whose session is already fresh is never held back
-        by it.
-        """
+        """Make sure a usable Steam session is in place."""
         if not self._should_check_login():
             return
 
@@ -241,7 +202,6 @@ class SteamService:
             raise SteamLoginUnavailable(f"Steam login is on cooldown for another {remaining}.")
 
         async with self._login_lock():
-            # the process that held the lock may have just published a session
             if await self._restore_shared_session():
                 self._last_check = datetime.datetime.now(datetime.UTC)
                 return
@@ -286,12 +246,7 @@ class SteamService:
     @requires_login
     @throttled
     async def get_order_book(self, market_hash_name: str, app_id: str) -> dict:
-        """
-        Fetch the current order book for an item.
-
-        The session cookies decide the currency: without them Steam answers in EUR
-        instead of the wallet currency, so this must run authenticated.
-        """
+        """Fetch the current order book for an item."""
         logger.debug(f"Fetching order book for {market_hash_name}.")
         params = {"q": "Load", "qp": json.dumps([int(app_id), market_hash_name], separators=(",", ":"))}
         cookies = self.client._session.cookies.get_dict(domain="steamcommunity.com")
@@ -332,12 +287,7 @@ class SteamService:
         sort_column: str = "quantity",
         sort_dir: str = "desc",
     ) -> dict:
-        """
-        One page of the market search, as JSON.
-
-        `sell_listings` counts how many copies are on sale, which is a rough liquidity
-        proxy; the real traded volume only comes from the price history.
-        """
+        """One page of the market search, as JSON."""
         logger.debug(f"Searching the market for app {app_id}, offset {start}.")
         params = {
             "query": "",

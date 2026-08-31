@@ -170,8 +170,6 @@ async function loadDetails(hash, panel) {
       SMT.notify('Saved.');
       await loadDetails(hash, panel);
 
-      // the polling loop only touches cells it is waiting on, so the row above
-      // would keep showing the previous prices until a reload
       const fresh = await SMT.get('/api/v1/pool/status?market_hash_names=' + encodeURIComponent(hash));
       if (fresh[0]) applyStatus(fresh[0]);
     } catch (e) {
@@ -200,7 +198,6 @@ async function toggleRow(row) {
 }
 
 document.querySelectorAll('.pool-row').forEach(row => {
-  // the checkbox and the item link keep their own behaviour
   row.addEventListener('click', ev => {
     if (ev.target.closest('a, input, label, button, select')) return;
     toggleRow(row);

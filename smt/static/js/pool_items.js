@@ -169,7 +169,6 @@ async function pollUpdates() {
 pollHandle = setInterval(pollUpdates, POLL_INTERVAL);
 pollUpdates();
 
-// -- summary bar and the trading switch -----------------------------------
 const SUMMARY_INTERVAL = 20000;
 
 const tradingToggle = document.getElementById('trading-toggle');

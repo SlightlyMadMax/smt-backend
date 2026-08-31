@@ -16,9 +16,7 @@ class PositionService:
         self,
         data: PositionCreate,
     ) -> Position:
-        """
-        Create a new Position in OPEN state using PositionCreate schema.
-        """
+        """Create a new Position in OPEN state using PositionCreate schema."""
         pos = await self.repo.add(data)
         return pos
 
@@ -48,9 +46,7 @@ class PositionService:
         }
 
     async def mark_as_bought(self, position_id: int, asset_id: str, bought_at: Optional[datetime] = None) -> Position:
-        """
-        Transition a Position from OPEN to BOUGHT.
-        """
+        """Transition a Position from OPEN to BOUGHT."""
         pos = await self.get(position_id)
         if pos.status != PositionStatus.OPEN:
             raise ValueError("Can only mark OPEN positions as BOUGHT")
@@ -60,12 +56,7 @@ class PositionService:
         return pos
 
     async def mark_as_listing_pending(self, position_id: int, listed_at: Optional[datetime] = None) -> Position:
-        """
-        Transition a Position from BOUGHT to LISTING_PENDING.
-
-        Steam does not return a listing id when a sell order is created, so the
-        position waits here until the listing shows up in the account listings.
-        """
+        """Transition a Position from BOUGHT to LISTING_PENDING."""
         pos = await self.get(position_id)
         if pos.status != PositionStatus.BOUGHT:
             raise ValueError("Can only mark BOUGHT positions as LISTING_PENDING")
@@ -75,9 +66,7 @@ class PositionService:
         return pos
 
     async def mark_as_listed(self, position_id: int, sell_order_id: str) -> Position:
-        """
-        Transition a Position from LISTING_PENDING to LISTED once its listing id is known.
-        """
+        """Transition a Position from LISTING_PENDING to LISTED once its listing id is known."""
         pos = await self.get(position_id)
         if pos.status != PositionStatus.LISTING_PENDING:
             raise ValueError("Can only mark LISTING_PENDING positions as LISTED")
@@ -90,13 +79,7 @@ class PositionService:
         position_id: int,
         sold_at: Optional[datetime] = None,
     ) -> Position:
-        """
-        Transition a LISTED Position to CLOSED and record what the sale returned.
-
-        The buyer paid `sell_price`; Steam and the publisher take their cut from it,
-        so the wallet receives less. Both numbers are stored rather than recomputed
-        later, because the fee model can change.
-        """
+        """Transition a LISTED Position to CLOSED and record what the sale returned."""
         pos = await self.get(position_id)
         if pos.status != PositionStatus.LISTED:
             raise ValueError("Can only close positions that are LISTED")
@@ -120,12 +103,7 @@ class PositionService:
         return await self.repo.realized_profit_since(since)
 
     async def mark_as_cancelled(self, position_id: int) -> Position:
-        """
-        Transition an OPEN Position to CANCELLED.
-
-        Used when the buy order is gone from Steam and no matching item arrived,
-        which means the order expired or was cancelled rather than filled.
-        """
+        """Transition an OPEN Position to CANCELLED."""
         pos = await self.get(position_id)
         if pos.status != PositionStatus.OPEN:
             raise ValueError("Can only cancel OPEN positions")

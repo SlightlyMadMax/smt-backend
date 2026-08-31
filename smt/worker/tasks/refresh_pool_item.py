@@ -18,7 +18,6 @@ from smt.worker.schedule import due
 
 logger = get_logger("worker.tasks")
 
-# Bounds how many items share one price history insert; pacing is handled by SteamService.
 REFRESH_BATCH_SIZE = 10
 
 

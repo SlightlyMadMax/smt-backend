@@ -30,7 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const result = await SMT.post('/api/v1/pool/add-multiple', {asset_ids});
 
-      // navigating away would take the toast with it, so say it here and stay put
       if (result.count === 0) {
         SMT.notify('Every selected item is already in the pool.', 'error');
         addSelectedBtn.disabled = false;

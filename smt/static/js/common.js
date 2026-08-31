@@ -70,7 +70,6 @@
   };
 })(window);
 
-// the wallet readout lives in the header on every page
 document.addEventListener('DOMContentLoaded', async () => {
   const el = document.getElementById('wallet-balance');
   if (!el) return;

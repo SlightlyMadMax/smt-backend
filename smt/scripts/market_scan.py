@@ -153,8 +153,6 @@ async def measure(
     candidate.volume_30d = sum(volume for _, _, volume in points)
     candidate.median_price = statistics.median(price for _, price, _ in points)
 
-    # A history centred far away from today's asking price does not describe what can
-    # be bought now, whatever the reason, so the percentiles taken from it are useless.
     if candidate.current_price > 0:
         candidate.price_drift = (candidate.median_price / candidate.current_price).quantize(Decimal("0.01"))
         if not (1 / max_drift <= candidate.price_drift <= max_drift):

@@ -15,12 +15,7 @@ class SettingsService:
         return await self.repo.update(update)
 
     async def _validate_settings(self, update: SettingsUpdate) -> None:
-        """
-        Check the settings as they will look after the update.
-
-        Comparing only the fields present in the patch would let a single field slip
-        past: raising the buy percentile alone could push it above the stored sell one.
-        """
+        """Check the settings as they will look after the update."""
         current = await self.repo.get_current()
         patch = update.model_dump(exclude_unset=True)
 
