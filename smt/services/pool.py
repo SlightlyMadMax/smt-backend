@@ -19,20 +19,20 @@ class PoolService:
         self.inventory_service = inventory_service
 
     async def list(self) -> Sequence[PoolItem]:
-        return await self.pool_repo.list_items()
+        return await self.pool_repo.list()
 
     async def list_marked_for_trading(self) -> Sequence[PoolItem]:
         return await self.pool_repo.list_marked_for_trading()
 
     async def summary(self) -> dict:
-        items = await self.pool_repo.list_items()
+        items = await self.pool_repo.list()
         ready = sum(1 for item in items if item.use_for_trading)
         return {"total": len(items), "ready": ready, "not_ready": len(items) - ready}
 
     async def get_by_market_hash_name(self, market_hash_name: str) -> PoolItem:
         return await self.pool_repo.get_by_market_hash_name(market_hash_name)
 
-    async def add_one(self, asset_id: str) -> PoolItem:
+    async def add(self, asset_id: str) -> PoolItem:
         try:
             asset = await self.inventory_service.get_by_id(asset_id)
         except NoResultFound:
@@ -45,7 +45,7 @@ class PoolService:
             app_id=asset.app_id,
             context_id=asset.context_id,
         )
-        created = await self.pool_repo.add_item(payload)
+        created = await self.pool_repo.add(payload)
         if created is None:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -77,7 +77,7 @@ class PoolService:
             )
             for asset in unique_assets.values()
         ]
-        return await self.pool_repo.add_items(pool_items)
+        return await self.pool_repo.add_many(pool_items)
 
     async def get_many(self, market_hash_names: List[str]) -> Sequence[PoolItem]:
         return await self.pool_repo.get_many(market_hash_names)
@@ -85,8 +85,8 @@ class PoolService:
     async def update(self, market_hash_name: str, payload: PoolItemUpdate) -> PoolItem:
         return await self.pool_repo.update(market_hash_name, payload)
 
-    async def remove(self, market_hash_name: str) -> bool:
-        return await self.pool_repo.remove(market_hash_name)
+    async def delete(self, market_hash_name: str) -> bool:
+        return await self.pool_repo.delete(market_hash_name)
 
-    async def remove_many(self, market_hash_names: List[str]) -> int:
-        return await self.pool_repo.remove_many(market_hash_names)
+    async def delete_many(self, market_hash_names: List[str]) -> int:
+        return await self.pool_repo.delete_many(market_hash_names)

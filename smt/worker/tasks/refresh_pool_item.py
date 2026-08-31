@@ -71,7 +71,7 @@ async def refresh_periodic_task(ctx):
             stats_service, pool_repo = await build_services(session=session, steam_service=ctx["steam_service"])
             settings = await SettingsService(SettingsRepo(session)).get_settings()
 
-            all_items = await pool_repo.list_items()
+            all_items = await pool_repo.list()
             market_hash_names = [item.market_hash_name for item in all_items]
             if not market_hash_names:
                 return

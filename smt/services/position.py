@@ -23,7 +23,7 @@ class PositionService:
         return pos
 
     async def list(self) -> Sequence[Position]:
-        return await self.repo.list_positions()
+        return await self.repo.list()
 
     async def list_by_status(self, status: PositionStatus) -> Sequence[Position]:
         return await self.repo.list_by_status(status=status)
@@ -44,7 +44,7 @@ class PositionService:
             "realized_profit_24h": await self.repo.realized_profit_since(
                 datetime.now(timezone.utc) - timedelta(days=1)
             ),
-            "realized_profit_total": await self.repo.total_realized_profit(),
+            "realized_profit_total": await self.repo.realized_profit_total(),
         }
 
     async def mark_as_bought(self, position_id: int, asset_id: str, bought_at: Optional[datetime] = None) -> Position:

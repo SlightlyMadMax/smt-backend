@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError, NoResultFound
@@ -12,7 +12,7 @@ class PoolRepo:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_items(self) -> Sequence[PoolItem]:
+    async def list(self) -> Sequence[PoolItem]:
         stmt = select(PoolItem).order_by(PoolItem.created_at.desc())
         result = await self.session.execute(stmt)
         return result.scalars().all()
@@ -30,14 +30,14 @@ class PoolRepo:
             raise NoResultFound(f"No PoolItem with hash {market_hash_name}")
         return item
 
-    async def get_many(self, market_hash_names: list[str]) -> Sequence[PoolItem]:
+    async def get_many(self, market_hash_names: List[str]) -> Sequence[PoolItem]:
         if not market_hash_names:
             return []
         stmt = select(PoolItem).where(PoolItem.market_hash_name.in_(market_hash_names))
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
-    async def add_item(self, item: PoolItemCreate) -> Optional[PoolItem]:
+    async def add(self, item: PoolItemCreate) -> Optional[PoolItem]:
         stmt = select(PoolItem).where(PoolItem.market_hash_name == item.market_hash_name)
         result = await self.session.execute(stmt)
         existing = result.scalar_one_or_none()
@@ -57,7 +57,7 @@ class PoolRepo:
             await self.session.rollback()
             return None
 
-    async def add_items(self, items: list[PoolItemCreate]) -> list[PoolItem]:
+    async def add_many(self, items: List[PoolItemCreate]) -> List[PoolItem]:
         names = [item.market_hash_name for item in items]
         stmt = select(PoolItem.market_hash_name).where(PoolItem.market_hash_name.in_(names))
 
@@ -93,14 +93,14 @@ class PoolRepo:
         except NoResultFound:
             return None
 
-    async def remove(self, market_hash_name: str) -> bool:
+    async def delete(self, market_hash_name: str) -> bool:
         stmt = delete(PoolItem).where(PoolItem.market_hash_name == market_hash_name)
         result = await self.session.execute(stmt)
         await self.session.commit()
 
         return result.rowcount > 0
 
-    async def remove_many(self, market_hash_names: list[str]) -> int:
+    async def delete_many(self, market_hash_names: List[str]) -> int:
         if not market_hash_names:
             return 0
 

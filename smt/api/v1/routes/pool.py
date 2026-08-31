@@ -103,7 +103,7 @@ async def add_to_pool(
     pool_service: PoolService = Depends(get_pool_service),
     arq_service: ARQService = Depends(get_arq_service),
 ):
-    created = await pool_service.add_one(payload.asset_id)
+    created = await pool_service.add(payload.asset_id)
     await arq_service.enqueue("refresh_task", [created.market_hash_name])
     return created
 
@@ -131,9 +131,9 @@ async def update(
 
 
 @router.delete("/{market_hash_name}", response_model=RemoveResponse)
-async def remove_pool_item(market_hash_name: str, service: PoolService = Depends(get_pool_service)) -> RemoveResponse:
+async def delete_pool_item(market_hash_name: str, service: PoolService = Depends(get_pool_service)) -> RemoveResponse:
     try:
-        success = await service.remove(market_hash_name)
+        success = await service.delete(market_hash_name)
 
         if success:
             return RemoveResponse(success=True, message=f"Pool item '{market_hash_name}' removed successfully")
@@ -146,14 +146,14 @@ async def remove_pool_item(market_hash_name: str, service: PoolService = Depends
 
 
 @router.delete("/", response_model=RemoveManyResponse)
-async def remove_many_pool_items(
+async def delete_many_pool_items(
     request: RemoveManyRequest, service: PoolService = Depends(get_pool_service)
 ) -> RemoveManyResponse:
     try:
         if not request.market_hash_names:
             return RemoveManyResponse(removed_count=0, message="No items specified for removal")
 
-        removed_count = await service.remove_many(request.market_hash_names)
+        removed_count = await service.delete_many(request.market_hash_names)
 
         total_requested = len(request.market_hash_names)
 

@@ -77,8 +77,8 @@ class TestItemRepo:
             ("999", "9", []),
         ],
     )
-    async def test_list_for_game(self, item_repo, app_id, context_id, expected_ids):
-        results = await item_repo.list_for_game(app_id, context_id)
+    async def test_list_by_game(self, item_repo, app_id, context_id, expected_ids):
+        results = await item_repo.list_by_game(app_id, context_id)
         ids = [item.id for item in results]
         assert set(ids) == set(expected_ids)
 
@@ -109,7 +109,7 @@ class TestItemRepo:
         assert set(ids) == {"c3"}
 
     async def test_sync_for_game_preserves_first_seen_at(self, db_session, item_repo):
-        original = (await item_repo.list_for_game("100", "1"))[0]
+        original = (await item_repo.list_by_game("100", "1"))[0]
         first_seen_at = original.first_seen_at
 
         resynced = Item(
@@ -130,7 +130,7 @@ class TestItemRepo:
         assert new_ids == set()
 
     async def test_sync_for_game_reports_new_assets(self, db_session, item_repo):
-        existing = await item_repo.list_for_game("100", "1")
+        existing = await item_repo.list_by_game("100", "1")
         fresh = Item(
             id="brand-new",
             market_hash_name="brand-new",

@@ -52,7 +52,7 @@ async def setup_pool_items(db_session):
 @pytest.mark.asyncio
 class TestPoolItemsRepo:
     async def test_list(self, pool_repo):
-        pool_items = await pool_repo.list_items()
+        pool_items = await pool_repo.list()
         hash_names = [p.market_hash_name for p in pool_items]
         assert set(hash_names) == {"a1", "b2", "c3"}
 
@@ -132,7 +132,7 @@ class TestPoolItemsRepo:
             context_id="2",
             icon_url="https://cdn.com/d4.png",
         )
-        created_pool_item = await pool_repo.add_item(pool_item)
+        created_pool_item = await pool_repo.add(pool_item)
         assert created_pool_item is not None
         assert created_pool_item.market_hash_name == pool_item.market_hash_name
         # verify in DB
@@ -148,7 +148,7 @@ class TestPoolItemsRepo:
             context_id="2",
             icon_url="https://cdn.com/c3.png",
         )
-        created_pool_item = await pool_repo.add_item(pool_item)
+        created_pool_item = await pool_repo.add(pool_item)
         assert created_pool_item is None
 
     @pytest.mark.parametrize(
@@ -195,8 +195,8 @@ class TestPoolItemsRepo:
             ([], set()),
         ],
     )
-    async def test_add_items(self, pool_repo, pool_items, expected_set):
-        created_pool_items = await pool_repo.add_items(pool_items)
+    async def test_add_many(self, pool_repo, pool_items, expected_set):
+        created_pool_items = await pool_repo.add_many(pool_items)
         names = [p.name for p in created_pool_items]
         assert set(names) == expected_set
 
@@ -226,21 +226,21 @@ class TestPoolItemsRepo:
         assert updated_item.market_hash_name == "a1"
         assert updated_item.max_listed == 10
 
-    async def test_remove_success(self, pool_repo, db_session):
-        all_items = await pool_repo.list_items()
+    async def test_delete_success(self, pool_repo, db_session):
+        all_items = await pool_repo.list()
         hash_names_before = {p.market_hash_name for p in all_items}
         assert "a1" in hash_names_before
 
-        result = await pool_repo.remove("a1")
+        result = await pool_repo.delete("a1")
         assert result is True
 
-        all_items_after = await pool_repo.list_items()
+        all_items_after = await pool_repo.list()
         hash_names_after = {p.market_hash_name for p in all_items_after}
         assert "a1" not in hash_names_after
         assert len(hash_names_after) == len(hash_names_before) - 1
 
-    async def test_remove_nonexistent(self, pool_repo):
-        result = await pool_repo.remove("nonexistent")
+    async def test_delete_nonexistent(self, pool_repo):
+        result = await pool_repo.delete("nonexistent")
         assert result is False
 
     @pytest.mark.parametrize(
@@ -253,17 +253,17 @@ class TestPoolItemsRepo:
             (["a1", "b2", "c3"], 3, set()),  # Remove all items
         ],
     )
-    async def test_remove_many(self, pool_repo, market_hash_names, expected_removed_count, expected_remaining):
-        removed_count = await pool_repo.remove_many(market_hash_names)
+    async def test_delete_many(self, pool_repo, market_hash_names, expected_removed_count, expected_remaining):
+        removed_count = await pool_repo.delete_many(market_hash_names)
         assert removed_count == expected_removed_count
 
-        remaining_items = await pool_repo.list_items()
+        remaining_items = await pool_repo.list()
         remaining_hash_names = {p.market_hash_name for p in remaining_items}
         assert remaining_hash_names == expected_remaining
 
-    async def test_remove_many_empty_list(self, pool_repo):
-        result = await pool_repo.remove_many([])
+    async def test_delete_many_empty_list(self, pool_repo):
+        result = await pool_repo.delete_many([])
         assert result == 0
 
-        all_items = await pool_repo.list_items()
+        all_items = await pool_repo.list()
         assert len(all_items) == 3

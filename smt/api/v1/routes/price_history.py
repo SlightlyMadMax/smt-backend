@@ -36,7 +36,7 @@ async def add_price_record(
     service: PriceHistoryService = Depends(get_price_history_service),
 ):
     try:
-        created = await service.add_one(price_record)
+        created = await service.add(price_record)
     except UnknownPoolItem as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
 

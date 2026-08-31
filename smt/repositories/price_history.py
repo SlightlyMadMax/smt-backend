@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -15,7 +15,7 @@ class PriceHistoryRepo:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_records(self, market_hash_name: str, since: datetime) -> Sequence[PriceHistoryRecordORM]:
+    async def list(self, market_hash_name: str, since: datetime) -> Sequence[PriceHistoryRecordORM]:
         stmt = (
             select(PriceHistoryRecordORM)
             .where(
@@ -34,7 +34,7 @@ class PriceHistoryRepo:
         result = await self.session.execute(stmt)
         return {name for name, in result.all()}
 
-    async def add_record(self, price_record: PriceHistoryRecordCreate) -> Optional[PriceHistoryRecordORM]:
+    async def add(self, price_record: PriceHistoryRecordCreate) -> Optional[PriceHistoryRecordORM]:
         if not await self._known_pool_items({price_record.market_hash_name}):
             raise UnknownPoolItem(f"{price_record.market_hash_name} is not in the pool")
 
@@ -48,7 +48,7 @@ class PriceHistoryRepo:
             await self.session.rollback()
             return None
 
-    async def add_records(self, price_records: list[PriceHistoryRecordCreate]) -> list[PriceHistoryRecordORM]:
+    async def add_many(self, price_records: List[PriceHistoryRecordCreate]) -> List[PriceHistoryRecordORM]:
         if not price_records:
             return []
 
@@ -86,7 +86,7 @@ class PriceHistoryRepo:
 
         return new_objs
 
-    async def delete_records_before(self, market_hash_name: str, before_date: datetime) -> int:
+    async def delete_before(self, market_hash_name: str, before_date: datetime) -> int:
         stmt = delete(PriceHistoryRecordORM).where(
             PriceHistoryRecordORM.market_hash_name == market_hash_name, PriceHistoryRecordORM.recorded_at < before_date
         )

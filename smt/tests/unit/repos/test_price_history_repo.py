@@ -65,15 +65,15 @@ async def setup_price_history(db_session, base_time):
 
 @pytest.mark.asyncio
 class TestPriceHistoryRepo:
-    async def test_list_records_filters_and_orders(self, price_history_repo, base_time):
+    async def test_list_filters_and_orders(self, price_history_repo, base_time):
         since = base_time - timedelta(hours=1, minutes=30)
-        results = await price_history_repo.list_records("item1", since)
+        results = await price_history_repo.list("item1", since)
         # Should return only the record from 1 hour ago, not the 2-hour-old one
         assert len(results) == 1
         assert results[0].price == Decimal(110.0)
         # Ensure ordering by recorded_at
         since2 = base_time - timedelta(hours=3)
-        all_records = await price_history_repo.list_records("item1", since2)
+        all_records = await price_history_repo.list("item1", since2)
         times = [r.recorded_at for r in all_records]
         assert times == sorted(times)
 
@@ -85,7 +85,7 @@ class TestPriceHistoryRepo:
             price=Decimal(300.0),
             volume=2,
         )
-        created = await price_history_repo.add_record(payload)
+        created = await price_history_repo.add(payload)
         assert created is not None
         assert created.market_hash_name == payload.market_hash_name
         assert created.price == payload.price
@@ -107,10 +107,10 @@ class TestPriceHistoryRepo:
             price=Decimal(999.0),
             volume=2,
         )
-        result = await price_history_repo.add_record(payload)
+        result = await price_history_repo.add(payload)
         assert result is None
 
-    async def test_add_records_bulk(self, price_history_repo, db_session, base_time):
+    async def test_add_many_bulk(self, price_history_repo, db_session, base_time):
         batch = [
             PriceHistoryRecordCreate(
                 market_hash_name="item1",
@@ -131,7 +131,7 @@ class TestPriceHistoryRepo:
                 volume=30,
             ),
         ]
-        created = await price_history_repo.add_records(batch)
+        created = await price_history_repo.add_many(batch)
         # Should only include the two new unique records
         names_times = {(r.market_hash_name, r.recorded_at) for r in created}
         expected = {
@@ -143,42 +143,42 @@ class TestPriceHistoryRepo:
         total = await db_session.execute(select(PriceHistoryRecord))
         assert len(total.scalars().all()) == 5
 
-    async def test_add_records_empty(self, price_history_repo):
-        created = await price_history_repo.add_records([])
+    async def test_add_many_empty(self, price_history_repo):
+        created = await price_history_repo.add_many([])
         assert created == []
 
-    async def test_delete_records_before_success(self, price_history_repo, db_session, base_time):
+    async def test_delete_before_success(self, price_history_repo, db_session, base_time):
         # Delete item1 records older than 1.5 hours ago
         cutoff_time = base_time - timedelta(hours=1, minutes=30)
-        deleted_count = await price_history_repo.delete_records_before("item1", cutoff_time)
+        deleted_count = await price_history_repo.delete_before("item1", cutoff_time)
 
         # Should delete the 2-hour-old record but keep the 1-hour-old record
         assert deleted_count == 1
 
         # Verify the remaining records
-        remaining = await price_history_repo.list_records("item1", base_time - timedelta(hours=3))
+        remaining = await price_history_repo.list("item1", base_time - timedelta(hours=3))
         assert len(remaining) == 1
         assert remaining[0].price == Decimal(110.0)  # Only the 1-hour-old record remains
 
         # Verify item2 records are unaffected
-        item2_records = await price_history_repo.list_records("item2", base_time - timedelta(hours=3))
+        item2_records = await price_history_repo.list("item2", base_time - timedelta(hours=3))
         assert len(item2_records) == 1
         assert item2_records[0].price == Decimal(200.0)
 
-    async def test_delete_records_before_no_matches(self, price_history_repo, base_time):
+    async def test_delete_before_no_matches(self, price_history_repo, base_time):
         # Try to delete records older than 3 hours ago (no records exist that old)
         cutoff_time = base_time - timedelta(hours=3)
-        deleted_count = await price_history_repo.delete_records_before("item1", cutoff_time)
+        deleted_count = await price_history_repo.delete_before("item1", cutoff_time)
 
         assert deleted_count == 0
 
         # Also test with non-existent market_hash_name
-        deleted_count = await price_history_repo.delete_records_before("nonexistent_item", base_time)
+        deleted_count = await price_history_repo.delete_before("nonexistent_item", base_time)
         assert deleted_count == 0
 
     async def test_add_record_rejects_an_unknown_pool_item(self, price_history_repo, base_time):
         with pytest.raises(UnknownPoolItem):
-            await price_history_repo.add_record(
+            await price_history_repo.add(
                 PriceHistoryRecordCreate(
                     market_hash_name="not-in-the-pool",
                     recorded_at=base_time,
@@ -187,11 +187,11 @@ class TestPriceHistoryRepo:
                 )
             )
 
-    async def test_add_records_names_the_unknown_items(self, price_history_repo, base_time):
+    async def test_add_many_names_the_unknown_items(self, price_history_repo, base_time):
         records = [
             PriceHistoryRecordCreate(market_hash_name="item1", recorded_at=base_time, price=Decimal("1.00"), volume=1),
             PriceHistoryRecordCreate(market_hash_name="ghost", recorded_at=base_time, price=Decimal("1.00"), volume=1),
         ]
 
         with pytest.raises(UnknownPoolItem, match="ghost"):
-            await price_history_repo.add_records(records)
+            await price_history_repo.add_many(records)

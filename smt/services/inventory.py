@@ -18,7 +18,7 @@ class InventoryService:
         self.item_repo = item_repo
 
     async def list(self, game_option: GameOptions) -> Sequence[Item]:
-        return await self.item_repo.list_for_game(game_option.app_id, game_option.context_id)
+        return await self.item_repo.list_by_game(game_option.app_id, game_option.context_id)
 
     async def get_by_id(self, asset_id: str) -> Item:
         return await self.item_repo.get_by_id(asset_id)

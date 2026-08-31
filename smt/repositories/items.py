@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import List, Sequence
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import NoResultFound
@@ -19,19 +19,19 @@ class ItemRepo:
             raise NoResultFound(f"Item with id {item_id} not found")
         return item
 
-    async def list_for_game(self, app_id: str, context_id: str) -> Sequence[Item]:
+    async def list_by_game(self, app_id: str, context_id: str) -> Sequence[Item]:
         q = select(Item).where(Item.app_id == app_id, Item.context_id == context_id)
         res = await self.session.execute(q)
         return res.scalars().all()
 
-    async def sync_for_game(self, app_id: str, context_id: str, items: list[Item]) -> set[str]:
+    async def sync_for_game(self, app_id: str, context_id: str, items: List[Item]) -> set[str]:
         """
         Bring the stored inventory for a game in line with `items`.
 
         Rows for assets that are still present keep their original `first_seen_at`.
         Returns the ids of the assets that were not stored before.
         """
-        existing = {item.id: item for item in await self.list_for_game(app_id, context_id)}
+        existing = {item.id: item for item in await self.list_by_game(app_id, context_id)}
         incoming_ids = {item.id for item in items}
 
         stale_ids = set(existing) - incoming_ids

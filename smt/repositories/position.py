@@ -23,7 +23,7 @@ class PositionRepo:
             raise NoResultFound(f"Position with id {position_id} not found")
         return pos
 
-    async def list_positions(self) -> Sequence[Position]:
+    async def list(self) -> Sequence[Position]:
         stmt = select(Position).options(selectinload(Position.pool_item))
         result = await self.session.execute(stmt)
         return result.scalars().all()
@@ -51,7 +51,7 @@ class PositionRepo:
         result = await self.session.execute(stmt)
         return Decimal(result.scalar_one())
 
-    async def total_realized_profit(self) -> Decimal:
+    async def realized_profit_total(self) -> Decimal:
         stmt = select(func.coalesce(func.sum(Position.realized_profit), 0)).where(
             Position.status == PositionStatus.CLOSED
         )

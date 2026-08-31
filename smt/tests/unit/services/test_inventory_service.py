@@ -18,7 +18,7 @@ def mock_steam_service():
 @pytest_asyncio.fixture
 def mock_item_repo():
     repo = Mock(spec=ItemRepo)
-    repo.list_for_game = AsyncMock()
+    repo.list_by_game = AsyncMock()
     repo.sync_for_game = AsyncMock()
     repo.get_by_id = AsyncMock()
     return repo
@@ -69,24 +69,24 @@ class TestInventoryService:
         self, inventory_service, mock_item_repo, sample_game_option, sample_orm_items
     ):
         # Arrange
-        mock_item_repo.list_for_game.return_value = sample_orm_items
+        mock_item_repo.list_by_game.return_value = sample_orm_items
 
         # Act
         result = await inventory_service.list(sample_game_option)
 
         # Assert
-        mock_item_repo.list_for_game.assert_called_once_with("730", "2")
+        mock_item_repo.list_by_game.assert_called_once_with("730", "2")
         assert result == sample_orm_items
 
     async def test_list_returns_empty_list_when_no_items(self, inventory_service, mock_item_repo, sample_game_option):
         # Arrange
-        mock_item_repo.list_for_game.return_value = []
+        mock_item_repo.list_by_game.return_value = []
 
         # Act
         result = await inventory_service.list(sample_game_option)
 
         # Assert
-        mock_item_repo.list_for_game.assert_called_once_with("730", "2")
+        mock_item_repo.list_by_game.assert_called_once_with("730", "2")
         assert result == []
 
     async def test_get_by_id_returns_item_from_repo(self, inventory_service, mock_item_repo, sample_orm_items):
