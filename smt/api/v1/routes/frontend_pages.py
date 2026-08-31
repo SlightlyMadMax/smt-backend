@@ -5,6 +5,7 @@ from fastapi.params import Query
 from fastapi.templating import Jinja2Templates
 from starlette.responses import HTMLResponse, RedirectResponse
 
+from smt.schemas.action_log import ActionLevel
 from smt.schemas.inventory import GAME_MAP, GameName
 from smt.schemas.position import PositionStatus
 from smt.services.dependencies import (
@@ -93,6 +94,14 @@ async def trade_market_page(
             "summary": await service.summary(),
             "statuses": [status.value for status in PositionStatus],
         },
+    )
+
+
+@router.get("/action-history", response_class=HTMLResponse, include_in_schema=False)
+async def action_history_page(request: Request):
+    return templates.TemplateResponse(
+        "action_history.html",
+        {"request": request, "levels": [level.value for level in ActionLevel]},
     )
 
 

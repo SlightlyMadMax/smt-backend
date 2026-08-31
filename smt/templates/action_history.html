@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ static_url('css/action_history.css') }}">
+{% endblock %}
+
+{% block title %}Action History — Steam Market Trader{% endblock %}
+
+{% block content %}
+<h1 class="page-name">Action History</h1>
+
+<div class="filter-bar">
+    <label for="level-filter">Show</label>
+    <select id="level-filter">
+        <option value="">Everything</option>
+        {% for level in levels %}
+        <option value="{{ level }}">{{ level|title }} and nothing else</option>
+        {% endfor %}
+    </select>
+    <span class="filter-hint" id="entry-count"></span>
+</div>
+
+<div class="table-scroll">
+    <table class="action-table">
+        <thead>
+        <tr>
+            <th title="When the bot did this">When</th>
+            <th title="What kind of event this was">Event</th>
+            <th title="The item the event concerns">Item</th>
+            <th title="What happened">Details</th>
+        </tr>
+        </thead>
+        <tbody id="action-body">
+        <tr><td colspan="4" class="empty">Loading…</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ static_url('js/action_history.js') }}" defer></script>
+{% endblock %}
