@@ -45,7 +45,13 @@ class PoolService:
             app_id=asset.app_id,
             context_id=asset.context_id,
         )
-        return await self.pool_repo.add_item(payload)
+        created = await self.pool_repo.add_item(payload)
+        if created is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"{asset.market_hash_name} is already in the pool",
+            )
+        return created
 
     async def add_many(self, asset_ids: List[str]) -> List[PoolItem]:
         if not asset_ids:

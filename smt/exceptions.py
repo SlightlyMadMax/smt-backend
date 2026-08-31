@@ -2,6 +2,14 @@ class SMTError(Exception):
     """Base class for all application specific errors."""
 
 
+class PoolItemAlreadyExists(SMTError):
+    """The item is already in the trading pool."""
+
+
+class UnknownPoolItem(SMTError):
+    """The referenced item is not in the trading pool."""
+
+
 class SteamLoginUnavailable(SMTError):
     """Steam refused to establish a session and further attempts are on cooldown."""
 
