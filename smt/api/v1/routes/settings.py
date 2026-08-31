@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from smt.schemas.settings import SettingsResponse, SettingsUpdate
 from smt.services.dependencies import get_pool_service, get_settings_service, get_stats_refresh_service
@@ -25,7 +25,10 @@ async def update_settings(
     pool_service: PoolService = Depends(get_pool_service),
     refresh_service: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
-    updated_settings = await service.update_settings(update)
+    try:
+        updated_settings = await service.update_settings(update)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
     # Trigger recalculation of all pool items if analytical settings changed
     analytical_fields = {
@@ -37,7 +40,7 @@ async def update_settings(
         "analysis_window_days",
     }
 
-    if any(field in update.dict(exclude_unset=True) for field in analytical_fields):
+    if any(field in update.model_dump(exclude_unset=True) for field in analytical_fields):
         pool_items = await pool_service.list()
         item_names = [item.market_hash_name for item in pool_items]
 
@@ -69,4 +72,7 @@ async def reset_to_defaults(service: SettingsService = Depends(get_settings_serv
         cancel_untracked_orders=False,
         max_daily_loss=Decimal("100.00"),
     )
-    return await service.update_settings(default_update)
+    try:
+        return await service.update_settings(default_update)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))

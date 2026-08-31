@@ -11,18 +11,24 @@ class SettingsService:
         return await self.repo.get_current()
 
     async def update_settings(self, update: SettingsUpdate) -> TradingSettings:
-        self._validate_settings(update)
+        await self._validate_settings(update)
         return await self.repo.update(update)
 
-    def _validate_settings(self, update: SettingsUpdate) -> None:
-        data = update.dict(exclude_unset=True)
+    async def _validate_settings(self, update: SettingsUpdate) -> None:
+        """
+        Check the settings as they will look after the update.
 
-        # Validate percentiles
-        if "buy_percentile" in data and "sell_percentile" in data:
-            if data["buy_percentile"] >= data["sell_percentile"]:
-                raise ValueError("Buy percentile must be less than sell percentile")
+        Comparing only the fields present in the patch would let a single field slip
+        past: raising the buy percentile alone could push it above the stored sell one.
+        """
+        current = await self.repo.get_current()
+        patch = update.model_dump(exclude_unset=True)
 
-        # Validate volatility range
-        if "min_volatility_threshold" in data and "max_volatility_threshold" in data:
-            if data["min_volatility_threshold"] >= data["max_volatility_threshold"]:
-                raise ValueError("Min volatility must be less than max volatility")
+        def value(field: str):
+            return patch[field] if field in patch else getattr(current, field)
+
+        if value("buy_percentile") >= value("sell_percentile"):
+            raise ValueError("Buy percentile must be less than sell percentile")
+
+        if value("min_volatility_threshold") >= value("max_volatility_threshold"):
+            raise ValueError("Min volatility must be less than max volatility")
