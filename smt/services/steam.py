@@ -131,12 +131,14 @@ class SteamService:
         backoff. Without it every Steam call would start its own retry burst, and those
         bursts are what makes Steam refuse the next login in the first place.
         """
+        # A live session is ours to use even while another process is backing off: the
+        # cooldown limits login attempts, not every call that can reuse a session.
+        if not self._should_check_login():
+            return
+
         remaining = await self._cooldown_remaining()
         if remaining is not None:
             raise SteamLoginUnavailable(f"Steam login is on cooldown for another {remaining}.")
-
-        if not self._should_check_login():
-            return
 
         try:
             await self._log_in()

@@ -150,3 +150,10 @@ class TestLoginCooldown:
 
         with pytest.raises(SteamLoginUnavailable, match="cooldown"):
             await steam_service._ensure_login()
+
+    async def test_a_live_session_is_not_blocked_by_someone_elses_cooldown(self, steam_service):
+        """The worker keeps trading while the web app backs off from a failed login."""
+        steam_service._last_check = datetime.datetime.now(datetime.UTC)
+        await steam_service._start_login_cooldown()
+
+        await steam_service._ensure_login()
