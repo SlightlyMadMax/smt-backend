@@ -1,5 +1,9 @@
+import asyncio
 import datetime
 import json
+import time
+import uuid
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from functools import partial, wraps
 from typing import Optional
@@ -8,9 +12,7 @@ import httpx
 from anyio import to_thread
 from redis.asyncio import Redis
 from steampy.client import SteamClient
-from steampy.exceptions import LoginRequired
 from steampy.models import Currency, GameOptions
-from tenacity import AsyncRetrying, stop_after_attempt, wait_fixed
 
 from smt.core.config import Settings
 from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed, SteamLoginUnavailable
@@ -27,6 +29,11 @@ ACCOUNT_CURRENCY = Currency.RUB
 RATE_LIMIT_KEY = "smt:steam:calls"
 LOGIN_BLOCK_KEY = "smt:steam:login_block"
 LOGIN_FAILURES_KEY = "smt:steam:login_failures"
+LOGIN_LOCK_KEY = "smt:steam:login_lock"
+SESSION_KEY = "smt:steam:session"
+LOGIN_LOCK_TTL = 60
+LOGIN_LOCK_WAIT = 90
+SESSION_TTL = 60 * 60 * 12
 STEAM_MAX_CALLS_PER_PERIOD = 15
 STEAM_RATE_LIMIT_PERIOD = 60.0
 LOGIN_COOLDOWN_BASE = datetime.timedelta(minutes=5)
@@ -67,7 +74,14 @@ def throttled(func):
 
 class SteamService:
     def __init__(self, settings: Settings):
-        self.client = SteamClient(api_key=settings.STEAM_API_KEY)
+        # The credentials go in here rather than only into login(): is_session_alive()
+        # compares the account name against the page, so a client that adopted someone
+        # else's session still needs to know it.
+        self.client = SteamClient(
+            api_key=settings.STEAM_API_KEY,
+            username=settings.STEAM_USERNAME,
+            password=settings.STEAM_PASSWORD,
+        )
         self._username: str = settings.STEAM_USERNAME
         self._password: str = settings.STEAM_PASSWORD
         self._guard: str = json.dumps(
@@ -104,51 +118,127 @@ class SteamService:
     async def _clear_login_cooldown(self) -> None:
         await self._redis.delete(LOGIN_BLOCK_KEY, LOGIN_FAILURES_KEY)
 
+    @asynccontextmanager
+    async def _login_lock(self):
+        """
+        Only one process may be logging in at a time.
+
+        Steam refuses a second session opened moments after the first, so two processes
+        starting together used to collide. Whoever loses the race waits and then finds
+        the session the winner published.
+        """
+        token = uuid.uuid4().hex
+        deadline = time.monotonic() + LOGIN_LOCK_WAIT
+
+        while not await self._redis.set(LOGIN_LOCK_KEY, token, nx=True, ex=LOGIN_LOCK_TTL):
+            if time.monotonic() > deadline:
+                raise SteamLoginUnavailable("Another process has been logging in to Steam for too long.")
+            await asyncio.sleep(1)
+
+        try:
+            yield
+        finally:
+            if await self._redis.get(LOGIN_LOCK_KEY) == token.encode():
+                await self._redis.delete(LOGIN_LOCK_KEY)
+
+    async def _save_shared_session(self) -> None:
+        cookies = [
+            {"name": c.name, "value": c.value, "domain": c.domain, "path": c.path} for c in self.client._session.cookies
+        ]
+        await self._redis.set(
+            SESSION_KEY,
+            json.dumps({"cookies": cookies, "steam_guard": self.client.steam_guard}),
+            ex=SESSION_TTL,
+        )
+
+    async def _restore_shared_session(self) -> bool:
+        """Adopt the session another process published, if it is still usable."""
+        raw = await self._redis.get(SESSION_KEY)
+        if not raw:
+            return False
+
+        try:
+            stored = json.loads(raw)
+            for cookie in stored["cookies"]:
+                self.client._session.cookies.set(
+                    cookie["name"], cookie["value"], domain=cookie["domain"], path=cookie["path"]
+                )
+            self.client.steam_guard = stored["steam_guard"]
+            self.client.was_login_executed = True
+            self.client.market._set_login_executed(self.client.steam_guard, self.client._get_session_id())
+
+            await self._limiter.acquire()
+            if await to_thread.run_sync(self.client.is_session_alive):
+                logger.info("Reusing the Steam session published by another process.")
+                return True
+
+            logger.info("The stored Steam session is no longer alive.")
+        except Exception as e:
+            logger.info(f"Could not adopt the stored Steam session: {e!r}")
+
+        # Failing to adopt it says nothing about whether the session still works for the
+        # process that created it, so it is left alone; a fresh login overwrites it and
+        # the ttl clears it eventually.
+        self.client.was_login_executed = False
+        return False
+
     async def _log_in(self) -> None:
-        async for attempt in AsyncRetrying(reraise=True, stop=stop_after_attempt(3), wait=wait_fixed(3)):
-            with attempt:
-                await self._limiter.acquire()
-                try:
-                    await to_thread.run_sync(self.client.is_session_alive)
-                except LoginRequired:
-                    logger.info("Logging into Steam.")
-                    await self._limiter.acquire()
-                    await to_thread.run_sync(
-                        self.client.login,
-                        self._username,
-                        self._password,
-                        self._guard,
-                    )
-                    assert self.client.was_login_executed
-                    logger.info("Steam login successful.")
+        """
+        One attempt, no retry.
+
+        Steam limits how often an account may log in, and a refusal comes back as a
+        response missing the fields steampy expects. Retrying that three times within
+        nine seconds spends the budget faster and digs the hole deeper; the growing
+        cooldown is the right answer instead.
+        """
+        logger.info("Logging into Steam.")
+        await self._limiter.acquire()
+        await to_thread.run_sync(
+            self.client.login,
+            self._username,
+            self._password,
+            self._guard,
+        )
+        assert self.client.was_login_executed
+        logger.info("Steam login successful.")
 
     async def _ensure_login(self) -> None:
         """
-        Make sure the Steam session is usable.
+        Make sure a usable Steam session is in place.
 
-        A refused login puts further attempts on a growing cooldown, kept in Redis so
-        that the web app, the worker and any restart of either all observe the same
-        backoff. Without it every Steam call would start its own retry burst, and those
-        bursts are what makes Steam refuse the next login in the first place.
+        One session is shared through Redis by every process: Steam refuses a second
+        session opened right after the first, so each process minting its own is what
+        made logins fail. A refused login puts further attempts on a growing cooldown,
+        also shared, but a process whose session is already fresh is never held back
+        by it.
         """
-        # A live session is ours to use even while another process is backing off: the
-        # cooldown limits login attempts, not every call that can reuse a session.
         if not self._should_check_login():
+            return
+
+        if await self._restore_shared_session():
+            self._last_check = datetime.datetime.now(datetime.UTC)
             return
 
         remaining = await self._cooldown_remaining()
         if remaining is not None:
             raise SteamLoginUnavailable(f"Steam login is on cooldown for another {remaining}.")
 
-        try:
-            await self._log_in()
-        except Exception as e:
-            cooldown = await self._start_login_cooldown()
-            logger.error(f"Steam login failed, backing off for {cooldown}: {e!r}")
-            raise SteamLoginUnavailable(f"Could not log in to Steam: {e!r}") from e
+        async with self._login_lock():
+            # the process that held the lock may have just published a session
+            if await self._restore_shared_session():
+                self._last_check = datetime.datetime.now(datetime.UTC)
+                return
 
-        await self._clear_login_cooldown()
-        self._last_check = datetime.datetime.now(datetime.UTC)
+            try:
+                await self._log_in()
+            except Exception as e:
+                cooldown = await self._start_login_cooldown()
+                logger.error(f"Steam login failed, backing off for {cooldown}: {e!r}")
+                raise SteamLoginUnavailable(f"Could not log in to Steam: {e!r}") from e
+
+            await self._save_shared_session()
+            await self._clear_login_cooldown()
+            self._last_check = datetime.datetime.now(datetime.UTC)
 
     @requires_login
     @throttled
