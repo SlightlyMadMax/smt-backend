@@ -38,19 +38,19 @@
         <table class="pool-table">
             <thead>
             <tr>
-                <th>
+                <th title="Select rows for the bulk action above">
                     <label class="checkbox-label">
                         <input type="checkbox" id="select-all"/>
                         <span class="checkbox-custom"></span>
                     </label>
                 </th>
-                <th>Icon</th>
-                <th>Name</th>
-                <th>Buy Price</th>
-                <th>Sell Price</th>
-                <th>Current Price</th>
-                <th>Profit</th>
-                <th>Updated At</th>
+                <th title="Item icon as Steam shows it">Icon</th>
+                <th title="Market hash name. The link opens the item page on the Steam Market">Name</th>
+                <th title="Price the bot places its buy order at: the manual override if set, otherwise the computed percentile">Buy Price</th>
+                <th title="Price the bot lists the item at once it owns one">Sell Price</th>
+                <th title="Cheapest listing on the market right now">Current Price</th>
+                <th title="Expected profit of one round trip after Steam and publisher fees">Profit</th>
+                <th title="When the indicators were last recomputed">Updated At</th>
                 <th></th>
             </tr>
             </thead>
@@ -59,7 +59,7 @@
             <tr class="pool-row {% if item.use_for_trading %}state-positive{% else %}state-negative{% endif %}"
                 data-hash="{{ item.market_hash_name }}"
                 tabindex="0" role="button" aria-expanded="false" aria-controls="details-{{ loop.index }}"
-                title="Show price history, order book and manual overrides">
+                aria-label="Show details for {{ item.name }}">
 
                 <td>
                     <label class="checkbox-label">
@@ -72,7 +72,7 @@
 
                 <td>
                     <a href="{{ item.listing_url }}" target="_blank" rel="noopener"
-                       class="item-link">{{ item.name }}</a>
+                       class="item-link" title="{{ item.listing_url }}">{{ item.name }}</a>
                 </td>
 
                 <td><span class="poll-buy-price" data-hash="{{ item.market_hash_name }}">{% if item.effective_buy_price is not none %}{{ item.effective_buy_price }}{% else %}<em>Loading…</em>{% endif %}</span></td>
@@ -85,7 +85,7 @@
 
                 <td><span class="poll-updated-at" data-hash="{{ item.market_hash_name }}">{% if item.updated_at is not none %}{{ item.updated_at.strftime("%Y-%m-%d %H:%M") }}{% else %}<em>Loading…</em>{% endif %}</span></td>
 
-                <td class="chevron-cell"><span class="row-chevron" aria-hidden="true"></span></td>
+                <td class="chevron-cell" title="Show price history, order book and manual overrides"><span class="row-chevron" aria-hidden="true"></span></td>
             </tr>
             <tr class="details-row" id="details-{{ loop.index }}"
                 data-details-for="{{ item.market_hash_name }}" hidden>
