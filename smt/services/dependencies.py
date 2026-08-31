@@ -1,5 +1,3 @@
-from functools import lru_cache
-
 from fastapi import Depends
 
 from smt.core.config import Settings, get_settings
@@ -20,9 +18,20 @@ from smt.services.stats_refresh import StatsRefreshService
 from smt.services.steam import SteamService
 
 
-@lru_cache()
+_steam_service: SteamService | None = None
+
+
 def get_steam_service(settings: Settings = Depends(get_settings)) -> SteamService:
-    return SteamService(settings)
+    """
+    One Steam client per process.
+
+    It holds the logged in session, the rate limiter and the login cooldown, so handing
+    out a fresh instance per request would throw all three away.
+    """
+    global _steam_service
+    if _steam_service is None:
+        _steam_service = SteamService(settings)
+    return _steam_service
 
 
 def get_inventory_service(
