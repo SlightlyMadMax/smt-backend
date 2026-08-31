@@ -65,9 +65,17 @@ function buildChart(allRecords, buyTarget, sellTarget) {
       : '');
 }
 
-function buildDepth(book) {
+function buildDepth(book, status) {
   if (!book) {
-    return '<p class="details-empty">The order book is unavailable right now.</p>';
+    const ask = status.current_lowest_price;
+    const bid = status.current_highest_buy_order;
+    const stored = (ask != null || bid != null)
+      ? '<dl class="details-stats"><div><dt>Cheapest listing</dt><dd>' +
+        (ask == null ? '-' : escapeHtml(ask)) + '</dd></div>' +
+        '<div><dt>Top buy order</dt><dd>' + (bid == null ? '-' : escapeHtml(bid)) + '</dd></div></dl>'
+      : '';
+    return '<p class="details-empty">Steam did not answer, so the depth is missing. ' +
+      'These are the prices from the last refresh.</p>' + stored;
   }
 
   const sells = (book.sell_levels || []).slice(0, 6);
@@ -144,7 +152,7 @@ async function loadDetails(hash, panel) {
     '<section><h4>Price, last ' + HISTORY_DAYS + ' days</h4>' +
     buildChart(history, status.optimal_buy_price, status.optimal_sell_price) +
     buildStats(status) + '</section>' +
-    '<section><h4>Order book</h4>' + buildDepth(book) + '</section>' +
+    '<section><h4>Order book</h4>' + buildDepth(book, status) + '</section>' +
     '<section><h4>Manual overrides</h4>' + buildForm(status) + '</section>' +
     '</div>';
 

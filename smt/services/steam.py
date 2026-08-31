@@ -176,9 +176,10 @@ class SteamService:
         except Exception as e:
             logger.info(f"Could not adopt the stored Steam session: {e!r}")
 
-        # Failing to adopt it says nothing about whether the session still works for the
-        # process that created it, so it is left alone; a fresh login overwrites it and
-        # the ttl clears it eventually.
+        # Leave the stored session alone: failing to adopt it says nothing about whether
+        # it still works for the process that created it. Drop the cookies we injected
+        # though, because logging in over a stale steamLoginSecure confuses Steam.
+        self.client._session.cookies.clear()
         self.client.was_login_executed = False
         return False
 
