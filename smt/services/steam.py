@@ -6,6 +6,7 @@ from typing import Optional
 
 import httpx
 from anyio import to_thread
+from redis.asyncio import Redis
 from steampy.client import SteamClient
 from steampy.exceptions import LoginRequired
 from steampy.models import Currency, GameOptions
@@ -14,7 +15,7 @@ from tenacity import AsyncRetrying, stop_after_attempt, wait_fixed
 from smt.core.config import Settings
 from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed, SteamLoginUnavailable
 from smt.logger import get_logger
-from smt.utils.rate_limit import RateLimiter
+from smt.utils.rate_limit import RedisRateLimiter
 from smt.utils.steam import calculate_fees, parse_steam_ts
 
 
@@ -23,6 +24,9 @@ logger = get_logger("services.steam")
 STEAM_COMMUNITY_URL = "https://steamcommunity.com"
 ORDER_BOOK_TIMEOUT = 30
 ACCOUNT_CURRENCY = Currency.RUB
+RATE_LIMIT_KEY = "smt:steam:calls"
+LOGIN_BLOCK_KEY = "smt:steam:login_block"
+LOGIN_FAILURES_KEY = "smt:steam:login_failures"
 STEAM_MAX_CALLS_PER_PERIOD = 15
 STEAM_RATE_LIMIT_PERIOD = 60.0
 LOGIN_COOLDOWN_BASE = datetime.timedelta(minutes=5)
@@ -74,25 +78,31 @@ class SteamService:
             }
         )
         self._last_check: Optional[datetime] = None
-        self._login_blocked_until: Optional[datetime] = None
-        self._login_failures: int = 0
-        self._limiter = RateLimiter(STEAM_MAX_CALLS_PER_PERIOD, STEAM_RATE_LIMIT_PERIOD)
+        self._redis = Redis(host=settings.REDIS_HOST, port=int(settings.REDIS_PORT))
+        self._limiter = RedisRateLimiter(
+            self._redis, RATE_LIMIT_KEY, STEAM_MAX_CALLS_PER_PERIOD, STEAM_RATE_LIMIT_PERIOD
+        )
         self._check_interval = datetime.timedelta(minutes=5)
 
     def _should_check_login(self) -> bool:
         return not self._last_check or datetime.datetime.now(datetime.UTC) - self._last_check > self._check_interval
 
-    def _cooldown_remaining(self) -> Optional[datetime.timedelta]:
-        if not self._login_blocked_until:
+    async def _cooldown_remaining(self) -> Optional[datetime.timedelta]:
+        milliseconds = await self._redis.pttl(LOGIN_BLOCK_KEY)
+        if milliseconds is None or milliseconds < 0:
             return None
-        remaining = self._login_blocked_until - datetime.datetime.now(datetime.UTC)
-        return remaining if remaining > datetime.timedelta(0) else None
+        return datetime.timedelta(milliseconds=milliseconds)
 
-    def _start_login_cooldown(self) -> datetime.timedelta:
-        self._login_failures += 1
-        cooldown = min(LOGIN_COOLDOWN_BASE * 2 ** (self._login_failures - 1), LOGIN_COOLDOWN_MAX)
-        self._login_blocked_until = datetime.datetime.now(datetime.UTC) + cooldown
+    async def _start_login_cooldown(self) -> datetime.timedelta:
+        failures = await self._redis.incr(LOGIN_FAILURES_KEY)
+        await self._redis.expire(LOGIN_FAILURES_KEY, int(LOGIN_COOLDOWN_MAX.total_seconds()) * 2)
+
+        cooldown = min(LOGIN_COOLDOWN_BASE * 2 ** (failures - 1), LOGIN_COOLDOWN_MAX)
+        await self._redis.set(LOGIN_BLOCK_KEY, failures, px=int(cooldown.total_seconds() * 1000))
         return cooldown
+
+    async def _clear_login_cooldown(self) -> None:
+        await self._redis.delete(LOGIN_BLOCK_KEY, LOGIN_FAILURES_KEY)
 
     async def _log_in(self) -> None:
         async for attempt in AsyncRetrying(reraise=True, stop=stop_after_attempt(3), wait=wait_fixed(3)):
@@ -116,11 +126,12 @@ class SteamService:
         """
         Make sure the Steam session is usable.
 
-        A refused login puts further attempts on a growing cooldown. Without it every
-        Steam call would start its own retry burst, and those bursts are what makes
-        Steam refuse the next login in the first place.
+        A refused login puts further attempts on a growing cooldown, kept in Redis so
+        that the web app, the worker and any restart of either all observe the same
+        backoff. Without it every Steam call would start its own retry burst, and those
+        bursts are what makes Steam refuse the next login in the first place.
         """
-        remaining = self._cooldown_remaining()
+        remaining = await self._cooldown_remaining()
         if remaining is not None:
             raise SteamLoginUnavailable(f"Steam login is on cooldown for another {remaining}.")
 
@@ -130,12 +141,11 @@ class SteamService:
         try:
             await self._log_in()
         except Exception as e:
-            cooldown = self._start_login_cooldown()
-            logger.error(f"Steam login failed ({self._login_failures} in a row), backing off for {cooldown}: {e!r}")
+            cooldown = await self._start_login_cooldown()
+            logger.error(f"Steam login failed, backing off for {cooldown}: {e!r}")
             raise SteamLoginUnavailable(f"Could not log in to Steam: {e!r}") from e
 
-        self._login_failures = 0
-        self._login_blocked_until = None
+        await self._clear_login_cooldown()
         self._last_check = datetime.datetime.now(datetime.UTC)
 
     @requires_login
