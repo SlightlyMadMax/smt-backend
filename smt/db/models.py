@@ -163,3 +163,26 @@ class Position(TimeStampedModel, Base):
             f"status={self.status.value} buy={self.buy_price}"
             f" sell={self.sell_price}>"
         )
+
+
+class ActionLog(Base):
+    """
+    What the bot did, as a stream of events.
+
+    `market_hash_name` deliberately carries no foreign key: removing an item from the
+    pool must not erase the record of the trades it took part in.
+    """
+
+    __tablename__ = "action_log"
+    __table_args__ = (Index("ix_action_log_occurred_at", "occurred_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    level: Mapped[str] = mapped_column(String(16), nullable=False, default="info")
+    market_hash_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    position_id: Mapped[int] = mapped_column(Integer, nullable=True)
+    message: Mapped[str] = mapped_column(String(512), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<ActionLog {self.occurred_at} {self.kind} {self.message[:40]}>"
