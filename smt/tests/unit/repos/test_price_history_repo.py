@@ -6,7 +6,8 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select
 
-from smt.db.models import PriceHistoryRecord
+from smt.db.models import PoolItem, PriceHistoryRecord
+from smt.exceptions import UnknownPoolItem
 from smt.repositories.price_history import PriceHistoryRepo
 from smt.schemas.price_history import PriceHistoryRecordCreate
 
@@ -24,6 +25,17 @@ def base_time() -> datetime.datetime:
 @pytest_asyncio.fixture(autouse=True)
 async def setup_price_history(db_session, base_time):
     await db_session.execute(delete(PriceHistoryRecord))
+    await db_session.execute(delete(PoolItem))
+    db_session.add_all(
+        PoolItem(
+            market_hash_name=name,
+            name=name,
+            app_id="440",
+            context_id="2",
+            icon_url="http://example.com/icon.png",
+        )
+        for name in ("item1", "item2", "item3", "item4")
+    )
     await db_session.commit()
 
     records = [
@@ -163,3 +175,23 @@ class TestPriceHistoryRepo:
         # Also test with non-existent market_hash_name
         deleted_count = await price_history_repo.delete_records_before("nonexistent_item", base_time)
         assert deleted_count == 0
+
+    async def test_add_record_rejects_an_unknown_pool_item(self, price_history_repo, base_time):
+        with pytest.raises(UnknownPoolItem):
+            await price_history_repo.add_record(
+                PriceHistoryRecordCreate(
+                    market_hash_name="not-in-the-pool",
+                    recorded_at=base_time,
+                    price=Decimal("1.00"),
+                    volume=1,
+                )
+            )
+
+    async def test_add_records_names_the_unknown_items(self, price_history_repo, base_time):
+        records = [
+            PriceHistoryRecordCreate(market_hash_name="item1", recorded_at=base_time, price=Decimal("1.00"), volume=1),
+            PriceHistoryRecordCreate(market_hash_name="ghost", recorded_at=base_time, price=Decimal("1.00"), volume=1),
+        ]
+
+        with pytest.raises(UnknownPoolItem, match="ghost"):
+            await price_history_repo.add_records(records)

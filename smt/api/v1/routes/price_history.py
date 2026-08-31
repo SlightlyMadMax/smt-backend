@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.params import Query
 from starlette import status
 
+from smt.exceptions import UnknownPoolItem
 from smt.schemas.price_history import (
     PriceHistoryRecord,
     PriceHistoryRecordCreate,
@@ -34,12 +35,13 @@ async def add_price_record(
     price_record: PriceHistoryRecordCreate,
     service: PriceHistoryService = Depends(get_price_history_service),
 ):
-    created = await service.add_one(price_record)
+    try:
+        created = await service.add_one(price_record)
+    except UnknownPoolItem as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+
     if not created:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "Record already exists",
-        )
+        raise HTTPException(status.HTTP_409_CONFLICT, "A record for this item and time already exists")
     return created
 
 
@@ -52,5 +54,9 @@ async def add_price_records(
     price_records: list[PriceHistoryRecordCreate],
     service: PriceHistoryService = Depends(get_price_history_service),
 ):
-    records = await service.add_many(price_records)
+    try:
+        records = await service.add_many(price_records)
+    except UnknownPoolItem as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+
     return PriceRecordBulkCreateResponse(count=len(records))

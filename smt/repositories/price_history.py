@@ -5,7 +5,9 @@ from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from smt.db.models import PoolItem
 from smt.db.models import PriceHistoryRecord as PriceHistoryRecordORM
+from smt.exceptions import UnknownPoolItem
 from smt.schemas.price_history import PriceHistoryRecordCreate
 
 
@@ -25,7 +27,17 @@ class PriceHistoryRepo:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def _known_pool_items(self, names: set[str]) -> set[str]:
+        if not names:
+            return set()
+        stmt = select(PoolItem.market_hash_name).where(PoolItem.market_hash_name.in_(names))
+        result = await self.session.execute(stmt)
+        return {name for name, in result.all()}
+
     async def add_record(self, price_record: PriceHistoryRecordCreate) -> Optional[PriceHistoryRecordORM]:
+        if not await self._known_pool_items({price_record.market_hash_name}):
+            raise UnknownPoolItem(f"{price_record.market_hash_name} is not in the pool")
+
         record = PriceHistoryRecordORM(**price_record.model_dump())
         self.session.add(record)
         try:
@@ -41,6 +53,11 @@ class PriceHistoryRepo:
             return []
 
         dumps = [rec.model_dump() for rec in price_records]
+
+        known = await self._known_pool_items({d["market_hash_name"] for d in dumps})
+        unknown = {d["market_hash_name"] for d in dumps} - known
+        if unknown:
+            raise UnknownPoolItem(f"not in the pool: {', '.join(sorted(unknown))}")
 
         clauses = [
             and_(
