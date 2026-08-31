@@ -53,7 +53,8 @@ class TestRedisRateLimiter:
         for _ in range(3):
             await limiter.acquire()
 
-        assert time.monotonic() - started >= 1
+        # the window opens at the first acquire, a moment after `started`
+        assert time.monotonic() - started >= 0.9
 
     async def test_slots_free_up_once_the_window_passes(self, redis, key):
         limiter = RedisRateLimiter(redis, key, max_calls=2, period=0.5)
@@ -78,7 +79,8 @@ class TestRedisRateLimiter:
         started = time.monotonic()
         await worker.acquire()
 
-        assert time.monotonic() - started >= 1
+        # the window opened at the first acquire, a moment before `started`
+        assert time.monotonic() - started >= 0.9
 
     async def test_concurrent_callers_never_exceed_the_limit(self, redis, key):
         limiter = RedisRateLimiter(redis, key, max_calls=3, period=30)

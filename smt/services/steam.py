@@ -84,6 +84,7 @@ class SteamService:
         )
         self._username: str = settings.STEAM_USERNAME
         self._password: str = settings.STEAM_PASSWORD
+        self._steam_id: str = settings.STEAMID
         self._guard: str = json.dumps(
             {
                 "steamid": settings.STEAMID,
@@ -142,37 +143,43 @@ class SteamService:
                 await self._redis.delete(LOGIN_LOCK_KEY)
 
     async def _save_shared_session(self) -> None:
-        cookies = [
-            {"name": c.name, "value": c.value, "domain": c.domain, "path": c.path} for c in self.client._session.cookies
-        ]
         await self._redis.set(
             SESSION_KEY,
-            json.dumps({"cookies": cookies, "steam_guard": self.client.steam_guard}),
+            json.dumps(
+                {
+                    "cookies": self.client._session.cookies.get_dict(),
+                    "steam_guard": self.client.steam_guard,
+                }
+            ),
             ex=SESSION_TTL,
         )
 
     async def _restore_shared_session(self) -> bool:
-        """Adopt the session another process published, if it is still usable."""
+        """
+        Adopt the session another process published, if it is still usable.
+
+        Liveness is checked with get_steam_id() rather than steampy's is_session_alive():
+        the latter looks for the account name in the page, which Steam does not show, so
+        it reports a healthy session as dead. Matching the id also proves the cookies
+        belong to the account we mean to trade with.
+        """
         raw = await self._redis.get(SESSION_KEY)
         if not raw:
             return False
 
         try:
             stored = json.loads(raw)
-            for cookie in stored["cookies"]:
-                self.client._session.cookies.set(
-                    cookie["name"], cookie["value"], domain=cookie["domain"], path=cookie["path"]
-                )
             self.client.steam_guard = stored["steam_guard"]
-            self.client.was_login_executed = True
-            self.client.market._set_login_executed(self.client.steam_guard, self.client._get_session_id())
+            self.client.set_login_cookies(stored["cookies"])
 
             await self._limiter.acquire()
-            if await to_thread.run_sync(self.client.is_session_alive):
+            steam_id = str(await to_thread.run_sync(self.client.get_steam_id))
+
+            if steam_id == self._steam_id:
                 logger.info("Reusing the Steam session published by another process.")
                 return True
 
-            logger.info("The stored Steam session is no longer alive.")
+            logger.warning(f"The stored Steam session belongs to {steam_id}, not {self._steam_id}.")
         except Exception as e:
             logger.info(f"Could not adopt the stored Steam session: {e!r}")
 
