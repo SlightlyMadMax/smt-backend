@@ -8,7 +8,9 @@ from steampy.models import GameOptions
 from smt.db.models import Item, PoolItem
 from smt.exceptions import OrderBookUnavailable
 from smt.logger import get_logger
+from smt.schemas.action_log import ActionKind, ActionLevel
 from smt.schemas.position import PositionCreate, PositionStatus
+from smt.services.action_log import ActionLogService
 from smt.services.inventory import InventoryService
 from smt.services.pool import PoolService
 from smt.services.position import PositionService
@@ -33,12 +35,14 @@ class TradingService:
         position_service: PositionService,
         pool_item_service: PoolService,
         settings_service: SettingsService,
+        action_log: ActionLogService,
     ):
         self.steam_service = steam_service
         self.inventory_service = inventory_service
         self.position_service = position_service
         self.pool_item_service = pool_item_service
         self.settings_service = settings_service
+        self.action_log = action_log
 
     async def run_cycle(self) -> None:
         logger.info("Starting trading cycle")
@@ -59,8 +63,13 @@ class TradingService:
 
             if not settings.emergency_stop:
                 await self._open_new_positions()
-        except Exception:
+        except Exception as e:
             logger.exception("Error in trading cycle")
+            await self.action_log.record(
+                ActionKind.CYCLE_FAILED,
+                f"The trading cycle stopped early: {e!r}",
+                level=ActionLevel.ERROR,
+            )
 
         logger.info(f"Trading cycle complete in {time.monotonic() - start:.2f} s.")
 
@@ -103,6 +112,13 @@ class TradingService:
                 f"Untracked buy order {order_id} on Steam: {order.get('quantity')} x "
                 f"{order.get('item_name')} at {order.get('price')}. No active position refers to it."
             )
+            await self.action_log.record(
+                ActionKind.UNTRACKED_ORDER,
+                f"Buy order {order_id} on Steam matches no active position"
+                + (" and was cancelled." if cancel else "."),
+                level=ActionLevel.WARNING,
+                market_hash_name=order.get("item_name"),
+            )
             if cancel:
                 await self.steam_service.cancel_buy_order(order_id)
 
@@ -114,6 +130,12 @@ class TradingService:
             logger.warning(
                 f"Untracked sell listing {listing_id} on Steam for asset {asset_id}. "
                 f"No active position refers to it."
+            )
+            await self.action_log.record(
+                ActionKind.UNTRACKED_ORDER,
+                f"Sell listing {listing_id} on Steam matches no active position"
+                + (" and was cancelled." if cancel else "."),
+                level=ActionLevel.WARNING,
             )
             if cancel:
                 await self.steam_service.cancel_sell_listing(listing_id)
@@ -156,6 +178,12 @@ class TradingService:
                     position_id=pos.id,
                     asset_id=candidate.id,
                 )
+                await self.action_log.record(
+                    ActionKind.POSITION_BOUGHT,
+                    f"Bought at {pos.buy_price}, asset {candidate.id}.",
+                    market_hash_name=pos.pool_item_hash,
+                    position_id=pos.id,
+                )
                 claimed.add(candidate.id)
                 continue
 
@@ -170,6 +198,13 @@ class TradingService:
                 f"Marking the position as CANCELLED."
             )
             await self.position_service.mark_as_cancelled(position_id=pos.id)
+            await self.action_log.record(
+                ActionKind.POSITION_CANCELLED,
+                f"Buy order {pos.buy_order_id} disappeared without a matching item.",
+                level=ActionLevel.WARNING,
+                market_hash_name=pos.pool_item_hash,
+                position_id=pos.id,
+            )
 
     async def _list_bought_positions(self) -> None:
         """Place a sell order for each BOUGHT position."""
@@ -184,6 +219,12 @@ class TradingService:
                 price=pos.sell_price,
             )
             await self.position_service.mark_as_listing_pending(position_id=pos.id)
+            await self.action_log.record(
+                ActionKind.SELL_ORDER_PLACED,
+                f"Listed for sale at {pos.sell_price}.",
+                market_hash_name=pos.pool_item_hash,
+                position_id=pos.id,
+            )
 
     @staticmethod
     def _listing_asset_id(listing: dict) -> Optional[str]:
@@ -209,6 +250,12 @@ class TradingService:
 
             logger.info(f"Position {pos.id}: resolved listing {listing_id} for asset {pos.asset_id}.")
             await self.position_service.mark_as_listed(position_id=pos.id, sell_order_id=listing_id)
+            await self.action_log.record(
+                ActionKind.LISTING_RESOLVED,
+                f"Steam listing {listing_id} matched the position.",
+                market_hash_name=pos.pool_item_hash,
+                position_id=pos.id,
+            )
 
     async def _sync_listed_to_closed(
         self,
@@ -223,7 +270,14 @@ class TradingService:
                 continue
             if pos.sell_order_id not in active_listing_ids:
                 logger.info(f"Sell order {pos.sell_order_id} for Position {pos.id} disappeared, closing position.")
-                await self.position_service.close(position_id=pos.id)
+                closed = await self.position_service.close(position_id=pos.id)
+                await self.action_log.record(
+                    ActionKind.POSITION_CLOSED,
+                    f"Sold at {closed.sell_price}, received {closed.net_proceeds}, "
+                    f"profit {closed.realized_profit}.",
+                    market_hash_name=pos.pool_item_hash,
+                    position_id=pos.id,
+                )
 
     async def _open_new_positions(self) -> None:
         """Submit new buy orders for PoolItems flagged for trading, within the configured limits."""
@@ -359,7 +413,13 @@ class TradingService:
                     buy_price=buy_price,
                     sell_price=item.effective_sell_price,
                 )
-                await self.position_service.add(create)
+                position = await self.position_service.add(create)
+                await self.action_log.record(
+                    ActionKind.BUY_ORDER_PLACED,
+                    f"Placed a buy order at {buy_price} (cheapest listing {lowest_ask}).",
+                    market_hash_name=item.market_hash_name,
+                    position_id=position.id,
+                )
 
                 allowance -= buy_price
                 budget_left -= buy_price

@@ -73,6 +73,7 @@ def trading_service(position_service):
         position_service=position_service,
         pool_item_service=AsyncMock(),
         settings_service=AsyncMock(),
+        action_log=AsyncMock(),
     )
     service.settings_service.get_settings.return_value = make_settings()
     service.steam_service.get_wallet_balance.return_value = Decimal("1000.00")

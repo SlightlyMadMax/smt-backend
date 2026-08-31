@@ -2,10 +2,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from smt.db.database import async_session_maker
 from smt.logger import get_logger
+from smt.repositories.action_log import ActionLogRepo
 from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
 from smt.repositories.position import PositionRepo
 from smt.repositories.settings import SettingsRepo
+from smt.services.action_log import ActionLogService
 from smt.services.inventory import InventoryService
 from smt.services.pool import PoolService
 from smt.services.position import PositionService
@@ -23,6 +25,7 @@ async def build_trading_service(session: AsyncSession, steam_service: SteamServi
     pool_repo = PoolRepo(session)
     settings_repo = SettingsRepo(session)
     position_repo = PositionRepo(session)
+    action_log_repo = ActionLogRepo(session)
 
     settings_service = SettingsService(settings_repo)
     pool_service = PoolService(pool_repo, inventory_service)
@@ -33,6 +36,7 @@ async def build_trading_service(session: AsyncSession, steam_service: SteamServi
         position_service=position_service,
         pool_item_service=pool_service,
         settings_service=settings_service,
+        action_log=ActionLogService(action_log_repo),
     )
 
     return trading_service

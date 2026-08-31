@@ -2,11 +2,16 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from smt.db.dependencies import get_db
+from smt.repositories.action_log import ActionLogRepo
 from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
 from smt.repositories.position import PositionRepo
 from smt.repositories.price_history import PriceHistoryRepo
 from smt.repositories.settings import SettingsRepo
+
+
+def get_action_log_repo(db: AsyncSession = Depends(get_db)) -> ActionLogRepo:
+    return ActionLogRepo(db)
 
 
 def get_item_repo(db: AsyncSession = Depends(get_db)) -> ItemRepo:

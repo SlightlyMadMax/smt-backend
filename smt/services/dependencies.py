@@ -2,12 +2,14 @@ from fastapi import Depends
 
 from smt.core.config import Settings, get_settings
 from smt.repositories.dependencies import (
+    get_action_log_repo,
     get_item_repo,
     get_pool_repo,
     get_position_repo,
     get_price_history_repo,
     get_settings_repo,
 )
+from smt.services.action_log import ActionLogService
 from smt.services.inventory import InventoryService
 from smt.services.market_analytics import MarketAnalyticsService
 from smt.services.pool import PoolService
@@ -74,3 +76,7 @@ def get_stats_refresh_service(
 
 def get_position_service(position_repo=Depends(get_position_repo)) -> PositionService:
     return PositionService(position_repo)
+
+
+def get_action_log_service(repo=Depends(get_action_log_repo)) -> ActionLogService:
+    return ActionLogService(repo)
