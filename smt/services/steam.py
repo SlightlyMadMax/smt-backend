@@ -143,14 +143,12 @@ class SteamService:
                 await self._redis.delete(LOGIN_LOCK_KEY)
 
     async def _save_shared_session(self) -> None:
+        cookies = [
+            {"name": c.name, "value": c.value, "domain": c.domain, "path": c.path} for c in self.client._session.cookies
+        ]
         await self._redis.set(
             SESSION_KEY,
-            json.dumps(
-                {
-                    "cookies": self.client._session.cookies.get_dict(),
-                    "steam_guard": self.client.steam_guard,
-                }
-            ),
+            json.dumps({"cookies": cookies, "steam_guard": self.client.steam_guard}),
             ex=SESSION_TTL,
         )
 
@@ -158,10 +156,15 @@ class SteamService:
         """
         Adopt the session another process published, if it is still usable.
 
-        Liveness is checked with get_steam_id() rather than steampy's is_session_alive():
-        the latter looks for the account name in the page, which Steam does not show, so
-        it reports a healthy session as dead. Matching the id also proves the cookies
-        belong to the account we mean to trade with.
+        steampy's own set_login_cookies() cannot be used: it stores the cookies without a
+        domain and then reads the session id back with a domain filter, so the market
+        ends up wired with a null session id. Restoring each cookie with its domain keeps
+        that lookup working.
+
+        Liveness is checked with get_steam_id() rather than is_session_alive(), which
+        looks for the account name in a page that shows the persona name instead and so
+        calls a healthy session dead. Matching the id also proves the cookies belong to
+        the account we mean to trade with.
         """
         raw = await self._redis.get(SESSION_KEY)
         if not raw:
@@ -169,8 +172,14 @@ class SteamService:
 
         try:
             stored = json.loads(raw)
+            for cookie in stored["cookies"]:
+                self.client._session.cookies.set(
+                    cookie["name"], cookie["value"], domain=cookie["domain"], path=cookie["path"]
+                )
+
             self.client.steam_guard = stored["steam_guard"]
-            self.client.set_login_cookies(stored["cookies"])
+            self.client.was_login_executed = True
+            self.client.market._set_login_executed(self.client.steam_guard, self.client._get_session_id())
 
             await self._limiter.acquire()
             steam_id = str(await to_thread.run_sync(self.client.get_steam_id))
