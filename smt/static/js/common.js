@@ -136,6 +136,56 @@
     };
   }
 
+  function pager(container, {pageSize, onChange}) {
+    let offset = 0;
+    let total = 0;
+
+    container.classList.add('pager');
+    container.innerHTML =
+      '<span class="pager-range"></span>' +
+      '<button type="button" class="btn small" data-page="previous">Previous</button>' +
+      '<button type="button" class="btn small" data-page="next">Next</button>';
+
+    const range = container.querySelector('.pager-range');
+    const previous = container.querySelector('[data-page="previous"]');
+    const next = container.querySelector('[data-page="next"]');
+
+    function render() {
+      container.hidden = total <= pageSize;
+      if (container.hidden) return;
+
+      range.textContent = `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}`;
+      previous.disabled = offset === 0;
+      next.disabled = offset + pageSize >= total;
+    }
+
+    function move(by) {
+      const wanted = offset + by * pageSize;
+      if (wanted < 0 || wanted >= total) return;
+      offset = wanted;
+      render();
+      onChange();
+    }
+
+    previous.addEventListener('click', () => move(-1));
+    next.addEventListener('click', () => move(1));
+
+    return {
+      pageSize,
+      get offset() {
+        return offset;
+      },
+      update(newTotal) {
+        total = newTotal;
+        if (offset >= total) offset = Math.max(0, Math.floor(Math.max(total - 1, 0) / pageSize) * pageSize);
+        render();
+      },
+      reset() {
+        offset = 0;
+      },
+    };
+  }
+
   global.SMT = {
     request,
     get: (url) => request(url),
@@ -146,6 +196,7 @@
     confirmAction,
     comparator,
     sortControl,
+    pager,
   };
 })(window);
 
