@@ -7,7 +7,7 @@ from sqlalchemy import delete
 
 from smt.db.models import PoolItem, Position
 from smt.repositories.position import PositionRepo
-from smt.schemas.position import PositionCreate, PositionStatus, PositionUpdate
+from smt.schemas.position import PositionCreate, PositionSortKey, PositionStatus, PositionUpdate, SortOrder
 from smt.services.position import PositionService
 
 
@@ -162,3 +162,59 @@ class TestRealizedProfit:
         total = await position_service.realized_profit_since(datetime(2000, 1, 1, tzinfo=timezone.utc))
 
         assert total == Decimal("0")
+
+
+@pytest_asyncio.fixture
+async def many_positions(position_repo, db_session):
+    for n in range(5):
+        pos = await position_repo.add(
+            PositionCreate(
+                pool_item_hash=ITEM_HASH,
+                buy_order_id=f"BUY-{n}",
+                buy_price=Decimal(10 + n),
+                sell_price=Decimal(20),
+            )
+        )
+        if n < 3:
+            await position_repo.update(
+                pos.id,
+                PositionUpdate(status=PositionStatus.CLOSED.value, realized_profit=Decimal(n)),
+            )
+    yield
+
+
+@pytest.mark.asyncio
+class TestPositionPaging:
+    async def test_a_page_is_capped_by_the_limit(self, position_repo, many_positions):
+        assert len(await position_repo.list_page(limit=2, offset=0)) == 2
+
+    async def test_the_offset_moves_past_earlier_rows(self, position_repo, many_positions):
+        first = await position_repo.list_page(limit=2, offset=0, sort=PositionSortKey.BUY_PRICE, order=SortOrder.ASC)
+        second = await position_repo.list_page(limit=2, offset=2, sort=PositionSortKey.BUY_PRICE, order=SortOrder.ASC)
+
+        assert [p.buy_price for p in first] == [Decimal("10.00"), Decimal("11.00")]
+        assert [p.buy_price for p in second] == [Decimal("12.00"), Decimal("13.00")]
+
+    async def test_sorting_runs_over_everything_not_just_one_page(self, position_repo, many_positions):
+        """The whole point of sorting on the server: page one holds the real maximum."""
+        page = await position_repo.list_page(limit=2, offset=0, sort=PositionSortKey.BUY_PRICE, order=SortOrder.DESC)
+
+        assert page[0].buy_price == Decimal("14.00")
+
+    async def test_missing_values_sort_last_in_both_directions(self, position_repo, many_positions):
+        ascending = await position_repo.list_page(
+            limit=5, offset=0, sort=PositionSortKey.REALIZED_PROFIT, order=SortOrder.ASC
+        )
+        descending = await position_repo.list_page(
+            limit=5, offset=0, sort=PositionSortKey.REALIZED_PROFIT, order=SortOrder.DESC
+        )
+
+        assert [p.realized_profit for p in ascending][-2:] == [None, None]
+        assert [p.realized_profit for p in descending][-2:] == [None, None]
+
+    async def test_a_status_filter_narrows_the_page_and_the_count(self, position_repo, many_positions):
+        page = await position_repo.list_page(limit=10, offset=0, status=PositionStatus.CLOSED)
+
+        assert len(page) == 3
+        assert await position_repo.count(PositionStatus.CLOSED) == 3
+        assert await position_repo.count() == 5

@@ -28,9 +28,9 @@
     <table class="action-table">
         <thead>
         <tr>
-            <th title="When the bot did this">When</th>
-            <th title="What kind of event this was">Event</th>
-            <th title="The item the event concerns">Item</th>
+            <th data-sort="occurred_at" title="When the bot did this">When</th>
+            <th data-sort="kind" data-sort-default="ascending" title="What kind of event this was">Event</th>
+            <th data-sort="market_hash_name" data-sort-default="ascending" title="The item the event concerns">Item</th>
             <th title="What happened">Details</th>
         </tr>
         </thead>
@@ -39,6 +39,8 @@
         </tbody>
     </table>
 </div>
+
+<div id="actions-pager" hidden></div>
 {% endblock %}
 
 {% block extra_js %}

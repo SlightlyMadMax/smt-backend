@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -32,6 +32,18 @@ class ActionLogEntry(BaseModel):
     message: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ActionLogSortKey(str, Enum):
+    OCCURRED_AT = "occurred_at"
+    KIND = "kind"
+    LEVEL = "level"
+    MARKET_HASH_NAME = "market_hash_name"
+
+
+class ActionLogPage(BaseModel):
+    items: List[ActionLogEntry]
+    total: int
 
 
 class ActionLogPurged(BaseModel):

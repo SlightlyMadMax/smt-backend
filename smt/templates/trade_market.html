@@ -51,16 +51,16 @@
   <table class="positions-table">
     <thead>
       <tr>
-        <th>Item</th>
-        <th>Status</th>
-        <th>Buy</th>
-        <th>Sell</th>
-        <th>Net</th>
-        <th>Profit</th>
-        <th>Opened</th>
-        <th>Bought</th>
-        <th>Listed</th>
-        <th>Sold</th>
+        <th data-sort="name" data-sort-default="ascending">Item</th>
+        <th data-sort="status" data-sort-default="ascending">Status</th>
+        <th data-sort="buy_price">Buy</th>
+        <th data-sort="sell_price">Sell</th>
+        <th data-sort="net_proceeds">Net</th>
+        <th data-sort="realized_profit">Profit</th>
+        <th data-sort="created_at">Opened</th>
+        <th data-sort="bought_at">Bought</th>
+        <th data-sort="listed_at">Listed</th>
+        <th data-sort="sold_at">Sold</th>
       </tr>
     </thead>
     <tbody id="positions-body">
@@ -68,6 +68,8 @@
     </tbody>
   </table>
 </div>
+
+<div id="positions-pager" hidden></div>
 {% endblock %}
 
 {% block extra_js %}

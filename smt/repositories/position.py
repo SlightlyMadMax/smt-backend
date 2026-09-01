@@ -2,13 +2,34 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Sequence
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, nulls_last, select, update
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from smt.db.models import Position
-from smt.schemas.position import ACTIVE_STATUSES, PositionCreate, PositionStatus, PositionUpdate
+from smt.db.models import PoolItem, Position
+from smt.schemas.position import (
+    ACTIVE_STATUSES,
+    PositionCreate,
+    PositionSortKey,
+    PositionStatus,
+    PositionUpdate,
+    SortOrder,
+)
+
+
+SORT_COLUMNS = {
+    PositionSortKey.NAME: PoolItem.name,
+    PositionSortKey.STATUS: Position.status,
+    PositionSortKey.BUY_PRICE: Position.buy_price,
+    PositionSortKey.SELL_PRICE: Position.sell_price,
+    PositionSortKey.NET_PROCEEDS: Position.net_proceeds,
+    PositionSortKey.REALIZED_PROFIT: Position.realized_profit,
+    PositionSortKey.CREATED_AT: Position.created_at,
+    PositionSortKey.BOUGHT_AT: Position.bought_at,
+    PositionSortKey.LISTED_AT: Position.listed_at,
+    PositionSortKey.SOLD_AT: Position.sold_at,
+}
 
 
 class PositionRepo:
@@ -32,6 +53,35 @@ class PositionRepo:
         stmt = select(Position).options(selectinload(Position.pool_item)).where(Position.status == status)
         result = await self.session.execute(stmt)
         return result.scalars().all()
+
+    async def list_page(
+        self,
+        limit: int,
+        offset: int,
+        status: Optional[PositionStatus] = None,
+        sort: PositionSortKey = PositionSortKey.CREATED_AT,
+        order: SortOrder = SortOrder.DESC,
+    ) -> Sequence[Position]:
+        stmt = select(Position).options(selectinload(Position.pool_item))
+        if status:
+            stmt = stmt.where(Position.status == status)
+
+        column = SORT_COLUMNS[sort]
+        if sort is PositionSortKey.NAME:
+            stmt = stmt.outerjoin(PoolItem, Position.pool_item_hash == PoolItem.market_hash_name)
+
+        direction = column.asc() if order is SortOrder.ASC else column.desc()
+        stmt = stmt.order_by(nulls_last(direction), Position.id.desc()).limit(limit).offset(offset)
+
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def count(self, status: Optional[PositionStatus] = None) -> int:
+        stmt = select(func.count()).select_from(Position)
+        if status:
+            stmt = stmt.where(Position.status == status)
+        result = await self.session.execute(stmt)
+        return int(result.scalar_one())
 
     async def realized_profit_since(self, since: datetime) -> Decimal:
         stmt = select(func.coalesce(func.sum(Position.realized_profit), 0)).where(

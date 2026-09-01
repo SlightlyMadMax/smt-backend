@@ -6,7 +6,8 @@ from sqlalchemy import delete
 
 from smt.db.models import ActionLog
 from smt.repositories.action_log import ActionLogRepo
-from smt.schemas.action_log import ActionKind, ActionLevel
+from smt.schemas.action_log import ActionKind, ActionLevel, ActionLogSortKey
+from smt.schemas.position import SortOrder
 from smt.services.action_log import ActionLogService
 
 
@@ -142,3 +143,39 @@ class TestActionLogService:
 
         assert removed == 1
         assert [e.message for e in await action_log_repo.list()] == ["recent"]
+
+
+@pytest.mark.asyncio
+class TestActionLogPaging:
+    async def test_a_page_is_capped_and_the_total_is_not(self, action_log_repo):
+        for i in range(5):
+            await action_log_repo.add(kind="a", message=f"entry {i}")
+
+        assert len(await action_log_repo.list_page(limit=2, offset=0)) == 2
+        assert await action_log_repo.count() == 5
+
+    async def test_the_offset_moves_past_earlier_rows(self, action_log_repo):
+        for i in range(4):
+            await action_log_repo.add(kind="a", message=f"entry {i}")
+
+        second = await action_log_repo.list_page(limit=2, offset=2, sort=ActionLogSortKey.KIND)
+
+        assert len(second) == 2
+
+    async def test_a_filter_narrows_the_page_and_the_total(self, action_log_repo):
+        await action_log_repo.add(kind="a", message="quiet", level="info")
+        await action_log_repo.add(kind="b", message="loud", level="error")
+
+        page = await action_log_repo.list_page(limit=10, offset=0, level="error")
+
+        assert [e.message for e in page] == ["loud"]
+        assert await action_log_repo.count(level="error") == 1
+        assert await action_log_repo.count() == 2
+
+    async def test_sorting_by_kind_runs_over_everything(self, action_log_repo):
+        await action_log_repo.add(kind="zeta", message="last")
+        await action_log_repo.add(kind="alpha", message="first")
+
+        page = await action_log_repo.list_page(limit=1, offset=0, sort=ActionLogSortKey.KIND, order=SortOrder.ASC)
+
+        assert page[0].kind == "alpha"

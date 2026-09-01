@@ -78,6 +78,29 @@ class PositionRow(BaseModel):
     created_at: datetime
 
 
+class PositionSortKey(str, Enum):
+    NAME = "name"
+    STATUS = "status"
+    BUY_PRICE = "buy_price"
+    SELL_PRICE = "sell_price"
+    NET_PROCEEDS = "net_proceeds"
+    REALIZED_PROFIT = "realized_profit"
+    CREATED_AT = "created_at"
+    BOUGHT_AT = "bought_at"
+    LISTED_AT = "listed_at"
+    SOLD_AT = "sold_at"
+
+
+class SortOrder(str, Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+
+class PositionPage(BaseModel):
+    items: list[PositionRow]
+    total: int
+
+
 class PositionSummary(BaseModel):
     counts: dict[str, int]
     active_count: int

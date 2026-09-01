@@ -1,9 +1,16 @@
 from datetime import timedelta
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from smt.schemas.action_log import ActionLevel, ActionLogEntry, ActionLogPurged
+from smt.schemas.action_log import (
+    ActionLevel,
+    ActionLogEntry,
+    ActionLogPage,
+    ActionLogPurged,
+    ActionLogSortKey,
+)
+from smt.schemas.position import SortOrder
 from smt.services.action_log import ActionLogService
 from smt.services.dependencies import get_action_log_service
 
@@ -11,19 +18,29 @@ from smt.services.dependencies import get_action_log_service
 router = APIRouter(prefix="/actions", tags=["actions"])
 
 
-@router.get("/", response_model=List[ActionLogEntry])
+@router.get("/", response_model=ActionLogPage)
 async def read_actions(
-    limit: int = Query(200, ge=1, le=1000),
+    limit: int = Query(50, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     level: Optional[ActionLevel] = Query(None),
     market_hash_name: Optional[str] = Query(None),
+    sort: ActionLogSortKey = Query(ActionLogSortKey.OCCURRED_AT),
+    order: SortOrder = Query(SortOrder.DESC),
     service: ActionLogService = Depends(get_action_log_service),
 ):
-    entries = await service.list(
+    level_value = level.value if level else None
+    entries = await service.list_page(
         limit=limit,
-        level=level.value if level else None,
+        offset=offset,
+        level=level_value,
         market_hash_name=market_hash_name,
+        sort=sort,
+        order=order,
     )
-    return [ActionLogEntry.model_validate(entry) for entry in entries]
+    return ActionLogPage(
+        items=[ActionLogEntry.model_validate(entry) for entry in entries],
+        total=await service.count(level=level_value, market_hash_name=market_hash_name),
+    )
 
 
 @router.delete("/", response_model=ActionLogPurged)

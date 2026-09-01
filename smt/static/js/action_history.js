@@ -5,6 +5,21 @@ const levelFilter = document.getElementById('level-filter');
 const entryCount = document.getElementById('entry-count');
 const clearButton = document.getElementById('clear-history');
 
+const PAGE_SIZE = 50;
+
+const paging = SMT.pager(document.getElementById('actions-pager'), {
+  pageSize: PAGE_SIZE,
+  onChange: () => load(),
+});
+
+const sorting = SMT.sortControl(document.querySelector('.action-table'), {
+  key: 'occurred_at',
+  onChange: () => {
+    paging.reset();
+    load();
+  },
+});
+
 function escapeHtml(value) {
   const div = document.createElement('div');
   div.textContent = value == null ? '' : value;
@@ -37,10 +52,19 @@ function renderEmpty(message) {
 
 async function load() {
   const level = levelFilter.value;
-  const url = level ? `/api/v1/actions/?level=${encodeURIComponent(level)}` : '/api/v1/actions/';
+  const query = new URLSearchParams({
+    limit: PAGE_SIZE,
+    offset: paging.offset,
+    sort: sorting.key,
+    order: sorting.direction === 'ascending' ? 'asc' : 'desc',
+  });
+  if (level) query.set('level', level);
 
   try {
-    const entries = await SMT.get(url);
+    const page = await SMT.get(`/api/v1/actions/?${query}`);
+    const entries = page.items;
+    paging.update(page.total);
+
     if (entries.length === 0) {
       renderEmpty(level
         ? 'Nothing of that kind has happened yet.'
@@ -49,7 +73,7 @@ async function load() {
       return;
     }
     body.innerHTML = entries.map(renderRow).join('');
-    entryCount.textContent = countLabel(entries.length);
+    entryCount.textContent = countLabel(page.total);
   } catch (e) {
     renderEmpty(`Could not load the history: ${e.message}`);
   }
@@ -74,7 +98,10 @@ async function clearHistory() {
   }
 }
 
-levelFilter.addEventListener('change', load);
+levelFilter.addEventListener('change', () => {
+  paging.reset();
+  load();
+});
 clearButton.addEventListener('click', clearHistory);
 
 load();

@@ -45,6 +45,12 @@ class ActionLogService:
     ) -> Sequence[ActionLog]:
         return await self.repo.list(limit=limit, level=level, market_hash_name=market_hash_name)
 
+    async def list_page(self, **kwargs) -> Sequence[ActionLog]:
+        return await self.repo.list_page(**kwargs)
+
+    async def count(self, level: Optional[str] = None, market_hash_name: Optional[str] = None) -> int:
+        return await self.repo.count(level=level, market_hash_name=market_hash_name)
+
     async def purge(self, older_than: timedelta = timedelta(0)) -> int:
         return await self.repo.delete_before(datetime.now(UTC) - older_than)
 

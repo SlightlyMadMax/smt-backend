@@ -1,8 +1,15 @@
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from smt.schemas.position import PositionRow, PositionStatus, PositionSummary
+from smt.schemas.position import (
+    PositionPage,
+    PositionRow,
+    PositionSortKey,
+    PositionStatus,
+    PositionSummary,
+    SortOrder,
+)
 from smt.services.dependencies import get_position_service
 from smt.services.position import PositionService
 
@@ -30,13 +37,17 @@ def to_row(position) -> PositionRow:
     )
 
 
-@router.get("/", response_model=List[PositionRow])
+@router.get("/", response_model=PositionPage)
 async def read_positions(
     status: Optional[PositionStatus] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    sort: PositionSortKey = Query(PositionSortKey.CREATED_AT),
+    order: SortOrder = Query(SortOrder.DESC),
     service: PositionService = Depends(get_position_service),
 ):
-    positions = await service.list_by_status(status) if status else await service.list()
-    return [to_row(p) for p in sorted(positions, key=lambda p: p.created_at, reverse=True)]
+    positions = await service.list_page(limit=limit, offset=offset, status=status, sort=sort, order=order)
+    return PositionPage(items=[to_row(p) for p in positions], total=await service.count(status))
 
 
 @router.get("/summary", response_model=PositionSummary)

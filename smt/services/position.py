@@ -33,6 +33,12 @@ class PositionService:
 
         return active
 
+    async def list_page(self, **kwargs) -> Sequence[Position]:
+        return await self.repo.list_page(**kwargs)
+
+    async def count(self, status: Optional[PositionStatus] = None) -> int:
+        return await self.repo.count(status)
+
     async def summary(self) -> dict:
         counts = await self.repo.count_by_status()
         return {

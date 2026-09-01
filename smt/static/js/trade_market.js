@@ -4,6 +4,21 @@ const body = document.getElementById('positions-body');
 const statusFilter = document.getElementById('status-filter');
 const rowCount = document.getElementById('row-count');
 
+const PAGE_SIZE = 50;
+
+const paging = SMT.pager(document.getElementById('positions-pager'), {
+  pageSize: PAGE_SIZE,
+  onChange: () => loadPositions(),
+});
+
+const sorting = SMT.sortControl(document.querySelector('.positions-table'), {
+  key: 'created_at',
+  onChange: () => {
+    paging.reset();
+    loadPositions();
+  },
+});
+
 function formatDatetime(value) {
   if (!value) return '–';
   const d = new Date(value);
@@ -50,19 +65,25 @@ function renderEmpty(message) {
 
 async function loadPositions() {
   const status = statusFilter.value;
-  const url = status
-    ? `/api/v1/positions/?status=${encodeURIComponent(status)}`
-    : '/api/v1/positions/';
+  const query = new URLSearchParams({
+    limit: PAGE_SIZE,
+    offset: paging.offset,
+    sort: sorting.key,
+    order: sorting.direction === 'ascending' ? 'asc' : 'desc',
+  });
+  if (status) query.set('status', status);
 
   try {
-    const positions = await SMT.get(url);
-    if (positions.length === 0) {
+    const page = await SMT.get(`/api/v1/positions/?${query}`);
+    paging.update(page.total);
+
+    if (page.items.length === 0) {
       renderEmpty(status ? 'No positions with this status.' : 'No positions yet.');
       rowCount.textContent = '';
       return;
     }
-    body.innerHTML = positions.map(renderRow).join('');
-    rowCount.textContent = `${positions.length} position(s)`;
+    body.innerHTML = page.items.map(renderRow).join('');
+    rowCount.textContent = `${page.total} position${page.total === 1 ? '' : 's'}`;
   } catch (e) {
     renderEmpty(`Could not load positions: ${e.message}`);
   }
@@ -83,7 +104,10 @@ async function loadSummary() {
   }
 }
 
-statusFilter.addEventListener('change', loadPositions);
+statusFilter.addEventListener('change', () => {
+  paging.reset();
+  loadPositions();
+});
 
 async function refresh() {
   await Promise.all([loadPositions(), loadSummary()]);
