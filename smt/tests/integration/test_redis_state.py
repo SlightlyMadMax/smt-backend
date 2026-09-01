@@ -18,7 +18,7 @@ from smt.utils.rate_limit import RedisRateLimiter
 @pytest_asyncio.fixture
 async def redis():
     settings = get_settings()
-    client = Redis(host=settings.REDIS_HOST, port=int(settings.REDIS_PORT))
+    client = Redis(host=settings.REDIS_HOST, port=int(settings.REDIS_PORT), password=settings.REDIS_PASSWORD)
     yield client
     await client.aclose()
 

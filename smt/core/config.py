@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     REDIS_PORT: str
     REDIS_HOST: str
+    REDIS_PASSWORD: str
 
     LOG_DIR: str
     LOG_LEVEL: str

@@ -90,7 +90,11 @@ class SteamService:
             }
         )
         self._last_check: Optional[datetime] = None
-        self._redis = Redis(host=settings.REDIS_HOST, port=int(settings.REDIS_PORT))
+        self._redis = Redis(
+            host=settings.REDIS_HOST,
+            port=int(settings.REDIS_PORT),
+            password=settings.REDIS_PASSWORD,
+        )
         self._limiter = RedisRateLimiter(
             self._redis, RATE_LIMIT_KEY, STEAM_MAX_CALLS_PER_PERIOD, STEAM_RATE_LIMIT_PERIOD
         )

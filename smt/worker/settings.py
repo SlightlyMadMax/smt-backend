@@ -28,7 +28,11 @@ class WorkerSettings:
         cron(refresh_periodic_task, hour=None, minute=set(range(0, 60, 5)), second=30),
         cron(trading_cycle, hour=None, minute=set(range(5, 60, 5)), second=0),
     ]
-    redis_settings = RedisSettings(host=settings.REDIS_HOST, port=int(settings.REDIS_PORT))
+    redis_settings = RedisSettings(
+        host=settings.REDIS_HOST,
+        port=int(settings.REDIS_PORT),
+        password=settings.REDIS_PASSWORD,
+    )
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = 1

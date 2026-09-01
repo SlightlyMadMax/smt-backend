@@ -76,7 +76,8 @@
   font-weight: 400;
   font-size: 0.8rem;
   color: var(--color-muted);
-  padding-top: 0;
+  padding: 0.35rem 0.6rem;
+  vertical-align: middle;
 }
 
 .stats-table .group-start {
