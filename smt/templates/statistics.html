@@ -28,20 +28,20 @@
     <table class="stats-table">
       <thead>
         <tr>
-          <th rowspan="2">Item</th>
-          <th rowspan="2" title="Closed trades">Trades</th>
-          <th rowspan="2" title="Realised profit added up">Profit</th>
-          <th colspan="2">Profit per trade</th>
-          <th colspan="2">Hold, h</th>
-          <th colspan="2">Return, % / 30d</th>
+          <th rowspan="2" data-sort="name">Item</th>
+          <th rowspan="2" data-sort="trades" title="Closed trades">Trades</th>
+          <th rowspan="2" data-sort="profit" title="Realised profit added up">Profit</th>
+          <th colspan="2" class="group-start">Profit per trade</th>
+          <th colspan="2" class="group-start">Hold, h</th>
+          <th colspan="2" class="group-start">Return, % / 30d</th>
         </tr>
         <tr>
-          <th class="sub">actual</th>
-          <th class="sub">forecast</th>
-          <th class="sub">actual</th>
-          <th class="sub">forecast</th>
-          <th class="sub">actual</th>
-          <th class="sub">forecast</th>
+          <th class="sub group-start" data-sort="avg_profit">actual</th>
+          <th class="sub" data-sort="forecast_profit">forecast</th>
+          <th class="sub group-start" data-sort="median_hold_hours">actual</th>
+          <th class="sub" data-sort="forecast_hold_hours">forecast</th>
+          <th class="sub group-start" data-sort="actual_return_30d">actual</th>
+          <th class="sub" data-sort="forecast_return_30d">forecast</th>
         </tr>
       </thead>
       <tbody id="items-body">

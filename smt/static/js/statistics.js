@@ -9,6 +9,10 @@ const funnelEl = document.getElementById('funnel');
 const itemsBody = document.getElementById('items-body');
 const dailyEl = document.getElementById('daily-profit');
 
+let currentItems = [];
+let sortKey = 'profit';
+let sortDirection = 'descending';
+
 function escapeHtml(value) {
   const div = document.createElement('div');
   div.textContent = value == null ? '' : value;
@@ -74,13 +78,53 @@ function renderItems(items) {
     </span></td>
     <td>${item.trades}</td>
     <td>${signed(item.profit)}</td>
-    <td>${num(item.avg_profit)}</td>
+    <td class="group-start">${num(item.avg_profit)}</td>
     <td class="forecast">${num(item.forecast_profit)}</td>
-    <td>${num(item.median_hold_hours)}</td>
+    <td class="group-start">${num(item.median_hold_hours)}</td>
     <td class="forecast">${num(item.forecast_hold_hours)}</td>
-    <td${returnHint(item)}>${signed(item.actual_return_30d)}</td>
+    <td class="group-start"${returnHint(item)}>${signed(item.actual_return_30d)}</td>
     <td class="forecast">${num(item.forecast_return_30d)}</td>
   </tr>`).join('');
+}
+
+function compare(a, b, key) {
+  const left = a[key];
+  const right = b[key];
+  if (left == null && right == null) return 0;
+  if (left == null) return 1;
+  if (right == null) return -1;
+  return key === 'name' ? String(left).localeCompare(String(right)) : Number(left) - Number(right);
+}
+
+function sortAndRender() {
+  const sorted = [...currentItems].sort((a, b) => {
+    const result = compare(a, b, sortKey);
+    return sortDirection === 'ascending' ? result : -result;
+  });
+
+  document.querySelectorAll('.stats-table th[data-sort]').forEach(th => {
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.remove();
+
+    if (th.dataset.sort !== sortKey) {
+      th.removeAttribute('aria-sort');
+      return;
+    }
+    th.setAttribute('aria-sort', sortDirection);
+    th.insertAdjacentHTML('beforeend', `<span class="sort-arrow">${sortDirection === 'ascending' ? '▲' : '▼'}</span>`);
+  });
+
+  renderItems(sorted);
+}
+
+function sortBy(key) {
+  if (key === sortKey) {
+    sortDirection = sortDirection === 'ascending' ? 'descending' : 'ascending';
+  } else {
+    sortKey = key;
+    sortDirection = key === 'name' ? 'ascending' : 'descending';
+  }
+  sortAndRender();
 }
 
 function renderDailyProfit(days) {
@@ -126,12 +170,17 @@ function renderDailyProfit(days) {
 async function load() {
   try {
     const data = await SMT.get(`/api/v1/statistics/?top=${ITEM_LIMIT}&days=${HISTORY_DAYS}`);
+    currentItems = data.items;
     renderFunnel(data.funnel);
-    renderItems(data.items);
+    sortAndRender();
     renderDailyProfit(data.daily_profit);
   } catch (e) {
     funnelEl.innerHTML = `<p class="empty">Could not load the statistics: ${escapeHtml(e.message)}</p>`;
   }
 }
+
+document.querySelectorAll('.stats-table th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => sortBy(th.dataset.sort));
+});
 
 load();

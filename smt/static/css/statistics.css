@@ -63,18 +63,13 @@
 .stats-table td {
   padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--color-border);
-  text-align: right;
+  text-align: center;
   white-space: nowrap;
 }
 
 .stats-table th {
   background: var(--color-surface-alt);
-  text-align: right;
   font-weight: 600;
-}
-
-.stats-table thead tr:first-child th[colspan] {
-  text-align: center;
 }
 
 .stats-table th.sub {
@@ -84,10 +79,32 @@
   padding-top: 0;
 }
 
-.stats-table th:first-child,
-.stats-table td:first-child {
+.stats-table .group-start {
+  border-left: 1px solid var(--color-border);
+}
+
+.stats-table thead tr:first-child th:first-child,
+.stats-table tbody td:first-child {
   text-align: left;
   white-space: normal;
+}
+
+.stats-table th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.stats-table th[data-sort]:hover {
+  color: var(--color-accent);
+}
+
+.stats-table th[aria-sort] {
+  color: var(--color-accent);
+}
+
+.sort-arrow {
+  font-size: 0.7em;
+  margin-left: 0.15rem;
 }
 
 .stats-table tbody tr:hover {
