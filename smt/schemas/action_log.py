@@ -32,3 +32,7 @@ class ActionLogEntry(BaseModel):
     message: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ActionLogPurged(BaseModel):
+    removed: int

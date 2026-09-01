@@ -11,6 +11,10 @@
   border-radius: var(--radius);
 }
 
+.filter-bar .btn {
+  margin-left: auto;
+}
+
 .filter-hint {
   color: var(--color-muted);
   font-size: 0.9rem;

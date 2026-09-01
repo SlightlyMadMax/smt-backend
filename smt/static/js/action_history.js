@@ -3,6 +3,7 @@ const REFRESH_INTERVAL = 15000;
 const body = document.getElementById('action-body');
 const levelFilter = document.getElementById('level-filter');
 const entryCount = document.getElementById('entry-count');
+const clearButton = document.getElementById('clear-history');
 
 function escapeHtml(value) {
   const div = document.createElement('div');
@@ -48,13 +49,33 @@ async function load() {
       return;
     }
     body.innerHTML = entries.map(renderRow).join('');
-    entryCount.textContent = `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}`;
+    entryCount.textContent = countLabel(entries.length);
   } catch (e) {
     renderEmpty(`Could not load the history: ${e.message}`);
   }
 }
 
+function countLabel(n) {
+  return `${n} entr${n === 1 ? 'y' : 'ies'}`;
+}
+
+async function clearHistory() {
+  if (!SMT.confirmAction('Delete every entry in the action history? This cannot be undone.')) return;
+
+  clearButton.disabled = true;
+  try {
+    const result = await SMT.remove('/api/v1/actions/');
+    SMT.notify(result.removed === 0 ? 'There was nothing to delete.' : `Deleted ${countLabel(result.removed)}.`);
+    await load();
+  } catch (e) {
+    SMT.notify(`Could not clear the history: ${e.message}`, 'error');
+  } finally {
+    clearButton.disabled = false;
+  }
+}
+
 levelFilter.addEventListener('change', load);
+clearButton.addEventListener('click', clearHistory);
 
 load();
 setInterval(load, REFRESH_INTERVAL);
