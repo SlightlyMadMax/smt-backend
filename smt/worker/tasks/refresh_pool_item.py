@@ -2,10 +2,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from smt.db.database import async_session_maker
 from smt.logger import get_logger
+from smt.repositories.action_log import ActionLogRepo
 from smt.repositories.items import ItemRepo
 from smt.repositories.pool_items import PoolRepo
 from smt.repositories.price_history import PriceHistoryRepo
 from smt.repositories.settings import SettingsRepo
+from smt.services.action_log import RETENTION, ActionLogService
 from smt.services.inventory import InventoryService
 from smt.services.market_analytics import MarketAnalyticsService
 from smt.services.pool import PoolService
@@ -19,6 +21,7 @@ from smt.worker.schedule import due
 logger = get_logger("worker.tasks")
 
 REFRESH_BATCH_SIZE = 10
+PRUNE_INTERVAL_MINUTES = 60 * 24
 
 
 async def build_services(session: AsyncSession, steam_service: SteamService):
@@ -69,6 +72,10 @@ async def refresh_periodic_task(ctx):
         try:
             stats_service, pool_repo = await build_services(session=session, steam_service=ctx["steam_service"])
             settings = await SettingsService(SettingsRepo(session)).get_settings()
+
+            if await due(ctx["redis"], "action_log", PRUNE_INTERVAL_MINUTES):
+                removed = await ActionLogService(ActionLogRepo(session)).prune()
+                logger.info(f"Removed {removed} action log entries older than {RETENTION.days} days")
 
             all_items = await pool_repo.list()
             market_hash_names = [item.market_hash_name for item in all_items]

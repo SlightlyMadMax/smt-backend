@@ -111,3 +111,34 @@ class TestActionLogService:
         action_log_service.repo.add = boom
 
         await action_log_service.record(ActionKind.CYCLE_FAILED, "anything")
+
+    async def test_purge_removes_everything(self, action_log_service, action_log_repo):
+        await action_log_repo.add(kind="a", message="one")
+        await action_log_repo.add(kind="b", message="two")
+
+        removed = await action_log_service.purge()
+
+        assert removed == 2
+        assert await action_log_repo.list() == []
+
+    async def test_purge_keeps_entries_inside_the_window(self, action_log_service, action_log_repo):
+        await action_log_repo.add(kind="a", message="recent")
+
+        assert await action_log_service.purge(timedelta(days=1)) == 0
+
+    async def test_prune_removes_only_what_aged_out(self, action_log_service, action_log_repo, db_session):
+        db_session.add(
+            ActionLog(
+                kind="a",
+                message="ancient",
+                level="info",
+                occurred_at=datetime.now(timezone.utc) - timedelta(days=40),
+            )
+        )
+        await db_session.commit()
+        await action_log_repo.add(kind="b", message="recent")
+
+        removed = await action_log_service.prune()
+
+        assert removed == 1
+        assert [e.message for e in await action_log_repo.list()] == ["recent"]

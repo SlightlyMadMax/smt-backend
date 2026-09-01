@@ -45,5 +45,8 @@ class ActionLogService:
     ) -> Sequence[ActionLog]:
         return await self.repo.list(limit=limit, level=level, market_hash_name=market_hash_name)
 
+    async def purge(self, older_than: timedelta = timedelta(0)) -> int:
+        return await self.repo.delete_before(datetime.now(UTC) - older_than)
+
     async def prune(self) -> int:
-        return await self.repo.delete_before(datetime.now(UTC) - RETENTION)
+        return await self.purge(RETENTION)
