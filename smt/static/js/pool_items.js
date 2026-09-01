@@ -209,3 +209,38 @@ async function refreshSummary() {
 }
 
 setInterval(refreshSummary, SUMMARY_INTERVAL);
+
+// ── sorting ──────────────────────────────────────────────────────────────
+const SORT_SELECTORS = {
+  name: '.item-link',
+  buy_price: '.poll-buy-price',
+  sell_price: '.poll-sell-price',
+  current_price: '.poll-current-price',
+  profit: '.poll-profit',
+  updated_at: '.poll-updated-at',
+};
+
+const poolTable = document.querySelector('.pool-table');
+const poolBody = poolTable && poolTable.querySelector('tbody');
+
+function cellValue(row, key) {
+  const cell = row.querySelector(SORT_SELECTORS[key]);
+  if (!cell) return '';
+  const text = cell.textContent.trim();
+  return text === LOADING_TEXT ? '' : text;
+}
+
+function reorderRows(key, direction) {
+  const rows = Array.from(poolBody.querySelectorAll('.pool-row'));
+  rows.sort(SMT.comparator(direction, row => cellValue(row, key)));
+
+  rows.forEach(row => {
+    const details = poolBody.querySelector(`.details-row[data-details-for="${CSS.escape(row.dataset.hash)}"]`);
+    poolBody.appendChild(row);
+    if (details) poolBody.appendChild(details);
+  });
+}
+
+if (poolBody && poolBody.querySelector('.pool-row')) {
+  SMT.sortControl(poolTable, {key: null, onChange: reorderRows});
+}
