@@ -101,7 +101,8 @@ class TestRedisRateLimiter:
 
 
 @pytest_asyncio.fixture
-async def steam_service(redis):
+async def steam_service(redis, monkeypatch):
+    monkeypatch.setattr("smt.services.steam.SESSION_KEY", f"smt:test:session:{uuid.uuid4().hex}")
     service = SteamService(get_settings())
     await redis.delete(LOGIN_BLOCK_KEY, LOGIN_FAILURES_KEY)
     yield service
