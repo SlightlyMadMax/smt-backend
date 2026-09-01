@@ -1,4 +1,4 @@
-const TOP_ITEMS = 5;
+const ITEM_LIMIT = 50;
 const HISTORY_DAYS = 30;
 const CHART_W = 900;
 const CHART_H = 180;
@@ -40,10 +40,25 @@ function renderFunnel(funnel) {
   }
 
   funnelEl.innerHTML =
-    step('Buy orders placed', funnel.opened) +
-    step('Filled', funnel.bought, funnel.fill_rate == null ? '' : `${funnel.fill_rate}% of them`) +
-    step('Sold', funnel.sold, funnel.sell_through == null ? '' : `${funnel.sell_through}% of the filled`) +
-    step('Cancelled', funnel.cancelled);
+    step(
+      'Buy orders that filled',
+      funnel.fill_rate == null ? '—' : `${funnel.fill_rate}%`,
+      `${funnel.bought} of ${funnel.opened}; the rest never got to the front of the queue`,
+    ) +
+    step(
+      'Filled positions that sold',
+      funnel.sell_through == null ? '—' : `${funnel.sell_through}%`,
+      `${funnel.sold} of ${funnel.bought}`,
+    );
+}
+
+function returnHint(item) {
+  const days = escapeHtml(item.observed_days == null ? 0 : item.observed_days);
+  if (item.actual_return_30d != null) {
+    return ` title="Measured over ${days} days, then scaled to 30."`;
+  }
+  const trades = `${item.trades} trade${item.trades === 1 ? '' : 's'}`;
+  return ` title="Too early to scale to 30 days: only ${trades} over ${days} days."`;
 }
 
 function renderItems(items) {
@@ -63,7 +78,7 @@ function renderItems(items) {
     <td class="forecast">${num(item.forecast_profit)}</td>
     <td>${num(item.median_hold_hours)}</td>
     <td class="forecast">${num(item.forecast_hold_hours)}</td>
-    <td>${signed(item.actual_return_30d)}</td>
+    <td${returnHint(item)}>${signed(item.actual_return_30d)}</td>
     <td class="forecast">${num(item.forecast_return_30d)}</td>
   </tr>`).join('');
 }
@@ -110,7 +125,7 @@ function renderDailyProfit(days) {
 
 async function load() {
   try {
-    const data = await SMT.get(`/api/v1/statistics/?top=${TOP_ITEMS}&days=${HISTORY_DAYS}`);
+    const data = await SMT.get(`/api/v1/statistics/?top=${ITEM_LIMIT}&days=${HISTORY_DAYS}`);
     renderFunnel(data.funnel);
     renderItems(data.items);
     renderDailyProfit(data.daily_profit);

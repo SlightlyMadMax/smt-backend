@@ -8,9 +8,11 @@ from smt.repositories.position import PositionRepo
 from smt.schemas.position import PositionStatus
 
 
-DEFAULT_TOP = 5
+DEFAULT_TOP = 50
 DEFAULT_DAYS = 30
 NORMALISED_DAYS = Decimal(30)
+MIN_TRADES_FOR_RETURN = 3
+MIN_OBSERVATION_DAYS = Decimal(7)
 
 
 def _percent(part: int, whole: int) -> Optional[Decimal]:
@@ -26,15 +28,29 @@ def _median_hold_hours(positions: Sequence[Position]) -> Optional[Decimal]:
     return Decimal(str(round(stats.median(holds), 1)))
 
 
-def _return_30d(profit: Decimal, capital: Decimal, positions: Sequence[Position]) -> Optional[Decimal]:
-    """Profit per unit of capital, scaled to 30 days so it lines up with the forecast."""
+def _observed_days(positions: Sequence[Position]) -> Optional[Decimal]:
+    """How long the item has actually been trading, from the first purchase to the last sale."""
     starts = [p.bought_at for p in positions if p.bought_at]
     ends = [p.sold_at for p in positions if p.sold_at]
-    if capital <= 0 or not starts or not ends:
+    if not starts or not ends:
         return None
 
-    span_days = Decimal(str(max((max(ends) - min(starts)).total_seconds() / 86400, 1.0)))
-    return (profit / capital * 100 * NORMALISED_DAYS / span_days).quantize(Decimal("0.1"))
+    return Decimal(str(round((max(ends) - min(starts)).total_seconds() / 86400, 1)))
+
+
+def _return_30d(profit: Decimal, capital: Decimal, trades: int, observed_days: Optional[Decimal]) -> Optional[Decimal]:
+    """
+    Profit per unit of capital, scaled to 30 days so it lines up with the forecast.
+
+    Scaling a short run up to 30 days multiplies its noise as well, so a run that is
+    too short or too sparse gets no number at all.
+    """
+    if capital <= 0 or observed_days is None:
+        return None
+    if trades < MIN_TRADES_FOR_RETURN or observed_days < MIN_OBSERVATION_DAYS:
+        return None
+
+    return (profit / capital * 100 * NORMALISED_DAYS / observed_days).quantize(Decimal("0.1"))
 
 
 class StatisticsService:
@@ -79,6 +95,7 @@ class StatisticsService:
             item = group[0].pool_item
             profit = sum((p.realized_profit for p in group), Decimal(0))
             capital = sum((p.buy_price for p in group), Decimal(0)) / len(group)
+            observed_days = _observed_days(group)
 
             rows.append(
                 {
@@ -90,7 +107,8 @@ class StatisticsService:
                     "avg_profit": (profit / len(group)).quantize(Decimal("0.01")),
                     "capital": capital.quantize(Decimal("0.01")),
                     "median_hold_hours": _median_hold_hours(group),
-                    "actual_return_30d": _return_30d(profit, capital, group),
+                    "observed_days": observed_days,
+                    "actual_return_30d": _return_30d(profit, capital, len(group), observed_days),
                     "forecast_profit": item.potential_profit if item else None,
                     "forecast_hold_hours": item.median_hold_hours if item else None,
                     "forecast_return_30d": item.return_on_capital_30d if item else None,

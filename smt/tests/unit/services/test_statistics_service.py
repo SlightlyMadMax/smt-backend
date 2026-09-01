@@ -183,15 +183,42 @@ class TestItems:
     async def test_return_is_scaled_to_thirty_days(self, db_session, statistics_service):
         """Ten percent earned over fifteen days is twenty percent over thirty.
 
-        The window runs from the first purchase to the last sale, so these two hold nothing.
+        The window runs from the first purchase to the last sale, so these hold nothing.
         """
         await add(
             db_session,
             closed(FAST, "10", "0.00", sold_days_ago=15, hold_hours=0),
+            closed(FAST, "10", "0.00", sold_days_ago=8, hold_hours=0),
             closed(FAST, "10", "1.00", sold_days_ago=0, hold_hours=0),
         )
 
-        assert (await statistics_service.overview())["items"][0]["actual_return_30d"] == Decimal("20.0")
+        item = (await statistics_service.overview())["items"][0]
+
+        assert item["observed_days"] == Decimal("15.0")
+        assert item["actual_return_30d"] == Decimal("20.0")
+
+    async def test_a_short_run_is_not_scaled_up(self, db_session, statistics_service):
+        """Three days of trading says nothing about thirty."""
+        await add(
+            db_session,
+            closed(FAST, "10", "1.00", sold_days_ago=3, hold_hours=0),
+            closed(FAST, "10", "1.00", sold_days_ago=2, hold_hours=0),
+            closed(FAST, "10", "1.00", sold_days_ago=0, hold_hours=0),
+        )
+
+        item = (await statistics_service.overview())["items"][0]
+
+        assert item["profit"] == Decimal("3.00")
+        assert item["actual_return_30d"] is None
+
+    async def test_too_few_trades_are_not_scaled_up(self, db_session, statistics_service):
+        await add(
+            db_session,
+            closed(FAST, "10", "1.00", sold_days_ago=20, hold_hours=0),
+            closed(FAST, "10", "1.00", sold_days_ago=0, hold_hours=0),
+        )
+
+        assert (await statistics_service.overview())["items"][0]["actual_return_30d"] is None
 
     async def test_positions_still_in_flight_are_left_out(self, db_session, statistics_service):
         await add(

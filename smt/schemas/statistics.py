@@ -23,6 +23,7 @@ class ItemPerformance(BaseModel):
     avg_profit: Decimal
     capital: Decimal
     median_hold_hours: Optional[Decimal] = None
+    observed_days: Optional[Decimal] = None
     actual_return_30d: Optional[Decimal] = None
     forecast_profit: Optional[Decimal] = None
     forecast_hold_hours: Optional[Decimal] = None
