@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ static_url('css/statistics.css') }}">
+{% endblock %}
+
+{% block title %}Statistics — Steam Market Trader{% endblock %}
+
+{% block content %}
+<h1 class="page-name">Statistics</h1>
+
+<section class="stats-section">
+  <h2 class="section-name">How far trades get</h2>
+  <div class="funnel" id="funnel">
+    <p class="empty">Loading…</p>
+  </div>
+</section>
+
+<section class="stats-section">
+  <h2 class="section-name">
+    Best items
+    <span class="section-hint">Ranked by realised profit. Forecast is what the pool predicted before the trade.</span>
+  </h2>
+  <div class="table-scroll">
+    <table class="stats-table">
+      <thead>
+        <tr>
+          <th rowspan="2">Item</th>
+          <th rowspan="2" title="Closed trades">Trades</th>
+          <th rowspan="2" title="Realised profit added up">Profit</th>
+          <th colspan="2">Profit per trade</th>
+          <th colspan="2">Hold, h</th>
+          <th colspan="2">Return, % / 30d</th>
+        </tr>
+        <tr>
+          <th class="sub">actual</th>
+          <th class="sub">forecast</th>
+          <th class="sub">actual</th>
+          <th class="sub">forecast</th>
+          <th class="sub">actual</th>
+          <th class="sub">forecast</th>
+        </tr>
+      </thead>
+      <tbody id="items-body">
+        <tr><td colspan="9" class="empty">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="stats-section">
+  <h2 class="section-name">
+    Realised profit by day
+    <span class="section-hint">Counted on the day the position closed.</span>
+  </h2>
+  <div id="daily-profit">
+    <p class="empty">Loading…</p>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ static_url('js/statistics.js') }}" defer></script>
+{% endblock %}

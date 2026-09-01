@@ -1,0 +1,144 @@
+.stats-section {
+  margin: 0 var(--gap) 2rem;
+}
+
+.section-name {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+  font-size: 1.1rem;
+  margin-bottom: var(--gap-sm);
+}
+
+.section-hint {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.funnel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--gap);
+}
+
+.funnel-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--gap);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-alt);
+}
+
+.funnel-step.derived {
+  background: var(--color-surface);
+  border-style: dashed;
+}
+
+.funnel-label {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.funnel-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.funnel-note {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stats-table th {
+  background: var(--color-surface-alt);
+  text-align: right;
+  font-weight: 600;
+}
+
+.stats-table th.sub {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.stats-table th:first-child,
+.stats-table td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+
+.stats-table tbody tr:hover {
+  background: var(--color-surface-alt);
+}
+
+.stats-table .forecast {
+  color: var(--color-muted);
+}
+
+.item-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+.item-cell img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.positive {
+  color: var(--color-positive-text);
+}
+
+.negative {
+  color: var(--color-negative-text);
+}
+
+.profit-chart {
+  width: 100%;
+  max-width: 900px;
+  height: auto;
+}
+
+.profit-chart .bar-positive {
+  fill: var(--color-success);
+}
+
+.profit-chart .bar-negative {
+  fill: var(--color-danger);
+}
+
+.profit-chart .chart-axis {
+  fill: var(--color-muted);
+  font-size: 10px;
+}
+
+.profit-chart .zero-line {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.empty {
+  padding: var(--gap);
+  color: var(--color-muted);
+  text-align: center;
+}
