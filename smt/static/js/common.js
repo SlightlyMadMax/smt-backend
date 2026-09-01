@@ -59,6 +59,83 @@
     return global.confirm(message);
   }
 
+  function comparator(direction, valueOf) {
+    const sign = direction === 'ascending' ? 1 : -1;
+    return (a, b) => {
+      const left = valueOf(a);
+      const right = valueOf(b);
+      const leftMissing = left == null || left === '';
+      const rightMissing = right == null || right === '';
+
+      if (leftMissing && rightMissing) return 0;
+      if (leftMissing) return 1;
+      if (rightMissing) return -1;
+
+      const leftNumber = Number(left);
+      const rightNumber = Number(right);
+      if (!Number.isNaN(leftNumber) && !Number.isNaN(rightNumber)) return sign * (leftNumber - rightNumber);
+      return sign * String(left).localeCompare(String(right));
+    };
+  }
+
+  function sortControl(table, {key = null, direction = 'descending', onChange}) {
+    const headers = Array.from(table.querySelectorAll('th[data-sort]'));
+    let current = {key, direction};
+
+    function paint() {
+      headers.forEach(th => {
+        const arrow = th.querySelector('.sort-arrow');
+        if (arrow) arrow.remove();
+
+        if (th.dataset.sort !== current.key) {
+          th.removeAttribute('aria-sort');
+          return;
+        }
+        th.setAttribute('aria-sort', current.direction);
+        th.insertAdjacentHTML(
+          'beforeend',
+          `<span class="sort-arrow" aria-hidden="true">${current.direction === 'ascending' ? '▲' : '▼'}</span>`,
+        );
+      });
+    }
+
+    function pick(next, fallback) {
+      if (next === current.key) {
+        current = {key: next, direction: current.direction === 'ascending' ? 'descending' : 'ascending'};
+      } else {
+        current = {key: next, direction: fallback || 'descending'};
+      }
+      paint();
+      onChange(current.key, current.direction);
+    }
+
+    headers.forEach(th => {
+      th.tabIndex = 0;
+      th.setAttribute('role', 'button');
+      th.addEventListener('click', () => pick(th.dataset.sort, th.dataset.sortDefault));
+      th.addEventListener('keydown', ev => {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        ev.preventDefault();
+        pick(th.dataset.sort, th.dataset.sortDefault);
+      });
+    });
+
+    paint();
+
+    return {
+      get key() {
+        return current.key;
+      },
+      get direction() {
+        return current.direction;
+      },
+      sort(rows, valueOf) {
+        if (!current.key) return rows.slice();
+        return rows.slice().sort(comparator(current.direction, valueOf || (row => row[current.key])));
+      },
+    };
+  }
+
   global.SMT = {
     request,
     get: (url) => request(url),
@@ -67,6 +144,8 @@
     remove: (url, body) => request(url, {method: 'DELETE', body}),
     notify,
     confirmAction,
+    comparator,
+    sortControl,
   };
 })(window);
 

@@ -347,3 +347,35 @@ button:disabled,
 .wallet.wallet-stale strong {
   opacity: 0.5;
 }
+
+th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+
+th[data-sort]:hover {
+  color: var(--color-accent);
+}
+
+th[aria-sort] {
+  color: var(--color-accent);
+}
+
+.sort-arrow {
+  font-size: 0.7em;
+  margin-left: 0.15rem;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-sm);
+  margin: var(--gap-sm) var(--gap);
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.pager[hidden] {
+  display: none;
+}

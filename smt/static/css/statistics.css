@@ -89,24 +89,6 @@
   white-space: normal;
 }
 
-.stats-table th[data-sort] {
-  cursor: pointer;
-  user-select: none;
-}
-
-.stats-table th[data-sort]:hover {
-  color: var(--color-accent);
-}
-
-.stats-table th[aria-sort] {
-  color: var(--color-accent);
-}
-
-.sort-arrow {
-  font-size: 0.7em;
-  margin-left: 0.15rem;
-}
-
 .stats-table tbody tr:hover {
   background: var(--color-surface-alt);
 }

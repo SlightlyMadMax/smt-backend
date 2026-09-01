@@ -9,9 +9,12 @@ const funnelEl = document.getElementById('funnel');
 const itemsBody = document.getElementById('items-body');
 const dailyEl = document.getElementById('daily-profit');
 
+const sorting = SMT.sortControl(document.querySelector('.stats-table'), {
+  key: 'profit',
+  onChange: () => sortAndRender(),
+});
+
 let currentItems = [];
-let sortKey = 'profit';
-let sortDirection = 'descending';
 
 function escapeHtml(value) {
   const div = document.createElement('div');
@@ -87,44 +90,8 @@ function renderItems(items) {
   </tr>`).join('');
 }
 
-function compare(a, b, key) {
-  const left = a[key];
-  const right = b[key];
-  if (left == null && right == null) return 0;
-  if (left == null) return 1;
-  if (right == null) return -1;
-  return key === 'name' ? String(left).localeCompare(String(right)) : Number(left) - Number(right);
-}
-
 function sortAndRender() {
-  const sorted = [...currentItems].sort((a, b) => {
-    const result = compare(a, b, sortKey);
-    return sortDirection === 'ascending' ? result : -result;
-  });
-
-  document.querySelectorAll('.stats-table th[data-sort]').forEach(th => {
-    const arrow = th.querySelector('.sort-arrow');
-    if (arrow) arrow.remove();
-
-    if (th.dataset.sort !== sortKey) {
-      th.removeAttribute('aria-sort');
-      return;
-    }
-    th.setAttribute('aria-sort', sortDirection);
-    th.insertAdjacentHTML('beforeend', `<span class="sort-arrow">${sortDirection === 'ascending' ? '▲' : '▼'}</span>`);
-  });
-
-  renderItems(sorted);
-}
-
-function sortBy(key) {
-  if (key === sortKey) {
-    sortDirection = sortDirection === 'ascending' ? 'descending' : 'ascending';
-  } else {
-    sortKey = key;
-    sortDirection = key === 'name' ? 'ascending' : 'descending';
-  }
-  sortAndRender();
+  renderItems(sorting.sort(currentItems));
 }
 
 function renderDailyProfit(days) {
@@ -178,9 +145,5 @@ async function load() {
     funnelEl.innerHTML = `<p class="empty">Could not load the statistics: ${escapeHtml(e.message)}</p>`;
   }
 }
-
-document.querySelectorAll('.stats-table th[data-sort]').forEach(th => {
-  th.addEventListener('click', () => sortBy(th.dataset.sort));
-});
 
 load();
