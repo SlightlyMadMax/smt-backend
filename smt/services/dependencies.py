@@ -16,6 +16,7 @@ from smt.services.pool import PoolService
 from smt.services.position import PositionService
 from smt.services.price_history import PriceHistoryService
 from smt.services.settings import SettingsService
+from smt.services.statistics import StatisticsService
 from smt.services.stats_refresh import StatsRefreshService
 from smt.services.steam import SteamService
 
@@ -80,3 +81,7 @@ def get_position_service(position_repo=Depends(get_position_repo)) -> PositionSe
 
 def get_action_log_service(repo=Depends(get_action_log_repo)) -> ActionLogService:
     return ActionLogService(repo)
+
+
+def get_statistics_service(position_repo=Depends(get_position_repo)) -> StatisticsService:
+    return StatisticsService(position_repo)

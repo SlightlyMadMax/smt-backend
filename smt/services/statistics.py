@@ -1,0 +1,116 @@
+import statistics as stats
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import Dict, List, Optional, Sequence
+
+from smt.db.models import Position
+from smt.repositories.position import PositionRepo
+from smt.schemas.position import PositionStatus
+
+
+DEFAULT_TOP = 5
+DEFAULT_DAYS = 30
+NORMALISED_DAYS = Decimal(30)
+
+
+def _percent(part: int, whole: int) -> Optional[Decimal]:
+    if whole <= 0:
+        return None
+    return (Decimal(part) / Decimal(whole) * 100).quantize(Decimal("0.1"))
+
+
+def _median_hold_hours(positions: Sequence[Position]) -> Optional[Decimal]:
+    holds = [(p.sold_at - p.bought_at).total_seconds() / 3600 for p in positions if p.sold_at and p.bought_at]
+    if not holds:
+        return None
+    return Decimal(str(round(stats.median(holds), 1)))
+
+
+def _return_30d(profit: Decimal, capital: Decimal, positions: Sequence[Position]) -> Optional[Decimal]:
+    """Profit per unit of capital, scaled to 30 days so it lines up with the forecast."""
+    starts = [p.bought_at for p in positions if p.bought_at]
+    ends = [p.sold_at for p in positions if p.sold_at]
+    if capital <= 0 or not starts or not ends:
+        return None
+
+    span_days = Decimal(str(max((max(ends) - min(starts)).total_seconds() / 86400, 1.0)))
+    return (profit / capital * 100 * NORMALISED_DAYS / span_days).quantize(Decimal("0.1"))
+
+
+class StatisticsService:
+    """Aggregates closed positions into per item performance the position list cannot show."""
+
+    def __init__(self, repo: PositionRepo):
+        self.repo = repo
+
+    async def overview(self, top: int = DEFAULT_TOP, days: int = DEFAULT_DAYS) -> dict:
+        positions = await self.repo.list()
+        closed = [p for p in positions if p.status == PositionStatus.CLOSED and p.realized_profit is not None]
+
+        return {
+            "funnel": self._funnel(positions),
+            "items": self._by_item(closed)[:top],
+            "daily_profit": self._daily_profit(closed, days),
+        }
+
+    @staticmethod
+    def _funnel(positions: Sequence[Position]) -> dict:
+        opened = len(positions)
+        bought = sum(1 for p in positions if p.bought_at is not None)
+        sold = sum(1 for p in positions if p.sold_at is not None)
+
+        return {
+            "opened": opened,
+            "bought": bought,
+            "sold": sold,
+            "cancelled": sum(1 for p in positions if p.status == PositionStatus.CANCELLED),
+            "fill_rate": _percent(bought, opened),
+            "sell_through": _percent(sold, bought),
+        }
+
+    @staticmethod
+    def _by_item(closed: Sequence[Position]) -> List[dict]:
+        groups: Dict[str, List[Position]] = {}
+        for position in closed:
+            groups.setdefault(position.pool_item_hash, []).append(position)
+
+        rows = []
+        for market_hash_name, group in groups.items():
+            item = group[0].pool_item
+            profit = sum((p.realized_profit for p in group), Decimal(0))
+            capital = sum((p.buy_price for p in group), Decimal(0)) / len(group)
+
+            rows.append(
+                {
+                    "market_hash_name": market_hash_name,
+                    "name": item.name if item else market_hash_name,
+                    "icon_url": item.icon_url if item else "",
+                    "trades": len(group),
+                    "profit": profit.quantize(Decimal("0.01")),
+                    "avg_profit": (profit / len(group)).quantize(Decimal("0.01")),
+                    "capital": capital.quantize(Decimal("0.01")),
+                    "median_hold_hours": _median_hold_hours(group),
+                    "actual_return_30d": _return_30d(profit, capital, group),
+                    "forecast_profit": item.potential_profit if item else None,
+                    "forecast_hold_hours": item.median_hold_hours if item else None,
+                    "forecast_return_30d": item.return_on_capital_30d if item else None,
+                }
+            )
+
+        rows.sort(key=lambda row: row["profit"], reverse=True)
+        return rows
+
+    @staticmethod
+    def _daily_profit(closed: Sequence[Position], days: int) -> List[dict]:
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).date()
+        totals: Dict[object, Decimal] = {}
+
+        for position in closed:
+            if not position.sold_at:
+                continue
+            day = position.sold_at.date()
+            if day < cutoff:
+                continue
+            totals[day] = totals.get(day, Decimal(0)) + position.realized_profit
+
+        return [{"day": day, "profit": totals[day].quantize(Decimal("0.01"))} for day in sorted(totals)]

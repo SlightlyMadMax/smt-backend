@@ -5,4 +5,5 @@ from smt.api.v1.routes.pool import router as pool_router
 from smt.api.v1.routes.positions import router as positions_router
 from smt.api.v1.routes.price_history import router as price_history_router
 from smt.api.v1.routes.settings import router as settings_router
+from smt.api.v1.routes.statistics import router as statistics_router
 from smt.api.v1.routes.steam import router as steam_router
