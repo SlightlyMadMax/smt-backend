@@ -243,16 +243,33 @@ class TradingService:
         self,
         listings: List,
     ) -> None:
-        """Mark LISTED positions as CLOSED when sell orders disappear."""
+        """
+        Close LISTED positions that Steam's own history confirms were sold.
+
+        A listing missing from the response is not evidence of a sale: a failed fetch looks
+        exactly the same and would book invented profit on every listed position at once.
+        """
         listed_positions = await self.position_service.list_by_status(PositionStatus.LISTED)
+        if not listed_positions:
+            return
+
+        history = await self.steam_service.get_sold_listings()
+        sold = history["sold"]
         active_listing_ids = {li.get("listing_id") for li in listings}
+
         for pos in listed_positions:
             if not pos.sell_order_id:
                 logger.warning(f"Position {pos.id} is LISTED without a listing id, skipping.")
                 continue
-            if pos.sell_order_id not in active_listing_ids:
-                logger.info(f"Sell order {pos.sell_order_id} for Position {pos.id} disappeared, closing position.")
-                closed = await self.position_service.close(position_id=pos.id)
+
+            sale = sold.get(pos.sell_order_id)
+            if sale:
+                closed = await self.position_service.close(
+                    position_id=pos.id,
+                    sold_at=sale["sold_at"],
+                    net_proceeds=sale["net_proceeds"],
+                )
+                logger.info(f"Steam history confirms listing {pos.sell_order_id} sold, closing position {pos.id}.")
                 await self.action_log.record(
                     ActionKind.POSITION_CLOSED,
                     f"Sold at {closed.sell_price}, received {closed.net_proceeds}, "
@@ -260,6 +277,27 @@ class TradingService:
                     market_hash_name=pos.pool_item_hash,
                     position_id=pos.id,
                 )
+                continue
+
+            if pos.sell_order_id not in active_listing_ids:
+                await self._report_vanished_listing(pos, history["oldest_event_at"])
+
+    async def _report_vanished_listing(self, pos, oldest_event_at) -> None:
+        """The listing is neither on the market nor in the sale history, so leave it alone."""
+        listed_at = getattr(pos, "listed_at", None)
+        if oldest_event_at is not None and listed_at is not None and oldest_event_at > listed_at:
+            reason = "the sale history does not reach back far enough to tell"
+        else:
+            reason = "Steam reports neither an active listing nor a sale"
+
+        logger.warning(f"Listing {pos.sell_order_id} for position {pos.id} is unaccounted for: {reason}.")
+        await self.action_log.record(
+            ActionKind.LISTING_VANISHED,
+            f"Listing {pos.sell_order_id} is gone but no sale is recorded: {reason}. Left as listed.",
+            level=ActionLevel.WARNING,
+            market_hash_name=pos.pool_item_hash,
+            position_id=pos.id,
+        )
 
     async def _open_new_positions(self) -> None:
         """Submit new buy orders for PoolItems flagged for trading, within the configured limits."""

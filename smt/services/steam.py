@@ -27,6 +27,8 @@ logger = get_logger("services.steam")
 STEAM_COMMUNITY_URL = "https://steamcommunity.com"
 ORDER_BOOK_TIMEOUT = 30
 ACCOUNT_CURRENCY = Currency.RUB
+SOLD_EVENT_TYPE = 3
+MARKET_HISTORY_PAGE = 100
 RATE_LIMIT_KEY = "smt:steam:calls"
 LOGIN_BLOCK_KEY = "smt:steam:login_block"
 LOGIN_FAILURES_KEY = "smt:steam:login_failures"
@@ -356,6 +358,45 @@ class SteamService:
         )
         resp.raise_for_status()
         return resp.json()
+
+    @requires_login
+    @throttled
+    async def get_sold_listings(self, count: int = MARKET_HISTORY_PAGE) -> dict:
+        """Listings Steam's own history reports as sold, keyed by listing id."""
+        logger.debug("Fetching market history.")
+        resp = await to_thread.run_sync(
+            partial(
+                self.client._session.get,
+                f"{STEAM_COMMUNITY_URL}/market/myhistory",
+                params={"norender": 1, "start": 0, "count": count},
+                timeout=ORDER_BOOK_TIMEOUT,
+            )
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        purchases = data.get("purchases") or {}
+        sold = {}
+        oldest = None
+
+        for event in data.get("events") or []:
+            occurred = datetime.datetime.fromtimestamp(event["time_event"], datetime.UTC)
+            oldest = occurred if oldest is None else min(oldest, occurred)
+
+            if event.get("event_type") != SOLD_EVENT_TYPE:
+                continue
+
+            purchase = purchases.get(f"{event['listingid']}_{event.get('purchaseid')}") or {}
+            if purchase.get("failed") or purchase.get("needs_rollback"):
+                continue
+
+            received = purchase.get("received_amount")
+            sold[str(event["listingid"])] = {
+                "sold_at": occurred,
+                "net_proceeds": _from_minor_units(received),
+            }
+
+        return {"sold": sold, "oldest_event_at": oldest}
 
     @requires_login
     @throttled

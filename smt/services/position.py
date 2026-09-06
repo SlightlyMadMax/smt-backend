@@ -84,6 +84,7 @@ class PositionService:
         self,
         position_id: int,
         sold_at: Optional[datetime] = None,
+        net_proceeds: Optional[Decimal] = None,
     ) -> Position:
         """Transition a LISTED Position to CLOSED and record what the sale returned."""
         pos = await self.get(position_id)
@@ -91,7 +92,8 @@ class PositionService:
             raise ValueError("Can only close positions that are LISTED")
 
         sold_at = sold_at or datetime.now(timezone.utc)
-        net_proceeds = net_received(pos.sell_price)
+        if net_proceeds is None:
+            net_proceeds = net_received(pos.sell_price)
 
         update_data = PositionUpdate(
             status=PositionStatus.CLOSED.value,

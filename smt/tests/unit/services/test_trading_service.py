@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from smt.exceptions import OrderBookUnavailable
+from smt.schemas.action_log import ActionKind
 from smt.schemas.position import PositionStatus
 from smt.services.trading import CANCEL_GRACE_PERIOD, TradingService
 
@@ -82,6 +83,11 @@ def trading_service(position_service):
     return service
 
 
+@pytest.fixture
+def action_log(trading_service):
+    return trading_service.action_log
+
+
 @pytest.mark.asyncio
 class TestResolvePendingListings:
     async def test_matches_listing_by_asset_id(self, trading_service, position_service):
@@ -123,28 +129,79 @@ class TestResolvePendingListings:
 
 @pytest.mark.asyncio
 class TestSyncListedToClosed:
+    @staticmethod
+    def listed(trading_service, position_service, **kwargs):
+        position = make_position(1, PositionStatus.LISTED, asset_id="ASSET-1", sell_order_id="LISTING-9")
+        position.listed_at = NOW - timedelta(hours=2)
+        position_service.list_by_status.return_value = [position]
+        trading_service.steam_service.get_sold_listings.return_value = {
+            "sold": {},
+            "oldest_event_at": NOW - timedelta(days=7),
+            **kwargs,
+        }
+        return position
+
     async def test_keeps_position_while_listing_is_active(self, trading_service, position_service):
-        position_service.list_by_status.return_value = [
-            make_position(1, PositionStatus.LISTED, asset_id="ASSET-1", sell_order_id="LISTING-9")
-        ]
+        self.listed(trading_service, position_service)
 
         await trading_service._sync_listed_to_closed([make_listing("LISTING-9", "ASSET-1")])
 
         position_service.close.assert_not_awaited()
 
-    async def test_closes_position_when_listing_is_gone(self, trading_service, position_service):
-        position_service.list_by_status.return_value = [
-            make_position(1, PositionStatus.LISTED, asset_id="ASSET-1", sell_order_id="LISTING-9")
-        ]
+    async def test_a_missing_listing_alone_is_not_a_sale(self, trading_service, position_service):
+        """A failed fetch looks exactly like every listing selling at once."""
+        self.listed(trading_service, position_service)
 
         await trading_service._sync_listed_to_closed([])
 
-        position_service.close.assert_awaited_once_with(position_id=1)
+        position_service.close.assert_not_awaited()
+
+    async def test_an_unaccounted_listing_is_reported(self, trading_service, position_service, action_log):
+        self.listed(trading_service, position_service)
+
+        await trading_service._sync_listed_to_closed([])
+
+        action_log.record.assert_awaited_once()
+        assert action_log.record.await_args.args[0] == ActionKind.LISTING_VANISHED
+
+    async def test_closes_when_the_history_confirms_the_sale(self, trading_service, position_service):
+        sold_at = NOW - timedelta(minutes=5)
+        self.listed(
+            trading_service,
+            position_service,
+            sold={"LISTING-9": {"sold_at": sold_at, "net_proceeds": Decimal("12.85")}},
+        )
+
+        await trading_service._sync_listed_to_closed([])
+
+        position_service.close.assert_awaited_once_with(position_id=1, sold_at=sold_at, net_proceeds=Decimal("12.85"))
+
+    async def test_the_sale_wins_even_if_the_listing_still_shows(self, trading_service, position_service):
+        """Steam can keep showing a listing for a moment after it sells."""
+        self.listed(
+            trading_service,
+            position_service,
+            sold={"LISTING-9": {"sold_at": NOW, "net_proceeds": Decimal("12.85")}},
+        )
+
+        await trading_service._sync_listed_to_closed([make_listing("LISTING-9", "ASSET-1")])
+
+        position_service.close.assert_awaited_once()
+
+    async def test_says_so_when_the_history_does_not_reach_back(self, trading_service, position_service, action_log):
+        position = self.listed(trading_service, position_service)
+        position.listed_at = NOW - timedelta(days=30)
+        trading_service.steam_service.get_sold_listings.return_value["oldest_event_at"] = NOW - timedelta(hours=1)
+
+        await trading_service._sync_listed_to_closed([])
+
+        assert "does not reach back" in action_log.record.await_args.args[1]
 
     async def test_skips_position_without_listing_id(self, trading_service, position_service):
         position_service.list_by_status.return_value = [
             make_position(1, PositionStatus.LISTED, asset_id="ASSET-1", sell_order_id=None)
         ]
+        trading_service.steam_service.get_sold_listings.return_value = {"sold": {}, "oldest_event_at": None}
 
         await trading_service._sync_listed_to_closed([])
 
