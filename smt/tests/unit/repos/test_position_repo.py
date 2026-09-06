@@ -9,6 +9,7 @@ from smt.db.models import PoolItem, Position
 from smt.repositories.position import PositionRepo
 from smt.schemas.position import PositionCreate, PositionSortKey, PositionStatus, PositionUpdate, SortOrder
 from smt.services.position import PositionService
+from smt.utils.steam import FeeSchedule, get_fee_schedule, set_fee_schedule
 
 
 ITEM_HASH = "AK-47 | Redline (Field-Tested)"
@@ -17,6 +18,15 @@ ITEM_HASH = "AK-47 | Redline (Field-Tested)"
 @pytest_asyncio.fixture
 def position_repo(db_session) -> PositionRepo:
     return PositionRepo(db_session)
+
+
+@pytest_asyncio.fixture(autouse=True)
+def pinned_fee_schedule():
+    """The proceeds below assume Steam's current 86 kopeck minimum fee."""
+    original = get_fee_schedule()
+    set_fee_schedule(FeeSchedule(minimum=86))
+    yield
+    set_fee_schedule(original)
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -121,8 +131,8 @@ class TestRealizedProfit:
 
         closed = await position_service.close(position.id)
 
-        assert closed.net_proceeds == Decimal("13.05")
-        assert closed.realized_profit == Decimal("3.05")
+        assert closed.net_proceeds == Decimal("12.85")
+        assert closed.realized_profit == Decimal("2.85")
 
     async def test_proceeds_are_below_what_the_buyer_paid(self, position_service, position):
         await bring_to_listed(position_service, position)
@@ -130,7 +140,7 @@ class TestRealizedProfit:
         closed = await position_service.close(position.id)
 
         assert closed.net_proceeds < closed.sell_price
-        assert closed.net_proceeds + Decimal("1.95") == closed.sell_price
+        assert closed.net_proceeds + Decimal("2.15") == closed.sell_price
 
     async def test_realized_profit_sums_only_closed_positions(self, position_service, position_repo, position):
         await bring_to_listed(position_service, position)
@@ -148,7 +158,7 @@ class TestRealizedProfit:
 
         total = await position_service.realized_profit_since(datetime(2000, 1, 1, tzinfo=timezone.utc))
 
-        assert total == Decimal("3.05")
+        assert total == Decimal("2.85")
 
     async def test_realized_profit_respects_the_window(self, position_service, position):
         await bring_to_listed(position_service, position)

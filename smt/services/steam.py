@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import json
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -18,7 +19,7 @@ from smt.core.config import Settings
 from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed, SteamLoginUnavailable
 from smt.logger import get_logger
 from smt.utils.rate_limit import RedisRateLimiter
-from smt.utils.steam import calculate_fees, parse_steam_ts
+from smt.utils.steam import FeeSchedule, calculate_fees, parse_steam_ts, set_fee_schedule
 
 
 logger = get_logger("services.steam")
@@ -31,9 +32,12 @@ LOGIN_BLOCK_KEY = "smt:steam:login_block"
 LOGIN_FAILURES_KEY = "smt:steam:login_failures"
 LOGIN_LOCK_KEY = "smt:steam:login_lock"
 SESSION_KEY = "smt:steam:session"
+FEE_SCHEDULE_KEY = "smt:steam:fee_schedule"
 LOGIN_LOCK_TTL = 60
 LOGIN_LOCK_WAIT = 90
 SESSION_TTL = 60 * 60 * 12
+FEE_SCHEDULE_TTL = 60 * 60 * 24
+WALLET_INFO_PATTERN = re.compile(r"g_rgWalletInfo\s*=\s*(\{.*?\});", re.S)
 STEAM_MAX_CALLS_PER_PERIOD = 15
 STEAM_RATE_LIMIT_PERIOD = 60.0
 LOGIN_COOLDOWN_BASE = datetime.timedelta(minutes=5)
@@ -192,7 +196,51 @@ class SteamService:
         assert self.client.was_login_executed
         logger.info("Steam login successful.")
 
+    def _schedule_from(self, info: dict) -> FeeSchedule:
+        return FeeSchedule(
+            steam_percent=Decimal(str(info["wallet_fee_percent"])),
+            publisher_percent=Decimal(str(info["wallet_publisher_fee_percent_default"])),
+            minimum=int(info["wallet_fee_minimum"]),
+            base=int(info["wallet_fee_base"]),
+        )
+
+    async def _load_fee_schedule(self) -> None:
+        """Steam publishes its fee parameters on the market page; they are not constants."""
+        cached = await self._redis.get(FEE_SCHEDULE_KEY)
+        if cached:
+            set_fee_schedule(self._schedule_from(json.loads(cached)))
+            return
+
+        try:
+            await self._limiter.acquire()
+            resp = await to_thread.run_sync(
+                partial(self.client._session.get, f"{STEAM_COMMUNITY_URL}/market/", timeout=ORDER_BOOK_TIMEOUT)
+            )
+            match = WALLET_INFO_PATTERN.search(resp.text)
+            if not match:
+                logger.warning("Steam did not include g_rgWalletInfo, keeping the current fee schedule.")
+                return
+
+            info = json.loads(match.group(1))
+            wanted = {
+                key: info[key]
+                for key in (
+                    "wallet_fee_percent",
+                    "wallet_publisher_fee_percent_default",
+                    "wallet_fee_minimum",
+                    "wallet_fee_base",
+                )
+            }
+            set_fee_schedule(self._schedule_from(wanted))
+            await self._redis.set(FEE_SCHEDULE_KEY, json.dumps(wanted), ex=FEE_SCHEDULE_TTL)
+        except Exception as e:
+            logger.warning(f"Could not read the Steam fee schedule: {e!r}")
+
     async def _ensure_login(self) -> None:
+        await self._establish_session()
+        await self._load_fee_schedule()
+
+    async def _establish_session(self) -> None:
         """Make sure a usable Steam session is in place."""
         if not self._should_check_login():
             return
