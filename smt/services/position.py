@@ -51,13 +51,22 @@ class PositionService:
             "realized_profit_total": await self.repo.realized_profit_total(),
         }
 
-    async def mark_as_bought(self, position_id: int, asset_id: str, bought_at: Optional[datetime] = None) -> Position:
-        """Transition a Position from OPEN to BOUGHT."""
+    async def mark_as_bought(
+        self,
+        position_id: int,
+        asset_id: str,
+        bought_at: Optional[datetime] = None,
+        buy_price: Optional[Decimal] = None,
+    ) -> Position:
+        """Transition a Position from OPEN to BOUGHT, recording what it actually cost."""
         pos = await self.get(position_id)
         if pos.status != PositionStatus.OPEN:
             raise ValueError("Can only mark OPEN positions as BOUGHT")
         bought_at = bought_at or datetime.now(timezone.utc)
-        update_data = PositionUpdate(asset_id=asset_id, status=PositionStatus.BOUGHT.value, bought_at=bought_at)
+        fields = {"asset_id": asset_id, "status": PositionStatus.BOUGHT.value, "bought_at": bought_at}
+        if buy_price is not None:
+            fields["buy_price"] = buy_price
+        update_data = PositionUpdate(**fields)
         pos = await self.repo.update(position_id, update_data)
         return pos
 

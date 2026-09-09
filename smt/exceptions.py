@@ -18,6 +18,10 @@ class SteamOperationFailed(SMTError):
     """Steam accepted the request but reported a failure."""
 
 
+class BuyOrderStatusUnavailable(SteamOperationFailed):
+    """Steam would not say what became of a buy order."""
+
+
 class BuyOrderFailed(SteamOperationFailed):
     pass
 

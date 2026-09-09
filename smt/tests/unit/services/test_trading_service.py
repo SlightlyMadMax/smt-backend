@@ -78,6 +78,7 @@ def trading_service(position_service):
     )
     service.settings_service.get_settings.return_value = make_settings()
     service.steam_service.get_wallet_balance.return_value = Decimal("1000.00")
+    service.steam_service.get_buy_order_status.return_value = make_order_status()
     position_service.realized_profit_since.return_value = Decimal("0")
     position_service.last_loss_at.return_value = None
     return service
@@ -232,7 +233,7 @@ class TestSyncOpenToBought:
 
         await trading_service._sync_open_to_bought(assets, buy_orders=[])
 
-        position_service.mark_as_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-1")
+        position_service.mark_as_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-1", buy_price=None)
         position_service.mark_as_cancelled.assert_not_awaited()
 
     async def test_never_claims_an_asset_owned_before_the_position(self, trading_service, position_service):
@@ -290,6 +291,17 @@ def make_pool_item(buy=Decimal("6.00"), sell=Decimal("7.77"), max_listed=1, name
 def make_pool_items(count: int, **kwargs):
     """Steam takes one buy order per item, so several orders means several items."""
     return [make_pool_item(name=f"Item {n}", **kwargs) for n in range(count)]
+
+
+def make_order_status(active=False, purchased=1, paid=None):
+    return {
+        "active": active,
+        "purchased": purchased,
+        "quantity": 1,
+        "quantity_remaining": 1 - purchased,
+        "paid": paid,
+        "purchases": [],
+    }
 
 
 def make_book(lowest_ask, highest_bid=Decimal("6.68")):
@@ -763,3 +775,53 @@ class TestRecoveringACancelledListing:
         await trading_service._resolve_pending_listings([], assets)
 
         position_service.revert_to_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-ASSET")
+
+
+@pytest.mark.asyncio
+class TestBuyOrderStatus:
+    """Steam can say directly whether an order filled, instead of us inferring it."""
+
+    @staticmethod
+    def open_position(position_service, asset=None):
+        position_service.list_by_status.return_value = [make_position(1, PositionStatus.OPEN)]
+        position_service.list.return_value = []
+        return {GAME_KEY: {ITEM_HASH: [make_asset(asset, NOW)]}} if asset else {}
+
+    async def test_an_order_still_open_is_left_alone(self, trading_service, position_service):
+        assets = self.open_position(position_service)
+        trading_service.steam_service.get_buy_order_status.return_value = make_order_status(active=True, purchased=0)
+
+        await trading_service._sync_open_to_bought(assets, [])
+
+        position_service.mark_as_bought.assert_not_awaited()
+        position_service.mark_as_cancelled.assert_not_awaited()
+
+    async def test_a_cancelled_order_is_closed_without_waiting(self, trading_service, position_service):
+        """Steam saying so beats the grace period."""
+        position_service.list_by_status.return_value = [make_position(1, PositionStatus.OPEN, created_at=NOW)]
+        position_service.list.return_value = []
+        trading_service.steam_service.get_buy_order_status.return_value = make_order_status(active=False, purchased=0)
+
+        await trading_service._sync_open_to_bought({}, [])
+
+        position_service.mark_as_cancelled.assert_awaited_once_with(position_id=1)
+
+    async def test_the_price_steam_reports_is_recorded(self, trading_service, position_service):
+        assets = self.open_position(position_service, asset="NEW-1")
+        trading_service.steam_service.get_buy_order_status.return_value = make_order_status(
+            purchased=1, paid=Decimal("3.08")
+        )
+
+        await trading_service._sync_open_to_bought(assets, [])
+
+        position_service.mark_as_bought.assert_awaited_once_with(
+            position_id=1, asset_id="NEW-1", buy_price=Decimal("3.08")
+        )
+
+    async def test_a_failed_status_call_does_not_stop_the_cycle(self, trading_service, position_service):
+        assets = self.open_position(position_service, asset="NEW-1")
+        trading_service.steam_service.get_buy_order_status.side_effect = RuntimeError("steam is down")
+
+        await trading_service._sync_open_to_bought(assets, [])
+
+        position_service.mark_as_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-1", buy_price=None)

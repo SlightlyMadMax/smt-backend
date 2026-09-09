@@ -35,6 +35,7 @@ class PositionCreate(PositionBase):
 
 class PositionUpdate(BaseModel):
     asset_id: Optional[str] = None
+    buy_price: Optional[Decimal] = None
     net_proceeds: Optional[Decimal] = None
     realized_profit: Optional[Decimal] = None
     sell_order_id: Optional[str] = None

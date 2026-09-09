@@ -141,9 +141,15 @@ class TradingService:
             if pos.buy_order_id in active_buy_order_ids:
                 continue
 
+            status = await self._buy_order_status(pos)
+            if status and status["active"] and not status["purchased"]:
+                logger.info(f"Buy order {pos.buy_order_id} is still open on Steam, leaving position {pos.id} alone.")
+                continue
+
             candidate = self._unclaimed_asset(assets, pos, claimed)
 
             if candidate:
+                paid = status["paid"] if status else None
                 logger.info(
                     f"Buy order {pos.buy_order_id} disappeared and item {candidate.id} acquired at "
                     f"{candidate.first_seen_at} was found for Position {pos.id}. Marking it as BOUGHT."
@@ -151,14 +157,27 @@ class TradingService:
                 await self.position_service.mark_as_bought(
                     position_id=pos.id,
                     asset_id=candidate.id,
+                    buy_price=paid,
                 )
                 await self.action_log.record(
                     ActionKind.POSITION_BOUGHT,
-                    f"Bought at {pos.buy_price}, asset {candidate.id}.",
+                    f"Bought at {paid or pos.buy_price}, asset {candidate.id}.",
                     market_hash_name=pos.pool_item_hash,
                     position_id=pos.id,
                 )
                 claimed.add(candidate.id)
+                continue
+
+            if status and not status["active"] and not status["purchased"]:
+                logger.info(f"Steam reports buy order {pos.buy_order_id} was cancelled without filling.")
+                await self.position_service.mark_as_cancelled(position_id=pos.id)
+                await self.action_log.record(
+                    ActionKind.POSITION_CANCELLED,
+                    f"Steam reports buy order {pos.buy_order_id} was cancelled without filling.",
+                    level=ActionLevel.WARNING,
+                    market_hash_name=pos.pool_item_hash,
+                    position_id=pos.id,
+                )
                 continue
 
             if now - pos.created_at < CANCEL_GRACE_PERIOD:
@@ -222,6 +241,18 @@ class TradingService:
             (item for item in available if item.id not in taken and item.first_seen_at > position.created_at),
             None,
         )
+
+    async def _buy_order_status(self, position) -> Optional[dict]:
+        """Ask Steam what became of one buy order; a failure here must not stop the cycle."""
+        try:
+            return await self.steam_service.get_buy_order_status(
+                buy_order_id=position.buy_order_id,
+                market_hash_name=position.pool_item_hash,
+                app_id=position.pool_item.app_id,
+            )
+        except Exception as e:
+            logger.warning(f"Could not read the status of buy order {position.buy_order_id}: {e!r}")
+            return None
 
     async def _claimed_asset_ids(self) -> set:
         return {pos.asset_id for pos in await self.position_service.list() if pos.asset_id}

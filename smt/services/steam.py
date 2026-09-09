@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from decimal import Decimal
 from functools import partial, wraps
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 from anyio import to_thread
@@ -16,7 +17,13 @@ from steampy.client import SteamClient
 from steampy.models import Currency, GameOptions
 
 from smt.core.config import Settings
-from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed, SteamLoginUnavailable
+from smt.exceptions import (
+    BuyOrderFailed,
+    BuyOrderStatusUnavailable,
+    OrderBookUnavailable,
+    SellOrderFailed,
+    SteamLoginUnavailable,
+)
 from smt.logger import get_logger
 from smt.utils.rate_limit import RedisRateLimiter
 from smt.utils.steam import FeeSchedule, calculate_fees, parse_steam_ts, set_fee_schedule
@@ -49,6 +56,20 @@ LOGIN_COOLDOWN_MAX = datetime.timedelta(hours=1)
 def _from_minor_units(value) -> Optional[Decimal]:
     """Steam quotes order book prices in minor units, e.g. 682 for 6.82 RUB."""
     return None if value is None else (Decimal(value) / 100).quantize(Decimal("0.01"))
+
+
+def _paid_from_purchases(purchases: list) -> Optional[Decimal]:
+    """Total the buyer actually paid, once Steam tells us what the fills cost."""
+    total = 0
+    seen = False
+    for purchase in purchases:
+        amount = purchase.get("paid_amount") if isinstance(purchase, dict) else None
+        fee = purchase.get("paid_fee") if isinstance(purchase, dict) else None
+        if amount is None:
+            continue
+        seen = True
+        total += int(amount) + int(fee or 0)
+    return _from_minor_units(total) if seen else None
 
 
 def _to_levels(compact: Optional[list]) -> list[dict]:
@@ -358,6 +379,39 @@ class SteamService:
         )
         resp.raise_for_status()
         return resp.json()
+
+    @requires_login
+    @throttled
+    async def get_buy_order_status(self, buy_order_id: str, market_hash_name: str, app_id: str) -> dict:
+        """What Steam says became of a buy order. The endpoint answers 400 without a Referer."""
+        listing_url = f"{STEAM_COMMUNITY_URL}/market/listings/{app_id}/{quote(market_hash_name)}"
+        resp = await to_thread.run_sync(
+            partial(
+                self.client._session.get,
+                f"{STEAM_COMMUNITY_URL}/market/getbuyorderstatus/",
+                params={"sessionid": self.client._get_session_id(), "buy_orderid": buy_order_id},
+                headers={"Referer": listing_url},
+                timeout=ORDER_BOOK_TIMEOUT,
+            )
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        if not data.get("success"):
+            raise BuyOrderStatusUnavailable(f"Steam returned no status for buy order {buy_order_id}: {data}")
+
+        purchases = data.get("purchases") or []
+        if purchases:
+            logger.info(f"Buy order {buy_order_id} reports purchases: {json.dumps(purchases, ensure_ascii=False)}")
+
+        return {
+            "active": bool(data.get("active")),
+            "purchased": int(data.get("purchased") or 0),
+            "quantity": int(data.get("quantity") or 0),
+            "quantity_remaining": int(data.get("quantity_remaining") or 0),
+            "paid": _paid_from_purchases(purchases),
+            "purchases": purchases,
+        }
 
     @requires_login
     @throttled
