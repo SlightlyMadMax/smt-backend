@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from steampy.models import GameOptions
 
 from smt.db.models import Item, PoolItem
-from smt.exceptions import OrderBookUnavailable
+from smt.exceptions import BuyOrderFailed, OrderBookUnavailable
 from smt.logger import get_logger
 from smt.schemas.action_log import ActionKind, ActionLevel
 from smt.schemas.position import PositionCreate, PositionStatus
@@ -391,8 +391,14 @@ class TradingService:
                 break
 
             existing_positions = [p for p in existing if p.pool_item_hash == item.market_hash_name]
-            to_create = min(item.max_listed - len(existing_positions), free_slots)
-            if to_create <= 0:
+            if item.max_listed - len(existing_positions) <= 0:
+                continue
+
+            if any(p.status == PositionStatus.OPEN for p in existing_positions):
+                logger.info(
+                    f"Skipping {item.market_hash_name}: it already has a buy order waiting, and Steam "
+                    f"allows only one per item."
+                )
                 continue
 
             committed = sum((p.buy_price for p in existing_positions), Decimal("0"))
@@ -437,52 +443,61 @@ class TradingService:
                 )
                 continue
 
-            for _ in range(to_create):
-                if buy_price > balance:
-                    logger.info(
-                        f"Skipping {item.market_hash_name}: a single order of {buy_price} exceeds "
-                        f"the wallet balance {balance}."
-                    )
-                    break
-
-                if buy_price > allowance:
-                    logger.info(
-                        f"Skipping {item.market_hash_name}: {buy_price} exceeds the remaining buy order "
-                        f"allowance {allowance}."
-                    )
-                    break
-
-                if buy_price > budget_left:
-                    logger.info(
-                        f"Skipping {item.market_hash_name}: {buy_price} exceeds the remaining per item "
-                        f"budget {budget_left}."
-                    )
-                    break
-
+            if buy_price > balance:
                 logger.info(
-                    f"Creating a buy order for {item.market_hash_name}, price: {buy_price} "
-                    f"(top bid {book['highest_buy_order']}, cheapest listing {lowest_ask})."
+                    f"Skipping {item.market_hash_name}: a single order of {buy_price} exceeds "
+                    f"the wallet balance {balance}."
                 )
+                continue
+
+            if buy_price > allowance:
+                logger.info(
+                    f"Skipping {item.market_hash_name}: {buy_price} exceeds the remaining buy order "
+                    f"allowance {allowance}."
+                )
+                continue
+
+            if buy_price > budget_left:
+                logger.info(
+                    f"Skipping {item.market_hash_name}: {buy_price} exceeds the remaining per item "
+                    f"budget {budget_left}."
+                )
+                continue
+
+            logger.info(
+                f"Creating a buy order for {item.market_hash_name}, price: {buy_price} "
+                f"(top bid {book['highest_buy_order']}, cheapest listing {lowest_ask})."
+            )
+            try:
                 buy_id = await self.steam_service.create_buy_order(
                     market_hash_name=item.market_hash_name,
                     price=buy_price,
                     game=GameOptions(item.app_id, item.context_id),
                     quantity=1,
                 )
-                create = PositionCreate(
-                    pool_item_hash=item.market_hash_name,
-                    buy_order_id=buy_id,
-                    buy_price=buy_price,
-                    sell_price=item.effective_sell_price,
-                )
-                position = await self.position_service.add(create)
+            except BuyOrderFailed as e:
+                logger.warning(f"Steam refused a buy order for {item.market_hash_name}: {e}")
                 await self.action_log.record(
-                    ActionKind.BUY_ORDER_PLACED,
-                    f"Placed a buy order at {buy_price} (cheapest listing {lowest_ask}).",
+                    ActionKind.BUY_ORDER_REFUSED,
+                    f"Steam refused a buy order at {buy_price}: {e}",
+                    level=ActionLevel.WARNING,
                     market_hash_name=item.market_hash_name,
-                    position_id=position.id,
                 )
+                continue
 
-                allowance -= buy_price
-                budget_left -= buy_price
-                free_slots -= 1
+            create = PositionCreate(
+                pool_item_hash=item.market_hash_name,
+                buy_order_id=buy_id,
+                buy_price=buy_price,
+                sell_price=item.effective_sell_price,
+            )
+            position = await self.position_service.add(create)
+            await self.action_log.record(
+                ActionKind.BUY_ORDER_PLACED,
+                f"Placed a buy order at {buy_price} (cheapest listing {lowest_ask}).",
+                market_hash_name=item.market_hash_name,
+                position_id=position.id,
+            )
+
+            allowance -= buy_price
+            free_slots -= 1

@@ -13,6 +13,7 @@ class ActionLevel(str, Enum):
 
 class ActionKind(str, Enum):
     BUY_ORDER_PLACED = "buy_order_placed"
+    BUY_ORDER_REFUSED = "buy_order_refused"
     POSITION_BOUGHT = "position_bought"
     SELL_ORDER_PLACED = "sell_order_placed"
     LISTING_RESOLVED = "listing_resolved"
