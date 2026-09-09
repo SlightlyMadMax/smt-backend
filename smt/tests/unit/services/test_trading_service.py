@@ -95,7 +95,7 @@ class TestResolvePendingListings:
             make_position(1, PositionStatus.LISTING_PENDING, asset_id="ASSET-1")
         ]
 
-        await trading_service._resolve_pending_listings([make_listing("LISTING-9", "ASSET-1")])
+        await trading_service._resolve_pending_listings([make_listing("LISTING-9", "ASSET-1")], {})
 
         position_service.mark_as_listed.assert_awaited_once_with(position_id=1, sell_order_id="LISTING-9")
 
@@ -104,7 +104,7 @@ class TestResolvePendingListings:
             make_position(1, PositionStatus.LISTING_PENDING, asset_id="ASSET-1")
         ]
 
-        await trading_service._resolve_pending_listings([make_listing("LISTING-9", "ASSET-2")])
+        await trading_service._resolve_pending_listings([make_listing("LISTING-9", "ASSET-2")], {})
 
         position_service.mark_as_listed.assert_not_awaited()
 
@@ -113,7 +113,9 @@ class TestResolvePendingListings:
             make_position(1, PositionStatus.LISTING_PENDING, asset_id="ASSET-1")
         ]
 
-        await trading_service._resolve_pending_listings([make_listing("LISTING-9", "ASSET-1", need_confirmation=True)])
+        await trading_service._resolve_pending_listings(
+            [make_listing("LISTING-9", "ASSET-1", need_confirmation=True)], {}
+        )
 
         position_service.mark_as_listed.assert_not_awaited()
 
@@ -122,7 +124,7 @@ class TestResolvePendingListings:
             make_position(1, PositionStatus.LISTING_PENDING, asset_id="ASSET-1")
         ]
 
-        await trading_service._resolve_pending_listings([])
+        await trading_service._resolve_pending_listings([], {})
 
         position_service.mark_as_listed.assert_not_awaited()
 
@@ -144,7 +146,7 @@ class TestSyncListedToClosed:
     async def test_keeps_position_while_listing_is_active(self, trading_service, position_service):
         self.listed(trading_service, position_service)
 
-        await trading_service._sync_listed_to_closed([make_listing("LISTING-9", "ASSET-1")])
+        await trading_service._sync_listed_to_closed([make_listing("LISTING-9", "ASSET-1")], {})
 
         position_service.close.assert_not_awaited()
 
@@ -152,14 +154,14 @@ class TestSyncListedToClosed:
         """A failed fetch looks exactly like every listing selling at once."""
         self.listed(trading_service, position_service)
 
-        await trading_service._sync_listed_to_closed([])
+        await trading_service._sync_listed_to_closed([], {})
 
         position_service.close.assert_not_awaited()
 
     async def test_an_unaccounted_listing_is_reported(self, trading_service, position_service, action_log):
         self.listed(trading_service, position_service)
 
-        await trading_service._sync_listed_to_closed([])
+        await trading_service._sync_listed_to_closed([], {})
 
         action_log.record.assert_awaited_once()
         assert action_log.record.await_args.args[0] == ActionKind.LISTING_VANISHED
@@ -172,7 +174,7 @@ class TestSyncListedToClosed:
             sold={"LISTING-9": {"sold_at": sold_at, "net_proceeds": Decimal("12.85")}},
         )
 
-        await trading_service._sync_listed_to_closed([])
+        await trading_service._sync_listed_to_closed([], {})
 
         position_service.close.assert_awaited_once_with(position_id=1, sold_at=sold_at, net_proceeds=Decimal("12.85"))
 
@@ -184,7 +186,7 @@ class TestSyncListedToClosed:
             sold={"LISTING-9": {"sold_at": NOW, "net_proceeds": Decimal("12.85")}},
         )
 
-        await trading_service._sync_listed_to_closed([make_listing("LISTING-9", "ASSET-1")])
+        await trading_service._sync_listed_to_closed([make_listing("LISTING-9", "ASSET-1")], {})
 
         position_service.close.assert_awaited_once()
 
@@ -193,7 +195,7 @@ class TestSyncListedToClosed:
         position.listed_at = NOW - timedelta(days=30)
         trading_service.steam_service.get_sold_listings.return_value["oldest_event_at"] = NOW - timedelta(hours=1)
 
-        await trading_service._sync_listed_to_closed([])
+        await trading_service._sync_listed_to_closed([], {})
 
         assert "does not reach back" in action_log.record.await_args.args[1]
 
@@ -203,7 +205,7 @@ class TestSyncListedToClosed:
         ]
         trading_service.steam_service.get_sold_listings.return_value = {"sold": {}, "oldest_event_at": None}
 
-        await trading_service._sync_listed_to_closed([])
+        await trading_service._sync_listed_to_closed([], {})
 
         position_service.close.assert_not_awaited()
 
@@ -629,3 +631,82 @@ class TestCooldownAfterLoss:
         await trading_service._open_new_positions()
 
         trading_service.steam_service.create_buy_order.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+class TestRecoveringACancelledListing:
+    """Steam issues a new asset id when a cancelled listing returns the item."""
+
+    @staticmethod
+    def setup(trading_service, position_service, status=PositionStatus.LISTED, first_seen_at=None):
+        position = make_position(1, status, asset_id="OLD-ASSET", sell_order_id="LISTING-9")
+        position.listed_at = NOW - timedelta(hours=2)
+        position_service.list_by_status.return_value = [position]
+        trading_service.steam_service.get_sold_listings.return_value = {
+            "sold": {},
+            "oldest_event_at": NOW - timedelta(days=7),
+        }
+        assets = {
+            GAME_KEY: {
+                ITEM_HASH: [make_asset("NEW-ASSET", first_seen_at or (NOW - timedelta(minutes=10)))],
+            }
+        }
+        return position, assets
+
+    async def test_the_item_coming_back_means_the_listing_was_cancelled(self, trading_service, position_service):
+        _, assets = self.setup(trading_service, position_service)
+
+        await trading_service._sync_listed_to_closed([], assets)
+
+        position_service.revert_to_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-ASSET")
+        position_service.close.assert_not_awaited()
+
+    async def test_it_is_journalled(self, trading_service, position_service, action_log):
+        _, assets = self.setup(trading_service, position_service)
+
+        await trading_service._sync_listed_to_closed([], assets)
+
+        assert action_log.record.await_args.args[0] == ActionKind.LISTING_CANCELLED
+
+    async def test_nothing_in_the_inventory_leaves_the_position_alone(self, trading_service, position_service):
+        self.setup(trading_service, position_service)
+
+        await trading_service._sync_listed_to_closed([], {})
+
+        position_service.revert_to_bought.assert_not_awaited()
+
+    async def test_it_will_not_take_an_item_older_than_the_position(self, trading_service, position_service):
+        """An item the account already owned is not ours to relist."""
+        _, assets = self.setup(trading_service, position_service, first_seen_at=NOW - timedelta(days=30))
+
+        await trading_service._sync_listed_to_closed([], assets)
+
+        position_service.revert_to_bought.assert_not_awaited()
+
+    async def test_it_will_not_take_an_item_another_position_holds(self, trading_service, position_service):
+        _, assets = self.setup(trading_service, position_service)
+        position_service.list.return_value = [
+            make_position(2, PositionStatus.BOUGHT, asset_id="NEW-ASSET"),
+        ]
+
+        await trading_service._sync_listed_to_closed([], assets)
+
+        position_service.revert_to_bought.assert_not_awaited()
+
+    async def test_a_confirmed_sale_wins_over_recovery(self, trading_service, position_service):
+        _, assets = self.setup(trading_service, position_service)
+        trading_service.steam_service.get_sold_listings.return_value["sold"] = {
+            "LISTING-9": {"sold_at": NOW, "net_proceeds": Decimal("12.85")}
+        }
+
+        await trading_service._sync_listed_to_closed([], assets)
+
+        position_service.close.assert_awaited_once()
+        position_service.revert_to_bought.assert_not_awaited()
+
+    async def test_a_pending_listing_recovers_too(self, trading_service, position_service):
+        _, assets = self.setup(trading_service, position_service, status=PositionStatus.LISTING_PENDING)
+
+        await trading_service._resolve_pending_listings([], assets)
+
+        position_service.revert_to_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-ASSET")

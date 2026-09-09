@@ -80,6 +80,20 @@ class PositionService:
         pos = await self.repo.update(position_id, update_data)
         return pos
 
+    async def revert_to_bought(self, position_id: int, asset_id: str) -> Position:
+        """The listing is gone but the item is ours again, under a new asset id."""
+        pos = await self.get(position_id)
+        if pos.status not in (PositionStatus.LISTING_PENDING, PositionStatus.LISTED):
+            raise ValueError("Can only revert positions that were being listed")
+
+        update_data = PositionUpdate(
+            asset_id=asset_id,
+            status=PositionStatus.BOUGHT.value,
+            sell_order_id=None,
+            listed_at=None,
+        )
+        return await self.repo.update(position_id, update_data)
+
     async def close(
         self,
         position_id: int,

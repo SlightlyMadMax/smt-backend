@@ -55,8 +55,8 @@ class TradingService:
             await self._reconcile_orders(buy_orders, sell_listings, settings.cancel_untracked_orders)
 
             await self._sync_open_to_bought(assets, buy_orders)
-            await self._resolve_pending_listings(sell_listings)
-            await self._sync_listed_to_closed(sell_listings)
+            await self._resolve_pending_listings(sell_listings, assets)
+            await self._sync_listed_to_closed(sell_listings, assets)
             await self._list_bought_positions()
 
             if not settings.emergency_stop:
@@ -134,22 +134,14 @@ class TradingService:
         """Resolve OPEN positions whose buy order is no longer active on Steam."""
         open_positions = await self.position_service.list_by_status(PositionStatus.OPEN)
         active_buy_order_ids = {order["order_id"] for order in buy_orders if "order_id" in order}
-        claimed = {pos.asset_id for pos in await self.position_service.list() if pos.asset_id}
+        claimed = await self._claimed_asset_ids()
         now = datetime.now(timezone.utc)
 
         for pos in open_positions:
             if pos.buy_order_id in active_buy_order_ids:
                 continue
 
-            key = (pos.pool_item.app_id, pos.pool_item.context_id)
-            available = sorted(
-                assets.get(key, {}).get(pos.pool_item_hash, []),
-                key=lambda item: item.first_seen_at,
-            )
-            candidate = next(
-                (item for item in available if item.id not in claimed and item.first_seen_at > pos.created_at),
-                None,
-            )
+            candidate = self._unclaimed_asset(assets, pos, claimed)
 
             if candidate:
                 logger.info(
@@ -212,7 +204,50 @@ class TradingService:
     def _listing_asset_id(listing: dict) -> Optional[str]:
         return (listing.get("description") or {}).get("id")
 
-    async def _resolve_pending_listings(self, listings: List) -> None:
+    @staticmethod
+    def _unclaimed_asset(assets: Dict, position, claimed: set):
+        """
+        Steam issues a new asset id every time an item moves, so a stored one goes stale.
+
+        Only an item that appeared after the position was opened can belong to it; anything
+        older is the account owner's own copy.
+        """
+        key = (position.pool_item.app_id, position.pool_item.context_id)
+        available = sorted(
+            assets.get(key, {}).get(position.pool_item_hash, []),
+            key=lambda item: item.first_seen_at,
+        )
+        taken = claimed - {position.asset_id}
+        return next(
+            (item for item in available if item.id not in taken and item.first_seen_at > position.created_at),
+            None,
+        )
+
+    async def _claimed_asset_ids(self) -> set:
+        return {pos.asset_id for pos in await self.position_service.list() if pos.asset_id}
+
+    async def _recover_cancelled_listing(self, position, assets: Dict, claimed: set) -> bool:
+        """An item back in the inventory is proof the listing was cancelled, not sold."""
+        candidate = self._unclaimed_asset(assets, position, claimed)
+        if not candidate:
+            return False
+
+        logger.info(
+            f"Position {position.id} has no listing but asset {candidate.id} is in the inventory. "
+            f"Reverting it to BOUGHT so it gets listed again."
+        )
+        await self.position_service.revert_to_bought(position_id=position.id, asset_id=candidate.id)
+        claimed.add(candidate.id)
+        await self.action_log.record(
+            ActionKind.LISTING_CANCELLED,
+            f"Listing is gone and asset {candidate.id} is back in the inventory, so it will be listed again.",
+            level=ActionLevel.WARNING,
+            market_hash_name=position.pool_item_hash,
+            position_id=position.id,
+        )
+        return True
+
+    async def _resolve_pending_listings(self, listings: List, assets: Dict) -> None:
         """Attach the Steam listing id to LISTING_PENDING positions by matching on asset_id."""
         pending_positions = await self.position_service.list_by_status(PositionStatus.LISTING_PENDING)
         if not pending_positions:
@@ -223,10 +258,13 @@ class TradingService:
             for li in listings
             if not li.get("need_confirmation") and (asset_id := self._listing_asset_id(li))
         }
+        claimed = await self._claimed_asset_ids()
 
         for pos in pending_positions:
             listing_id = asset_to_listing.get(pos.asset_id)
             if not listing_id:
+                if await self._recover_cancelled_listing(pos, assets, claimed):
+                    continue
                 logger.warning(f"Position {pos.id}: no active listing found yet for asset {pos.asset_id}.")
                 continue
 
@@ -242,6 +280,7 @@ class TradingService:
     async def _sync_listed_to_closed(
         self,
         listings: List,
+        assets: Dict,
     ) -> None:
         """
         Close LISTED positions that Steam's own history confirms were sold.
@@ -256,6 +295,7 @@ class TradingService:
         history = await self.steam_service.get_sold_listings()
         sold = history["sold"]
         active_listing_ids = {li.get("listing_id") for li in listings}
+        claimed = await self._claimed_asset_ids()
 
         for pos in listed_positions:
             if not pos.sell_order_id:
@@ -280,6 +320,8 @@ class TradingService:
                 continue
 
             if pos.sell_order_id not in active_listing_ids:
+                if await self._recover_cancelled_listing(pos, assets, claimed):
+                    continue
                 await self._report_vanished_listing(pos, history["oldest_event_at"])
 
     async def _report_vanished_listing(self, pos, oldest_event_at) -> None:

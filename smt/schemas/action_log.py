@@ -17,6 +17,7 @@ class ActionKind(str, Enum):
     SELL_ORDER_PLACED = "sell_order_placed"
     LISTING_RESOLVED = "listing_resolved"
     LISTING_VANISHED = "listing_vanished"
+    LISTING_CANCELLED = "listing_cancelled"
     POSITION_CLOSED = "position_closed"
     POSITION_CANCELLED = "position_cancelled"
     UNTRACKED_ORDER = "untracked_order"
