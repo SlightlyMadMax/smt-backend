@@ -18,6 +18,10 @@ class SteamOperationFailed(SMTError):
     """Steam accepted the request but reported a failure."""
 
 
+class ConfirmationFailed(SteamOperationFailed):
+    """Steam asked for a mobile confirmation that could not be answered."""
+
+
 class BuyOrderStatusUnavailable(SteamOperationFailed):
     """Steam would not say what became of a buy order."""
 

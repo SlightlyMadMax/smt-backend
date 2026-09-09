@@ -13,6 +13,7 @@ from urllib.parse import quote
 import httpx
 from anyio import to_thread
 from redis.asyncio import Redis
+from steampy import guard
 from steampy.client import SteamClient
 from steampy.models import Currency, GameOptions
 
@@ -20,6 +21,7 @@ from smt.core.config import Settings
 from smt.exceptions import (
     BuyOrderFailed,
     BuyOrderStatusUnavailable,
+    ConfirmationFailed,
     OrderBookUnavailable,
     SellOrderFailed,
     SteamLoginUnavailable,
@@ -32,6 +34,11 @@ from smt.utils.steam import FeeSchedule, calculate_fees, parse_steam_ts, set_fee
 logger = get_logger("services.steam")
 
 STEAM_COMMUNITY_URL = "https://steamcommunity.com"
+CONFIRMATION_URL = f"{STEAM_COMMUNITY_URL}/mobileconf"
+CONFIRMATION_ATTEMPTS = 4
+CONFIRMATION_DELAY = 3.0
+ORDER_PENDING_CONFIRMATION = 22
+LISTING_CONFIRMATION_TYPE = 3
 ORDER_BOOK_TIMEOUT = 30
 ACCOUNT_CURRENCY = Currency.RUB
 SOLD_EVENT_TYPE = 3
@@ -109,6 +116,7 @@ class SteamService:
         self._username: str = settings.STEAM_USERNAME
         self._password: str = settings.STEAM_PASSWORD
         self._steam_id: str = settings.STEAMID
+        self._identity_secret: str = settings.STEAM_IDENTITY_SECRET
         self._guard: str = json.dumps(
             {
                 "steamid": settings.STEAMID,
@@ -126,6 +134,77 @@ class SteamService:
             self._redis, RATE_LIMIT_KEY, STEAM_MAX_CALLS_PER_PERIOD, STEAM_RATE_LIMIT_PERIOD
         )
         self._check_interval = datetime.timedelta(minutes=5)
+
+    def _confirmation_params(self, tag: str) -> dict:
+        timestamp = int(time.time())
+        return {
+            "p": guard.generate_device_id(self._steam_id),
+            "a": self._steam_id,
+            "k": guard.generate_confirmation_key(self._identity_secret, tag, timestamp),
+            "t": timestamp,
+            "m": "android",
+            "tag": tag,
+        }
+
+    async def _pending_confirmations(self) -> list:
+        await self._limiter.acquire()
+        resp = await to_thread.run_sync(
+            partial(
+                self.client._session.get,
+                f"{CONFIRMATION_URL}/getlist",
+                params=self._confirmation_params("conf"),
+                headers={"X-Requested-With": "com.valvesoftware.android.steam.community"},
+                timeout=ORDER_BOOK_TIMEOUT,
+            )
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        if not payload.get("success"):
+            raise ConfirmationFailed(f"Steam would not list confirmations: {payload}")
+        return payload.get("conf") or []
+
+    async def _answer_confirmation(self, confirmation: dict, op: str) -> None:
+        params = self._confirmation_params(op)
+        params.update({"op": op, "cid": confirmation["id"], "ck": confirmation["nonce"]})
+
+        await self._limiter.acquire()
+        resp = await to_thread.run_sync(
+            partial(
+                self.client._session.get,
+                f"{CONFIRMATION_URL}/ajaxop",
+                params=params,
+                headers={"X-Requested-With": "XMLHttpRequest"},
+                timeout=ORDER_BOOK_TIMEOUT,
+            )
+        )
+        resp.raise_for_status()
+        if not resp.json().get("success"):
+            raise ConfirmationFailed(f"Steam rejected the answer to confirmation {confirmation['id']}: {resp.text}")
+
+    async def _find_confirmation(self, matches) -> Optional[dict]:
+        """The list can lag behind the request and can fail transiently, so keep looking."""
+        for attempt in range(CONFIRMATION_ATTEMPTS):
+            try:
+                found = [c for c in await self._pending_confirmations() if matches(c)]
+            except Exception as e:
+                logger.warning(f"Could not read the confirmation list: {e!r}")
+                found = []
+
+            if len(found) > 1:
+                raise ConfirmationFailed(f"{len(found)} confirmations match, refusing to guess which one is ours.")
+            if found:
+                return found[0]
+            if attempt < CONFIRMATION_ATTEMPTS - 1:
+                await asyncio.sleep(CONFIRMATION_DELAY)
+        return None
+
+    async def _confirm(self, matches, what: str) -> None:
+        confirmation = await self._find_confirmation(matches)
+        if not confirmation:
+            raise ConfirmationFailed(f"Steam asked to confirm {what} but no matching confirmation appeared.")
+
+        logger.info(f"Confirming {what} through confirmation {confirmation['id']}.")
+        await self._answer_confirmation(confirmation, "allow")
 
     def _should_check_login(self) -> bool:
         return not self._last_check or datetime.datetime.now(datetime.UTC) - self._last_check > self._check_interval
@@ -477,23 +556,52 @@ class SteamService:
         logger.info(f"Cancelling sell listing {listing_id}.")
         await to_thread.run_sync(self.client.market.cancel_sell_order, listing_id)
 
+    async def _placed_buy_order_id(self, market_hash_name: str) -> str:
+        """Steam does not return the id once a confirmation was involved, so read it back."""
+        listings = await self.get_my_market_listings()
+        for key, order in (listings.get("buy_orders") or {}).items():
+            if order.get("item_name") == market_hash_name:
+                return str(order.get("order_id") or key)
+        raise BuyOrderFailed(f"The confirmed buy order for {market_hash_name} is not among the active orders.")
+
     @requires_login
     @throttled
     async def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
         logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
         kopecks = int((price * 100).to_integral_value())
+        listing_url = f"{STEAM_COMMUNITY_URL}/market/listings/{game.app_id}/{quote(market_hash_name)}"
+
         resp = await to_thread.run_sync(
-            self.client.market.create_buy_order,
-            market_hash_name,
-            str(kopecks),
-            quantity,
-            game,
-            ACCOUNT_CURRENCY,
+            partial(
+                self.client._session.post,
+                f"{STEAM_COMMUNITY_URL}/market/createbuyorder/",
+                data={
+                    "sessionid": self.client._get_session_id(),
+                    "currency": ACCOUNT_CURRENCY.value,
+                    "appid": game.app_id,
+                    "market_hash_name": market_hash_name,
+                    "price_total": str(kopecks * quantity),
+                    "quantity": quantity,
+                },
+                headers={"Referer": listing_url},
+                timeout=ORDER_BOOK_TIMEOUT,
+            )
         )
-        if not resp.get("success", False):
-            logger.error(f"Failed to create a buy order for {quantity} {market_hash_name}. Response: {resp}")
-            raise BuyOrderFailed(f"Steam rejected the buy order for {market_hash_name}: {resp}")
-        buy_order_id = resp.get("buy_orderid")
+        payload = resp.json()
+
+        if payload.get("need_confirmation"):
+            wanted = str((payload.get("confirmation") or {}).get("confirmation_id") or "")
+            await self._confirm(
+                lambda c: str(c.get("creator_id")) == wanted,
+                f"a buy order for {market_hash_name}",
+            )
+            return await self._placed_buy_order_id(market_hash_name)
+
+        if payload.get("success") != 1:
+            logger.error(f"Failed to create a buy order for {quantity} {market_hash_name}. Response: {payload}")
+            raise BuyOrderFailed(f"Steam rejected the buy order for {market_hash_name}: {payload}")
+
+        buy_order_id = str(payload["buy_orderid"])
         logger.info(f"Buy order with id {buy_order_id} successfully created.")
         return buy_order_id
 
@@ -502,9 +610,36 @@ class SteamService:
     async def create_sell_order(self, asset_id: str, game: GameOptions, price: Decimal) -> None:
         logger.debug(f"Creating a sell order for {asset_id} at {price} rub.")
         kopecks = int((price * 100).to_integral_value())
-        net_received = str(calculate_fees(gross=kopecks)["net_received"])
-        resp = await to_thread.run_sync(self.client.market.create_sell_order, asset_id, game, net_received)
-        if not resp.get("success", False):
-            logger.error(f"Failed to create a sell order for {asset_id} at {price} rub. Response: {resp}")
-            raise SellOrderFailed(f"Steam rejected the sell order for {asset_id}: {resp}")
-        logger.info(f"Sell order for {asset_id} accepted by Steam. Response: {resp}")
+        net_received = calculate_fees(gross=kopecks)["net_received"]
+
+        resp = await to_thread.run_sync(
+            partial(
+                self.client._session.post,
+                f"{STEAM_COMMUNITY_URL}/market/sellitem/",
+                data={
+                    "assetid": asset_id,
+                    "sessionid": self.client._get_session_id(),
+                    "contextid": game.context_id,
+                    "appid": game.app_id,
+                    "amount": 1,
+                    "price": net_received,
+                },
+                headers={"Referer": f"{STEAM_COMMUNITY_URL}/profiles/{self._steam_id}/inventory"},
+                timeout=ORDER_BOOK_TIMEOUT,
+            )
+        )
+        payload = resp.json()
+
+        if payload.get("needs_mobile_confirmation"):
+            await self._confirm(
+                lambda c: c.get("type") == LISTING_CONFIRMATION_TYPE,
+                f"the listing of asset {asset_id}",
+            )
+            logger.info(f"Sell order for {asset_id} confirmed.")
+            return
+
+        if not payload.get("success"):
+            logger.error(f"Failed to create a sell order for {asset_id} at {price} rub. Response: {payload}")
+            raise SellOrderFailed(f"Steam rejected the sell order for {asset_id}: {payload}")
+
+        logger.info(f"Sell order for {asset_id} accepted by Steam. Response: {payload}")
