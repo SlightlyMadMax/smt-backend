@@ -42,6 +42,7 @@ async def build_services(session: AsyncSession, steam_service: SteamService):
         steam_service=steam_service,
         analytics_service=analytics_service,
         settings_service=settings_service,
+        action_log=ActionLogService(ActionLogRepo(session)),
     )
 
     return stats_service, pool_repo

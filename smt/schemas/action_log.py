@@ -22,6 +22,7 @@ class ActionKind(str, Enum):
     POSITION_CLOSED = "position_closed"
     POSITION_CANCELLED = "position_cancelled"
     UNTRACKED_ORDER = "untracked_order"
+    STEAM_THROTTLED = "steam_throttled"
     CYCLE_FAILED = "cycle_failed"
 
 

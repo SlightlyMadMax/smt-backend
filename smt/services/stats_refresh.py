@@ -1,14 +1,17 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.exc import NoResultFound
+from steampy.exceptions import TooManyRequests
 from steampy.models import GameOptions
 
 from smt.exceptions import OrderBookUnavailable
 from smt.logger import get_logger
+from smt.schemas.action_log import ActionKind, ActionLevel
 from smt.schemas.pool import PoolItemUpdate
 from smt.schemas.price_history import PriceHistoryRecordCreate
+from smt.services.action_log import ActionLogService
 from smt.services.market_analytics import ItemIndicators, MarketAnalyticsService
 from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService
@@ -30,18 +33,21 @@ class StatsRefreshService:
         steam_service: SteamService,
         analytics_service: MarketAnalyticsService,
         settings_service: SettingsService,
+        action_log: Optional[ActionLogService] = None,
     ):
         self.price_history_service = price_history_service
         self.pool_service = pool_service
         self.steam = steam_service
         self.analytics_service = analytics_service
         self.settings_service = settings_service
+        self.action_log = action_log
 
     async def refresh_price_history(self, market_hash_names: List[str]) -> None:
         settings = await self.settings_service.get_settings()
         days = settings.price_history_days
         cutoff = datetime.now(UTC) - timedelta(days=days)
         all_records: List[PriceHistoryRecordCreate] = []
+        throttled: List[str] = []
 
         for name in market_hash_names:
             try:
@@ -50,7 +56,13 @@ class StatsRefreshService:
                 continue
 
             game_opt = GameOptions(item.app_id, item.context_id)
-            raw_hist = await self.steam.get_price_history(market_hash_name=name, game=game_opt, days=days)
+            try:
+                raw_hist = await self.steam.get_price_history(market_hash_name=name, game=game_opt, days=days)
+            except TooManyRequests:
+                logger.warning(f"Steam is throttling price history, {name} was not refreshed.")
+                throttled.append(name)
+                continue
+
             for ts, price, vol in raw_hist:
                 all_records.append(
                     PriceHistoryRecordCreate(
@@ -66,6 +78,15 @@ class StatsRefreshService:
 
         for name in market_hash_names:
             await self.price_history_service.delete_before(name, cutoff)
+
+        if throttled and self.action_log:
+            await self.action_log.record(
+                ActionKind.STEAM_THROTTLED,
+                f"Steam limited how often price history may be read, so {len(throttled)} item(s) "
+                f"kept their previous prices. It will be tried again on the next refresh.",
+                level=ActionLevel.WARNING,
+                market_hash_name=throttled[0] if len(throttled) == 1 else None,
+            )
 
     async def refresh_current_stats(self, market_hash_name: str) -> None:
         try:

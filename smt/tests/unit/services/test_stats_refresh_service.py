@@ -4,8 +4,10 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from steampy.exceptions import TooManyRequests
 
 from smt.exceptions import OrderBookUnavailable
+from smt.schemas.action_log import ActionKind
 from smt.services import steam as steam_module
 from smt.services.stats_refresh import StatsRefreshService
 from smt.services.steam import ACCOUNT_CURRENCY, SteamService
@@ -218,3 +220,43 @@ class TestIndicatorDriftGuard:
 
         payload = indicator_service.pool_service.update.await_args.args[1]
         assert payload.use_for_trading is False
+
+
+@pytest.mark.asyncio
+class TestPriceHistoryThrottling:
+    """Steam meters price history separately, and one refusal must not cost the whole batch."""
+
+    @staticmethod
+    def service_with(steam, action_log=None):
+        return StatsRefreshService(
+            price_history_service=AsyncMock(),
+            pool_service=AsyncMock(),
+            steam_service=steam,
+            analytics_service=AsyncMock(),
+            settings_service=AsyncMock(),
+            action_log=action_log,
+        )
+
+    async def test_a_throttled_item_does_not_stop_the_others(self):
+        steam = AsyncMock()
+        steam.get_price_history.side_effect = [TooManyRequests("slow down"), []]
+        service = self.service_with(steam)
+        service.settings_service.get_settings.return_value = SimpleNamespace(price_history_days=30)
+        service.pool_service.get_by_market_hash_name.return_value = SimpleNamespace(app_id="440", context_id="2")
+
+        await service.refresh_price_history(["First", "Second"])
+
+        assert steam.get_price_history.await_count == 2
+
+    async def test_being_throttled_is_written_to_the_journal(self):
+        steam = AsyncMock()
+        steam.get_price_history.side_effect = TooManyRequests("slow down")
+        action_log = AsyncMock()
+        service = self.service_with(steam, action_log)
+        service.settings_service.get_settings.return_value = SimpleNamespace(price_history_days=30)
+        service.pool_service.get_by_market_hash_name.return_value = SimpleNamespace(app_id="440", context_id="2")
+
+        await service.refresh_price_history(["First"])
+
+        action_log.record.assert_awaited_once()
+        assert action_log.record.await_args.args[0] == ActionKind.STEAM_THROTTLED

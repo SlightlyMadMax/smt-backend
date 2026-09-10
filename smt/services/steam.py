@@ -62,6 +62,7 @@ ACCOUNT_CURRENCY = Currency.RUB
 SOLD_EVENT_TYPE = 3
 MARKET_HISTORY_PAGE = 100
 RATE_LIMIT_KEY = "smt:steam:calls"
+PRICE_HISTORY_KEY = "smt:steam:pricehistory"
 LOGIN_BLOCK_KEY = "smt:steam:login_block"
 LOGIN_FAILURES_KEY = "smt:steam:login_failures"
 LOGIN_LOCK_KEY = "smt:steam:login_lock"
@@ -74,6 +75,8 @@ FEE_SCHEDULE_TTL = 60 * 60 * 24
 WALLET_INFO_PATTERN = re.compile(r"g_rgWalletInfo\s*=\s*(\{.*?\});", re.S)
 STEAM_MAX_CALLS_PER_PERIOD = 15
 STEAM_RATE_LIMIT_PERIOD = 60.0
+PRICE_HISTORY_MAX_CALLS = 18
+PRICE_HISTORY_PERIOD = 60.0
 LOGIN_COOLDOWN_BASE = datetime.timedelta(minutes=5)
 LOGIN_COOLDOWN_MAX = datetime.timedelta(hours=1)
 
@@ -151,6 +154,9 @@ class SteamService:
         )
         self._limiter = RedisRateLimiter(
             self._redis, RATE_LIMIT_KEY, STEAM_MAX_CALLS_PER_PERIOD, STEAM_RATE_LIMIT_PERIOD
+        )
+        self._history_limiter = RedisRateLimiter(
+            self._redis, PRICE_HISTORY_KEY, PRICE_HISTORY_MAX_CALLS, PRICE_HISTORY_PERIOD
         )
         self._check_interval = datetime.timedelta(minutes=5)
 
@@ -401,6 +407,8 @@ class SteamService:
     async def get_price_history(
         self, market_hash_name: str, game: GameOptions, days: int = 30
     ) -> list[tuple[datetime.datetime, Decimal, int]]:
+        """Steam meters this endpoint far more tightly than the rest, so it has its own budget."""
+        await self._history_limiter.acquire()
         logger.debug(f"Fetching price history for {market_hash_name} (last {days}).")
         resp = await to_thread.run_sync(self.client.market.fetch_price_history, market_hash_name, game)
         raw = resp.get("prices", [])
