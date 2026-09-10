@@ -15,6 +15,7 @@ from anyio import to_thread
 from redis.asyncio import Redis
 from steampy import guard
 from steampy.client import SteamClient
+from steampy.exceptions import TooManyRequests
 from steampy.models import Currency, GameOptions
 
 from smt.core.config import Settings
@@ -25,6 +26,7 @@ from smt.exceptions import (
     OrderBookUnavailable,
     SellOrderFailed,
     SteamLoginUnavailable,
+    SteamThrottled,
 )
 from smt.logger import get_logger
 from smt.utils.rate_limit import RedisRateLimiter
@@ -62,7 +64,6 @@ ACCOUNT_CURRENCY = Currency.RUB
 SOLD_EVENT_TYPE = 3
 MARKET_HISTORY_PAGE = 100
 RATE_LIMIT_KEY = "smt:steam:calls"
-PRICE_HISTORY_KEY = "smt:steam:pricehistory"
 LOGIN_BLOCK_KEY = "smt:steam:login_block"
 LOGIN_FAILURES_KEY = "smt:steam:login_failures"
 LOGIN_LOCK_KEY = "smt:steam:login_lock"
@@ -73,10 +74,20 @@ LOGIN_LOCK_WAIT = 90
 SESSION_TTL = 60 * 60 * 12
 FEE_SCHEDULE_TTL = 60 * 60 * 24
 WALLET_INFO_PATTERN = re.compile(r"g_rgWalletInfo\s*=\s*(\{.*?\});", re.S)
-STEAM_MAX_CALLS_PER_PERIOD = 15
 STEAM_RATE_LIMIT_PERIOD = 60.0
-PRICE_HISTORY_MAX_CALLS = 18
-PRICE_HISTORY_PERIOD = 60.0
+
+# Steam meters each endpoint separately, and far from evenly.
+STEAM_BUDGETS = {
+    "market": 10,
+    "pricehistory": 18,
+    "inventory": 6,
+    "mobileconf": 5,
+    "orderbook": 20,
+    "orders": 10,
+    "default": 15,
+}
+COOLDOWN_KEY = "smt:steam:cooldown:"
+COOLDOWN_AFTER_REFUSAL = 180
 LOGIN_COOLDOWN_BASE = datetime.timedelta(minutes=5)
 LOGIN_COOLDOWN_MAX = datetime.timedelta(hours=1)
 
@@ -116,15 +127,30 @@ def requires_login(func):
     return wrapper
 
 
-def throttled(func):
-    """Pace outbound Steam calls so a batch cannot burst past Steam's limits."""
+def _was_refused_for_frequency(error: Exception) -> bool:
+    if isinstance(error, TooManyRequests):
+        return True
+    status = getattr(getattr(error, "response", None), "status_code", None)
+    return status == 429 or "429" in str(error)
 
-    @wraps(func)
-    async def wrapper(self, *args, **kwargs):
-        await self._limiter.acquire()
-        return await func(self, *args, **kwargs)
 
-    return wrapper
+def throttled(bucket: str = "default"):
+    """Pace outbound Steam calls, and stand back when Steam says no."""
+
+    def decorate(func):
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            await self._take_a_slot(bucket)
+            try:
+                return await func(self, *args, **kwargs)
+            except Exception as e:
+                if _was_refused_for_frequency(e):
+                    await self._stand_back(bucket)
+                raise
+
+        return wrapper
+
+    return decorate
 
 
 class SteamService:
@@ -152,12 +178,10 @@ class SteamService:
             port=int(settings.REDIS_PORT),
             password=settings.REDIS_PASSWORD,
         )
-        self._limiter = RedisRateLimiter(
-            self._redis, RATE_LIMIT_KEY, STEAM_MAX_CALLS_PER_PERIOD, STEAM_RATE_LIMIT_PERIOD
-        )
-        self._history_limiter = RedisRateLimiter(
-            self._redis, PRICE_HISTORY_KEY, PRICE_HISTORY_MAX_CALLS, PRICE_HISTORY_PERIOD
-        )
+        self._limiters = {
+            bucket: RedisRateLimiter(self._redis, f"{RATE_LIMIT_KEY}:{bucket}", calls, STEAM_RATE_LIMIT_PERIOD)
+            for bucket, calls in STEAM_BUDGETS.items()
+        }
         self._check_interval = datetime.timedelta(minutes=5)
 
     def _confirmation_params(self, tag: str) -> dict:
@@ -172,7 +196,7 @@ class SteamService:
         }
 
     async def _pending_confirmations(self) -> list:
-        await self._limiter.acquire()
+        await self._take_a_slot("mobileconf")
         resp = await to_thread.run_sync(
             partial(
                 self.client._session.get,
@@ -192,7 +216,7 @@ class SteamService:
         params = self._confirmation_params(op)
         params.update({"op": op, "cid": confirmation["id"], "ck": confirmation["nonce"]})
 
-        await self._limiter.acquire()
+        await self._take_a_slot("mobileconf")
         resp = await to_thread.run_sync(
             partial(
                 self.client._session.get,
@@ -230,6 +254,19 @@ class SteamService:
 
         logger.info(f"Confirming {what} through confirmation {confirmation['id']}.")
         await self._answer_confirmation(confirmation, "allow")
+
+    async def _take_a_slot(self, bucket: str) -> None:
+        remaining = await self._redis.pttl(f"{COOLDOWN_KEY}{bucket}")
+        if remaining and remaining > 0:
+            raise SteamThrottled(
+                f"Steam refused {bucket} requests for being too frequent; "
+                f"waiting another {remaining // 1000}s before trying again."
+            )
+        await self._limiters.get(bucket, self._limiters["default"]).acquire()
+
+    async def _stand_back(self, bucket: str) -> None:
+        logger.warning(f"Steam refused a {bucket} request for being too frequent, pausing that endpoint.")
+        await self._redis.set(f"{COOLDOWN_KEY}{bucket}", 1, ex=COOLDOWN_AFTER_REFUSAL)
 
     def _should_check_login(self) -> bool:
         return not self._last_check or datetime.datetime.now(datetime.UTC) - self._last_check > self._check_interval
@@ -295,7 +332,7 @@ class SteamService:
             self.client.was_login_executed = True
             self.client.market._set_login_executed(self.client.steam_guard, self.client._get_session_id())
 
-            await self._limiter.acquire()
+            await self._take_a_slot("market")
             steam_id = str(await to_thread.run_sync(self.client.get_steam_id))
 
             if steam_id == self._steam_id:
@@ -313,7 +350,7 @@ class SteamService:
     async def _log_in(self) -> None:
         """One attempt, no retry."""
         logger.info("Logging into Steam.")
-        await self._limiter.acquire()
+        await self._take_a_slot("market")
         await to_thread.run_sync(
             self.client.login,
             self._username,
@@ -339,7 +376,7 @@ class SteamService:
             return
 
         try:
-            await self._limiter.acquire()
+            await self._take_a_slot("market")
             resp = await to_thread.run_sync(
                 partial(self.client._session.get, f"{STEAM_COMMUNITY_URL}/market/", timeout=ORDER_BOOK_TIMEOUT)
             )
@@ -397,18 +434,16 @@ class SteamService:
             self._last_check = datetime.datetime.now(datetime.UTC)
 
     @requires_login
-    @throttled
+    @throttled("inventory")
     async def get_inventory(self, game: GameOptions) -> dict:
         logger.debug(f"Fetching inventory for app_id = {game.app_id}.")
         return await to_thread.run_sync(self.client.get_my_inventory, game, True, 1000)
 
     @requires_login
-    @throttled
+    @throttled("pricehistory")
     async def get_price_history(
         self, market_hash_name: str, game: GameOptions, days: int = 30
     ) -> list[tuple[datetime.datetime, Decimal, int]]:
-        """Steam meters this endpoint far more tightly than the rest, so it has its own budget."""
-        await self._history_limiter.acquire()
         logger.debug(f"Fetching price history for {market_hash_name} (last {days}).")
         resp = await to_thread.run_sync(self.client.market.fetch_price_history, market_hash_name, game)
         raw = resp.get("prices", [])
@@ -425,7 +460,7 @@ class SteamService:
         return history
 
     @requires_login
-    @throttled
+    @throttled("orderbook")
     async def get_order_book(self, market_hash_name: str, app_id: str) -> dict:
         """Fetch the current order book for an item."""
         logger.debug(f"Fetching order book for {market_hash_name}.")
@@ -459,7 +494,7 @@ class SteamService:
         }
 
     @requires_login
-    @throttled
+    @throttled("default")
     async def search_market(
         self,
         app_id: str,
@@ -487,7 +522,7 @@ class SteamService:
         return resp.json()
 
     @requires_login
-    @throttled
+    @throttled("orders")
     async def get_buy_order_status(self, buy_order_id: str, market_hash_name: str, app_id: str) -> dict:
         """What Steam says became of a buy order. The endpoint answers 400 without a Referer."""
         listing_url = f"{STEAM_COMMUNITY_URL}/market/listings/{app_id}/{quote(market_hash_name)}"
@@ -520,7 +555,7 @@ class SteamService:
         }
 
     @requires_login
-    @throttled
+    @throttled("market")
     async def get_sold_listings(self, count: int = MARKET_HISTORY_PAGE) -> dict:
         """Listings Steam's own history reports as sold, keyed by listing id."""
         logger.debug("Fetching market history.")
@@ -559,26 +594,26 @@ class SteamService:
         return {"sold": sold, "oldest_event_at": oldest}
 
     @requires_login
-    @throttled
+    @throttled("market")
     async def get_my_market_listings(self) -> dict:
         logger.debug("Fetching market listings.")
         return await to_thread.run_sync(self.client.market.get_my_market_listings)
 
     @requires_login
-    @throttled
+    @throttled("market")
     async def get_wallet_balance(self) -> Decimal:
         balance = await to_thread.run_sync(self.client.get_wallet_balance, True, False)
         logger.debug(f"Wallet balance: {balance}.")
         return Decimal(balance)
 
     @requires_login
-    @throttled
+    @throttled("orders")
     async def cancel_buy_order(self, buy_order_id: str) -> None:
         logger.info(f"Cancelling buy order {buy_order_id}.")
         await to_thread.run_sync(self.client.market.cancel_buy_order, buy_order_id)
 
     @requires_login
-    @throttled
+    @throttled("orders")
     async def cancel_sell_listing(self, listing_id: str) -> None:
         logger.info(f"Cancelling sell listing {listing_id}.")
         await to_thread.run_sync(self.client.market.cancel_sell_order, listing_id)
@@ -596,7 +631,7 @@ class SteamService:
         return resp.json()
 
     @requires_login
-    @throttled
+    @throttled("orders")
     async def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
         """
         Steam may hold the order for a mobile confirmation.
@@ -640,7 +675,7 @@ class SteamService:
         return buy_order_id
 
     @requires_login
-    @throttled
+    @throttled("orders")
     async def create_sell_order(self, asset_id: str, game: GameOptions, price: Decimal) -> None:
         logger.debug(f"Creating a sell order for {asset_id} at {price} rub.")
         kopecks = int((price * 100).to_integral_value())

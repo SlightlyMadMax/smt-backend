@@ -18,6 +18,10 @@ class SteamOperationFailed(SMTError):
     """Steam accepted the request but reported a failure."""
 
 
+class SteamThrottled(SteamOperationFailed):
+    """Steam refused a request for being too frequent and is being given room."""
+
+
 class ConfirmationFailed(SteamOperationFailed):
     """Steam asked for a mobile confirmation that could not be answered."""
 

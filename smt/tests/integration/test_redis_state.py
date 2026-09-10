@@ -10,8 +10,8 @@ import pytest_asyncio
 from redis.asyncio import Redis
 
 from smt.core.config import get_settings
-from smt.exceptions import SteamLoginUnavailable
-from smt.services.steam import LOGIN_BLOCK_KEY, LOGIN_FAILURES_KEY, SteamService
+from smt.exceptions import SteamLoginUnavailable, SteamThrottled
+from smt.services.steam import COOLDOWN_KEY, LOGIN_BLOCK_KEY, LOGIN_FAILURES_KEY, SteamService
 from smt.utils.rate_limit import RedisRateLimiter
 
 
@@ -155,3 +155,33 @@ class TestLoginCooldown:
         await steam_service._start_login_cooldown()
 
         await steam_service._ensure_login()
+
+
+@pytest.mark.asyncio
+class TestStandingBackFromSteam:
+    """A refusal must slow the whole system down, not just the caller that hit it."""
+
+    async def test_a_refusal_pauses_that_endpoint(self, steam_service, redis):
+        await steam_service._stand_back("market")
+        try:
+            with pytest.raises(SteamThrottled, match="market"):
+                await steam_service._take_a_slot("market")
+        finally:
+            await redis.delete(f"{COOLDOWN_KEY}market")
+
+    async def test_other_endpoints_keep_working(self, steam_service, redis):
+        await steam_service._stand_back("market")
+        try:
+            await steam_service._take_a_slot("orderbook")
+        finally:
+            await redis.delete(f"{COOLDOWN_KEY}market")
+
+    async def test_another_process_stands_back_too(self, steam_service, redis):
+        await steam_service._stand_back("pricehistory")
+        restarted = SteamService(get_settings())
+        try:
+            with pytest.raises(SteamThrottled):
+                await restarted._take_a_slot("pricehistory")
+        finally:
+            await redis.delete(f"{COOLDOWN_KEY}pricehistory")
+            await restarted._redis.aclose()
