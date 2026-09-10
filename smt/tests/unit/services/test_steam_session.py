@@ -83,13 +83,17 @@ class TestSteampyShortcuts:
             bare.is_session_alive()
 
 
-class TestSteampyParsesEnglishOnly:
-    """The listings page is scraped by its English labels, so the language must be pinned."""
+class TestHeadersSteamWillAccept:
+    """Measured against Steam: Accept and Accept-Language both draw a 429, whatever their value."""
 
-    def test_the_session_asks_steam_for_english(self, client):
-        from smt.services.steam import WEB_HEADERS
+    def test_neither_header_is_sent(self):
+        from smt.core.config import get_settings
+        from smt.services.steam import UNWELCOME_HEADERS, SteamService
 
-        assert WEB_HEADERS["Accept-Language"].startswith("en")
+        service = SteamService(get_settings())
+
+        for header in UNWELCOME_HEADERS:
+            assert header not in service.client._session.headers
 
     def test_the_parser_looks_for_english_labels(self):
         import inspect

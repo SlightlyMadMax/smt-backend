@@ -49,12 +49,12 @@ MOBILE_USER_AGENT = (
     "Mozilla/5.0 (Linux; U; Android 9; en-us; Valve Steam App Version/3) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/44.0.2403.133 Mobile Safari/537.36"
 )
-# Accept-Encoding is deliberately absent: the http libraries advertise the codecs they can
-# actually decode, and overriding it with one they cannot leaves undecodable bytes.
-WEB_HEADERS = {
-    "User-Agent": BROWSER_USER_AGENT,
-    "Accept-Language": "en-US,en;q=0.9",
-}
+# Steam answers 429 to any request carrying Accept or Accept-Language, whatever their value,
+# and requests sets "Accept: */*" on every session, so they have to be removed rather than
+# merely left unset. Accept-Encoding is fine, but the http libraries advertise the codecs they
+# can actually decode, so that one is left to them as well.
+UNWELCOME_HEADERS = ("Accept", "Accept-Language")
+WEB_HEADERS = {"User-Agent": BROWSER_USER_AGENT}
 MOBILE_HEADERS = {
     "User-Agent": MOBILE_USER_AGENT,
     "X-Requested-With": "com.valvesoftware.android.steam.community",
@@ -166,6 +166,8 @@ class SteamService:
             username=settings.STEAM_USERNAME,
             password=settings.STEAM_PASSWORD,
         )
+        for header in UNWELCOME_HEADERS:
+            self.client._session.headers.pop(header, None)
         self.client._session.headers.update(WEB_HEADERS)
         self._username: str = settings.STEAM_USERNAME
         self._password: str = settings.STEAM_PASSWORD
