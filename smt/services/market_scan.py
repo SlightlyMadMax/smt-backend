@@ -190,7 +190,10 @@ class MarketScanService:
             state.status = "done"
         except asyncio.CancelledError:
             state.status = "failed"
-            state.error = "The scan was cancelled."
+            state.error = (
+                f"Stopped after measuring {state.measured} of {state.params.limit} items. "
+                f"The results so far are kept."
+            )
             await self._finish(state)
             raise
         except Exception as e:

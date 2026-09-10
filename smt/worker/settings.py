@@ -1,4 +1,4 @@
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings
 
 from smt.core.config import get_settings
@@ -12,6 +12,9 @@ from smt.worker.tasks.trading_cycle import trading_cycle
 settings = get_settings()
 logger = get_logger("worker")
 
+# A scan reads one item at a time under Steam's rate limit, so the default 300s is nowhere near enough.
+SCAN_TIMEOUT = 3600
+
 
 async def startup(ctx) -> None:
     setup_all_loggers()
@@ -24,7 +27,7 @@ async def shutdown(ctx) -> None:
 
 
 class WorkerSettings:
-    functions = [refresh_task, market_scan_task]
+    functions = [refresh_task, func(market_scan_task, timeout=SCAN_TIMEOUT)]
     cron_jobs = [
         cron(refresh_periodic_task, hour=None, minute=set(range(0, 60, 5)), second=30),
         cron(trading_cycle, hour=None, minute=set(range(5, 60, 5)), second=0),

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -172,6 +173,22 @@ class TestRunningAScan:
         assert state["status"] == "done"
         assert "RuntimeError" in state["candidates"][0]["note"]
         assert state["candidates"][1]["note"] == ""
+
+    async def test_a_cancelled_scan_keeps_what_it_measured(self, scan_service):
+        """arq cancels a job that runs past its timeout; the work already done is still worth having."""
+        self.one_page(scan_service, [search_row("A"), search_row("B")])
+        scan_service.steam.get_price_history.side_effect = [
+            history(["8.00", "12.00", "8.20"]),
+            asyncio.CancelledError(),
+        ]
+
+        with pytest.raises(asyncio.CancelledError):
+            await scan_service.run("scan-7", ScanParams(limit=2, min_volume=0))
+
+        state = await self.stored(scan_service, "scan-7")
+        assert state["status"] == "failed"
+        assert "measuring 1 of 2 items" in state["error"]
+        assert len(state["candidates"]) == 1
 
     async def test_the_latest_scan_can_be_found_again(self, scan_service):
         self.one_page(scan_service, [search_row("A")])
