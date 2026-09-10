@@ -59,3 +59,16 @@ class ScanState(BaseModel):
     finished_at: str = ""
     params: dict = Field(default_factory=dict)
     candidates: List[ScanCandidate] = Field(default_factory=list)
+
+
+class ScanHistoryPoint(BaseModel):
+    recorded_at: str
+    price: Decimal
+    volume: int
+
+
+class ScanCandidateDetails(BaseModel):
+    market_hash_name: str
+    listing_url: str
+    history: List[ScanHistoryPoint] = Field(default_factory=list)
+    order_book: Optional[dict] = Field(default=None, description="None when Steam would not answer")

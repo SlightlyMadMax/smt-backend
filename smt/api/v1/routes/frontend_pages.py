@@ -105,6 +105,11 @@ async def action_history_page(request: Request):
     )
 
 
+@router.get("/scanner", response_class=HTMLResponse, include_in_schema=False)
+async def scanner_page(request: Request):
+    return templates.TemplateResponse("scanner.html", {"request": request})
+
+
 @router.get("/statistics", response_class=HTMLResponse, include_in_schema=False)
 async def statistics_page(request: Request):
     return templates.TemplateResponse("statistics.html", {"request": request})

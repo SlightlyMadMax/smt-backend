@@ -186,6 +186,98 @@
     };
   }
 
+
+  const OUTLIER_FACTOR = 5;
+  const CHART_W = 620;
+  const CHART_H = 170;
+  const CHART_PAD = 28;
+
+  function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : value;
+    return div.innerHTML;
+  }
+
+  function withoutOutliers(records) {
+    if (records.length === 0) return records;
+    const sorted = records.map(r => Number(r.price)).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    if (!(median > 0)) return records;
+    return records.filter(r => {
+      const price = Number(r.price);
+      return price >= median / OUTLIER_FACTOR && price <= median * OUTLIER_FACTOR;
+    });
+  }
+
+  function priceChart(allRecords, buyTarget, sellTarget, days) {
+    const records = withoutOutliers(allRecords);
+    const hidden = allRecords.length - records.length;
+
+    if (records.length < 2) {
+      return '<p class="details-empty">Not enough price history yet.</p>';
+    }
+
+    const prices = records.map(r => Number(r.price));
+    const times = records.map(r => new Date(r.recorded_at).getTime());
+    const levels = [buyTarget, sellTarget].filter(v => v != null).map(Number);
+    const min = Math.min(...prices, ...levels);
+    const max = Math.max(...prices, ...levels);
+    const span = max - min || 1;
+    const tMin = times[0];
+    const tSpan = times[times.length - 1] - tMin || 1;
+
+    const x = t => CHART_PAD + ((t - tMin) / tSpan) * (CHART_W - CHART_PAD * 2);
+    const y = p => CHART_H - CHART_PAD - ((p - min) / span) * (CHART_H - CHART_PAD * 2);
+    const line = records.map((r, i) => x(times[i]).toFixed(1) + ',' + y(prices[i]).toFixed(1)).join(' ');
+
+    const level = (value, cls, label) => {
+      if (value == null) return '';
+      const yy = y(Number(value)).toFixed(1);
+      return '<line class="chart-level ' + cls + '" x1="' + CHART_PAD + '" x2="' + (CHART_W - CHART_PAD) +
+        '" y1="' + yy + '" y2="' + yy + '"/>' +
+        '<text class="chart-label ' + cls + '" x="' + (CHART_W - CHART_PAD + 3) + '" y="' + yy +
+        '" dy="4">' + label + '</text>';
+    };
+
+    return '<svg class="price-chart" viewBox="0 0 ' + CHART_W + ' ' + CHART_H + '" role="img" ' +
+      'aria-label="Price over the last ' + days + ' days">' +
+      '<text class="chart-axis" x="2" y="' + y(max).toFixed(1) + '" dy="4">' + max.toFixed(2) + '</text>' +
+      '<text class="chart-axis" x="2" y="' + y(min).toFixed(1) + '" dy="4">' + min.toFixed(2) + '</text>' +
+      level(buyTarget, 'chart-buy', 'buy') +
+      level(sellTarget, 'chart-sell', 'sell') +
+      '<polyline class="chart-line" points="' + line + '"/></svg>' +
+      (hidden > 0
+        ? '<p class="chart-note">' + hidden + ' sale(s) far outside the usual range are not drawn. ' +
+          'They are typically money moved between accounts rather than trading.</p>'
+        : '');
+  }
+
+  function depthLists(book) {
+    const sells = (book.sell_levels || []).slice(0, 6);
+    const buys = (book.buy_levels || []).slice(0, 6);
+    const peak = Math.max(1, ...sells.map(l => l.quantity), ...buys.map(l => l.quantity));
+
+    const side = (levels, cls) => levels.map(l =>
+      '<li><span class="depth-price">' + escapeHtml(l.price) + '</span>' +
+      '<span class="depth-bar"><i class="' + cls + '" style="width:' +
+      (l.quantity / peak * 100).toFixed(1) + '%"></i></span>' +
+      '<span class="depth-qty">' + l.quantity + '</span></li>').join('');
+
+    const total = value => (value == null ? '-' : value);
+
+    return '<div class="depth">' +
+      '<div><h4>Sell orders <small>' + total(book.sell_order_count) + ' total</small></h4>' +
+      '<ul class="depth-list">' + side(sells, 'depth-sell') + '</ul></div>' +
+      '<div><h4>Buy orders <small>' + total(book.buy_order_count) + ' total</small></h4>' +
+      '<ul class="depth-list">' + side(buys, 'depth-buy') + '</ul></div></div>';
+  }
+
+  function statsList(rows) {
+    return '<dl class="details-stats">' + rows.map(pair =>
+      '<div><dt>' + pair[0] + '</dt><dd>' +
+      (pair[1] == null || pair[1] === '' ? '-' : escapeHtml(pair[1])) + '</dd></div>').join('') + '</dl>';
+  }
+
   global.SMT = {
     request,
     get: (url) => request(url),
@@ -197,6 +289,10 @@
     comparator,
     sortControl,
     pager,
+    escapeHtml,
+    priceChart,
+    depthLists,
+    statsList,
   };
 })(window);
 

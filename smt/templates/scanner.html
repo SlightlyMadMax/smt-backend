@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ static_url('css/pool_items.css') }}">
+{% endblock %}
+
+{% block title %}Market Scanner — Steam Market Trader{% endblock %}
+
+{% block content %}
+<h1 class="page-name">Market Scanner</h1>
+
+<form id="scan-form" class="settings-section">
+    <div class="form-row">
+        <div class="form-group">
+            <label for="app_id">Game</label>
+            <select name="app_id" id="app_id">
+                <option value="440" selected>Team Fortress 2</option>
+                <option value="730">Counter-Strike 2</option>
+                <option value="570">Dota 2</option>
+                <option value="753">Steam</option>
+            </select>
+            <small>Which market to walk through</small>
+        </div>
+
+        <div class="form-group">
+            <label for="limit">Items to measure</label>
+            <input type="number" name="limit" id="limit" min="1" max="500" value="50" required>
+            <small>Each one costs a request to Steam, so a large scan takes minutes</small>
+        </div>
+
+        <div class="form-group">
+            <label for="days">Price History, days</label>
+            <input type="number" name="days" id="days" min="1" max="365" value="30" required>
+            <small>How far back to read before judging an item</small>
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label for="min_price">Min Price</label>
+            <input type="number" name="min_price" id="min_price" step="0.01" min="0" value="8.00" required>
+            <small>Below this the minimum fee eats most of the spread</small>
+        </div>
+
+        <div class="form-group">
+            <label for="max_price">Max Price</label>
+            <input type="number" name="max_price" id="max_price" step="0.01" min="0.01" value="25.00" required>
+            <small>The dearest item worth tying capital up in</small>
+        </div>
+
+        <div class="form-group">
+            <label for="min_volume">Min Volume</label>
+            <input type="number" name="min_volume" id="min_volume" min="0" value="100" required>
+            <small>Sales over the whole window; thin items cannot be traded out of</small>
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label for="buy_percentile">Buy Percentile</label>
+            <input type="number" name="buy_percentile" id="buy_percentile" min="1" max="99" value="10" required>
+            <small>Where in the price distribution the buy order sits</small>
+        </div>
+
+        <div class="form-group">
+            <label for="sell_percentile">Sell Percentile</label>
+            <input type="number" name="sell_percentile" id="sell_percentile" min="1" max="99" value="90" required>
+            <small>Where the listing sits; further out means a longer wait</small>
+        </div>
+
+        <div class="form-group">
+            <label for="max_drift">Max Price Drift</label>
+            <input type="number" name="max_drift" id="max_drift" step="0.1" min="1.1" value="2" required>
+            <small>Reject an item whose history describes a different price era</small>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn" id="scan-start">Start scan</button>
+    </div>
+</form>
+
+<section class="pool-summary" id="scan-status" hidden>
+    <div class="pool-counts">
+        <span>Status: <strong id="scan-state">-</strong></span>
+        <span>Found: <strong id="scan-collected">0</strong></span>
+        <span>Measured: <strong id="scan-measured">0</strong></span>
+        <span class="count-ready">Clear the fee hurdle: <strong id="scan-tradable">0</strong></span>
+        <span id="scan-when"></span>
+    </div>
+</section>
+
+<p class="details-empty" id="scan-error" hidden></p>
+
+<form id="scan-bulk-form">
+    <div class="bulk-actions">
+        <label class="checkbox-label">
+            <input type="checkbox" id="only-tradable" checked>
+            <span class="checkbox-custom"></span>
+            <span>Only show items that clear the fee hurdle</span>
+        </label>
+        <button type="submit" class="btn" id="add-selected" disabled>Add selected to pool</button>
+    </div>
+</form>
+
+<div class="table-scroll">
+    <table class="pool-table" id="scan-table">
+        <thead>
+        <tr>
+            <th title="Select rows to add to the pool">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="select-all"/>
+                    <span class="checkbox-custom"></span>
+                </label>
+            </th>
+            <th title="Item icon as Steam shows it">Icon</th>
+            <th data-sort="name" data-sort-default="ascending" title="The link opens the item page on the Steam Market">Name</th>
+            <th data-sort="current_price" title="Cheapest listing right now">Now</th>
+            <th data-sort="buy_target" title="Price the bot would bid, at the chosen percentile of the history">Buy</th>
+            <th data-sort="sell_target" title="Price the bot would ask, at the chosen percentile of the history">Sell</th>
+            <th data-sort="profit_per_trade" title="What one round trip leaves after Steam and publisher fees">Per trip</th>
+            <th data-sort="round_trips" title="How many times the price made that journey over the window">Trips</th>
+            <th data-sort="median_hold_hours" title="Median hours a position stayed open during the simulation">Hold h</th>
+            <th data-sort="return_on_capital_pct" title="Profit per trip times trips, over the money tied up">ROI %</th>
+            <th data-sort="volume_30d" title="Items sold over the whole window">Volume</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody id="scan-rows">
+        <tr><td colspan="12" class="empty">No scan yet. Set the band above and start one.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div id="scan-pager"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ static_url('js/scanner.js') }}" defer></script>
+{% endblock %}
