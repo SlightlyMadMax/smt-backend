@@ -49,14 +49,14 @@ MOBILE_USER_AGENT = (
     "Mozilla/5.0 (Linux; U; Android 9; en-us; Valve Steam App Version/3) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/44.0.2403.133 Mobile Safari/537.36"
 )
+# Accept-Encoding is deliberately absent: the http libraries advertise the codecs they can
+# actually decode, and overriding it with one they cannot leaves undecodable bytes.
 WEB_HEADERS = {
     "User-Agent": BROWSER_USER_AGENT,
-    "Accept-Encoding": "gzip, deflate, br",
     "Accept-Language": "en-US,en;q=0.9",
 }
 MOBILE_HEADERS = {
     "User-Agent": MOBILE_USER_AGENT,
-    "Accept-Encoding": "gzip, deflate, br",
     "X-Requested-With": "com.valvesoftware.android.steam.community",
 }
 ORDER_BOOK_TIMEOUT = 30

@@ -100,3 +100,10 @@ class TestSteampyParsesEnglishOnly:
 
         assert "My buy orders" in source
         assert "My sell listings" in source
+
+    def test_we_do_not_promise_to_decode_what_we_cannot(self):
+        """requests advertises the codecs it has; overriding that leaves undecodable bytes."""
+        from smt.services.steam import MOBILE_HEADERS, WEB_HEADERS
+
+        assert "Accept-Encoding" not in WEB_HEADERS
+        assert "Accept-Encoding" not in MOBILE_HEADERS
