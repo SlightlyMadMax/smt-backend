@@ -117,7 +117,7 @@ class TestMeasuring:
         scan_service.steam.get_order_book.return_value = {"sell_levels": [{"price": Decimal("9.00"), "quantity": 240}]}
         points = history(["8.00", "12.00"] * 8, volume=20)
 
-        measured = await self.measure(scan_service, points)
+        measured = await self.measure(scan_service, points, days=30)
 
         assert measured.queue_ahead == 240
         assert measured.round_trips == 8

@@ -31,7 +31,7 @@ class ScanParams:
     app_id: str = "440"
     context_id: str = "2"
     limit: int = 50
-    days: int = 30
+    days: int = 14
     buy_percentile: int = 10
     sell_percentile: int = 90
     min_price: Decimal = Decimal("1.00")

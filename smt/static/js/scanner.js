@@ -61,17 +61,14 @@ function buildRow(row, index) {
     '<td>' + money(row.buy_target) + '</td>' +
     '<td>' + money(row.sell_target) + '</td>' +
     '<td>' + money(row.profit_per_trade) + '</td>' +
-    '<td>' + row.round_trips + '</td>' +
-    '<td>' + (row.queue_ahead == null ? '-' : row.queue_ahead) + '</td>' +
-    '<td>' + money(row.days_to_clear) + '</td>' +
     '<td>' + row.feasible_round_trips + '</td>' +
-    '<td>' + money(row.median_hold_hours) + '</td>' +
+    '<td>' + money(row.days_to_clear) + '</td>' +
     '<td>' + money(row.return_on_capital_pct) + '</td>' +
     '<td>' + row.volume_30d + '</td>' +
     '<td class="chevron-cell" title="Show price history and order book">' +
     '<span class="row-chevron" aria-hidden="true"></span></td></tr>' +
     '<tr class="details-row" id="scan-details-' + index + '" data-details-for="' + SMT.escapeHtml(hash) +
-    '" hidden><td colspan="15"><div class="details-panel"></div></td></tr>'
+    '" hidden><td colspan="12"><div class="details-panel"></div></td></tr>'
   );
 }
 
@@ -82,7 +79,7 @@ function render() {
   const page = ordered.slice(pages.offset, pages.offset + pages.pageSize);
 
   if (page.length === 0) {
-    rowsBody.innerHTML = '<tr><td colspan="15" class="empty">' +
+    rowsBody.innerHTML = '<tr><td colspan="12" class="empty">' +
       (candidates.length === 0 ? 'No scan yet. Set the band above and start one.'
         : 'Nothing here. Untick the filter to see the items that were measured and rejected.') +
       '</td></tr>';

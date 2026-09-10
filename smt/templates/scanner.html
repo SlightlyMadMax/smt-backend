@@ -31,7 +31,7 @@
 
         <div class="form-group">
             <label for="days">Price History, days</label>
-            <input type="number" name="days" id="days" min="1" max="365" value="30" required>
+            <input type="number" name="days" id="days" min="1" max="365" value="14" required>
             <small>How far back to read before judging an item</small>
         </div>
     </div>
@@ -120,18 +120,15 @@
             <th data-sort="buy_target" title="Price the bot would bid, at the chosen percentile of the history">Buy</th>
             <th data-sort="sell_target" title="Price the bot would ask, at the chosen percentile of the history">Sell</th>
             <th data-sort="profit_per_trade" title="What one round trip leaves after Steam and publisher fees">Per trip</th>
-            <th data-sort="round_trips" title="How many times the price made that journey over the window">Trips</th>
-            <th data-sort="queue_ahead" title="Listings priced at or below our sell price, which Steam serves before ours">Queue</th>
-            <th data-sort="days_to_clear" title="Days that queue takes to drain at the recent rate of sales">Wait d</th>
-            <th data-sort="feasible_round_trips" title="Trips the history allows, capped by how many the queue leaves time for. This is what the return is computed from">Real trips</th>
-            <th data-sort="median_hold_hours" title="Median hours a position stayed open during the simulation">Hold h</th>
+            <th data-sort="feasible_round_trips" title="Round trips the history allows, capped by how many the queue in front of our listing leaves time for. The return is computed from this">Trips</th>
+            <th data-sort="days_to_clear" title="Days the listings priced under ours take to sell off, at the recent rate. Open a row for the queue itself">Wait d</th>
             <th data-sort="return_on_capital_pct" title="Profit per trip times trips, over the money tied up">ROI %</th>
             <th data-sort="volume_30d" title="Items sold over the whole window">Volume</th>
             <th></th>
         </tr>
         </thead>
         <tbody id="scan-rows">
-        <tr><td colspan="15" class="empty">No scan yet. Set the band above and start one.</td></tr>
+        <tr><td colspan="12" class="empty">No scan yet. Set the band above and start one.</td></tr>
         </tbody>
     </table>
 </div>

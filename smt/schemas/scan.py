@@ -8,7 +8,7 @@ class ScanRequest(BaseModel):
     app_id: str = Field(default="440", description="Steam app id, 440 is TF2 and 730 is CS2")
     context_id: str = Field(default="2", description="Steam inventory context the items live in")
     limit: int = Field(default=50, ge=1, le=500, description="How many items to measure")
-    days: int = Field(default=30, ge=1, le=365, description="How far back to read price history")
+    days: int = Field(default=14, ge=1, le=365, description="How far back to read price history")
     buy_percentile: int = Field(default=10, ge=1, le=99, description="Percentile used as the buy target")
     sell_percentile: int = Field(default=90, ge=1, le=99, description="Percentile used as the sell target")
     min_price: Decimal = Field(default=Decimal("1.00"), ge=0, description="Ignore items cheaper than this")
