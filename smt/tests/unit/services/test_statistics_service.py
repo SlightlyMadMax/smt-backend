@@ -54,6 +54,8 @@ def closed(hash_name: str, buy: str, profit: str, sold_days_ago: float, hold_hou
     sold_at = NOW - timedelta(days=sold_days_ago)
     return Position(
         pool_item_hash=hash_name,
+        app_id="440",
+        context_id="2",
         buy_order_id=f"buy-{hash_name}-{sold_days_ago}-{profit}",
         buy_price=Decimal(buy),
         sell_price=Decimal(buy) * Decimal("1.2"),
@@ -77,6 +79,8 @@ class TestFunnel:
             db_session,
             Position(
                 pool_item_hash=FAST,
+                app_id="440",
+                context_id="2",
                 buy_order_id="never-filled",
                 buy_price=Decimal("10"),
                 sell_price=Decimal("12"),
@@ -84,6 +88,8 @@ class TestFunnel:
             ),
             Position(
                 pool_item_hash=FAST,
+                app_id="440",
+                context_id="2",
                 buy_order_id="still-waiting",
                 buy_price=Decimal("10"),
                 sell_price=Decimal("12"),
@@ -91,6 +97,8 @@ class TestFunnel:
             ),
             Position(
                 pool_item_hash=FAST,
+                app_id="440",
+                context_id="2",
                 buy_order_id="not-sold-yet",
                 buy_price=Decimal("10"),
                 sell_price=Decimal("12"),
@@ -225,6 +233,8 @@ class TestItems:
             db_session,
             Position(
                 pool_item_hash=FAST,
+                app_id="440",
+                context_id="2",
                 buy_order_id="open",
                 buy_price=Decimal("10"),
                 sell_price=Decimal("12"),

@@ -47,7 +47,7 @@ updateApplyState();
 // ── bulk actions ─────────────────────────────────────────────────────────
 async function removeItems(hashes) {
   const confirmed = SMT.confirmAction(
-    `Remove ${hashes.length} item(s) from the pool? Their price history will be deleted too.`
+    `Remove ${hashes.length} item(s) from the pool? Their price history goes too, but closed trades and open positions are kept.`
   );
   if (!confirmed) return;
 

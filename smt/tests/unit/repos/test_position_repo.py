@@ -51,6 +51,8 @@ async def position(position_repo) -> Position:
     return await position_repo.add(
         PositionCreate(
             pool_item_hash=ITEM_HASH,
+            app_id="440",
+            context_id="2",
             buy_order_id="BUY-1",
             buy_price=Decimal("10.00"),
             sell_price=Decimal("15.00"),
@@ -149,6 +151,8 @@ class TestRealizedProfit:
         other = await position_repo.add(
             PositionCreate(
                 pool_item_hash=ITEM_HASH,
+                app_id="440",
+                context_id="2",
                 buy_order_id="BUY-2",
                 buy_price=Decimal("10.00"),
                 sell_price=Decimal("15.00"),
@@ -180,6 +184,8 @@ async def many_positions(position_repo, db_session):
         pos = await position_repo.add(
             PositionCreate(
                 pool_item_hash=ITEM_HASH,
+                app_id="440",
+                context_id="2",
                 buy_order_id=f"BUY-{n}",
                 buy_price=Decimal(10 + n),
                 sell_price=Decimal(20),
@@ -228,3 +234,28 @@ class TestPositionPaging:
         assert len(page) == 3
         assert await position_repo.count(PositionStatus.CLOSED) == 3
         assert await position_repo.count() == 5
+
+
+@pytest.mark.asyncio
+class TestTradeHistoryOutlivesThePool:
+    async def test_a_closed_position_survives_removing_the_item(self, db_session, position_repo, position):
+        """The pool is a watchlist; deleting from it must not erase what was actually traded."""
+        await position_repo.update(position.id, PositionUpdate(status=PositionStatus.CLOSED.value))
+
+        await db_session.execute(delete(PoolItem).where(PoolItem.market_hash_name == ITEM_HASH))
+        await db_session.commit()
+        db_session.expunge_all()
+
+        survivor = await position_repo.get_by_id(position.id)
+        assert survivor.pool_item_hash == ITEM_HASH
+        assert survivor.status == PositionStatus.CLOSED
+
+    async def test_an_orphaned_position_still_knows_its_game(self, db_session, position_repo, position):
+        """The trading cycle reads the game off the position, so an open trade can still be finished."""
+        await db_session.execute(delete(PoolItem).where(PoolItem.market_hash_name == ITEM_HASH))
+        await db_session.commit()
+        db_session.expunge_all()
+
+        survivor = await position_repo.get_by_id(position.id)
+        assert (survivor.app_id, survivor.context_id) == ("440", "2")
+        assert survivor.pool_item is None

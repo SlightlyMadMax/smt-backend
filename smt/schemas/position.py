@@ -24,7 +24,9 @@ ACTIVE_STATUSES = (
 
 
 class PositionBase(BaseModel):
-    pool_item_hash: str = Field(..., description="Market hash name of the pool item")
+    pool_item_hash: str = Field(..., description="Market hash name of the item being traded")
+    app_id: str = Field(..., description="Steam app the item belongs to")
+    context_id: str = Field(..., description="Steam inventory context the item lives in")
 
 
 class PositionCreate(PositionBase):

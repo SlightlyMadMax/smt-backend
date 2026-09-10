@@ -246,7 +246,7 @@ class TradingService:
             try:
                 await self.steam_service.create_sell_order(
                     asset_id=pos.asset_id,
-                    game=GameOptions(pos.pool_item.app_id, pos.pool_item.context_id),
+                    game=GameOptions(pos.app_id, pos.context_id),
                     price=pos.sell_price,
                 )
             except SellOrderFailed as e:
@@ -289,7 +289,7 @@ class TradingService:
         Only an item that appeared after the position was opened can belong to it; anything
         older is the account owner's own copy.
         """
-        key = (position.pool_item.app_id, position.pool_item.context_id)
+        key = (position.app_id, position.context_id)
         available = sorted(
             assets.get(key, {}).get(position.pool_item_hash, []),
             key=lambda item: item.first_seen_at,
@@ -306,7 +306,7 @@ class TradingService:
             return await self.steam_service.get_buy_order_status(
                 buy_order_id=position.buy_order_id,
                 market_hash_name=position.pool_item_hash,
-                app_id=position.pool_item.app_id,
+                app_id=position.app_id,
             )
         except Exception as e:
             logger.warning(f"Could not read the status of buy order {position.buy_order_id}: {e!r}")
@@ -617,6 +617,8 @@ class TradingService:
 
             create = PositionCreate(
                 pool_item_hash=item.market_hash_name,
+                app_id=item.app_id,
+                context_id=item.context_id,
                 buy_order_id=buy_id,
                 buy_price=buy_price,
                 sell_price=item.effective_sell_price,

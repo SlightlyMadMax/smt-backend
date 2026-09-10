@@ -120,6 +120,8 @@ class PositionRepo:
     async def add(self, data: PositionCreate) -> Position:
         pos = Position(
             pool_item_hash=data.pool_item_hash,
+            app_id=data.app_id,
+            context_id=data.context_id,
             buy_order_id=data.buy_order_id,
             buy_price=data.buy_price,
             sell_price=data.sell_price,

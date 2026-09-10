@@ -62,7 +62,12 @@ class PoolItem(TimeStampedModel, Base):
     median_hold_hours: Mapped[Decimal] = mapped_column(Numeric(10, 1), nullable=True)
     return_on_capital_30d: Mapped[Decimal] = mapped_column(Numeric(10, 1), nullable=True)
     use_for_trading: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    positions = relationship("Position", back_populates="pool_item")
+    positions = relationship(
+        "Position",
+        back_populates="pool_item",
+        primaryjoin="foreign(Position.pool_item_hash) == PoolItem.market_hash_name",
+        viewonly=True,
+    )
 
     @property
     def effective_buy_price(self) -> Decimal | None:
@@ -135,10 +140,15 @@ class Position(TimeStampedModel, Base):
     __tablename__ = "positions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    pool_item_hash: Mapped[str] = mapped_column(
-        String(255), ForeignKey("pool_items.market_hash_name", ondelete="CASCADE"), nullable=False
+    pool_item_hash: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    app_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    context_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    pool_item = relationship(
+        "PoolItem",
+        back_populates="positions",
+        primaryjoin="foreign(Position.pool_item_hash) == PoolItem.market_hash_name",
+        viewonly=True,
     )
-    pool_item = relationship("PoolItem", back_populates="positions")
     asset_id: Mapped[str] = mapped_column(String(32), nullable=True, unique=True)
     buy_order_id: Mapped[str] = mapped_column(String(64), nullable=False)
     buy_price: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)

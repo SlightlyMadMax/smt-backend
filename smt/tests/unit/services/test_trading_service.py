@@ -22,6 +22,8 @@ def make_position(position_id: int, status: PositionStatus, asset_id=None, sell_
         id=position_id,
         buy_order_id=f"BUY-{position_id}",
         pool_item_hash=ITEM_HASH,
+        app_id="730",
+        context_id="2",
         pool_item=SimpleNamespace(app_id="730", context_id="2"),
         asset_id=asset_id,
         sell_order_id=sell_order_id,
