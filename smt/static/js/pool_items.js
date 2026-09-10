@@ -56,6 +56,7 @@ async function removeItems(hashes) {
     hashes.forEach(h => document.querySelector(`tr[data-hash="${CSS.escape(h)}"]`)?.remove());
     clearSelection();
     SMT.notify(result.message);
+    refreshSummary();
   } catch (e) {
     SMT.notify(`Could not remove items: ${e.message}`, 'error');
   }

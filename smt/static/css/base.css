@@ -235,6 +235,13 @@ button:disabled,
   margin-bottom: var(--gap);
 }
 
+.form-row > .form-group {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+  row-gap: 0;
+}
+
 .form-group label {
   font-weight: 600;
   margin-bottom: 0.25rem;
