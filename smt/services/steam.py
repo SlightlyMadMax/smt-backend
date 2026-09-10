@@ -556,46 +556,53 @@ class SteamService:
         logger.info(f"Cancelling sell listing {listing_id}.")
         await to_thread.run_sync(self.client.market.cancel_sell_order, listing_id)
 
-    async def _placed_buy_order_id(self, market_hash_name: str) -> str:
-        """Steam does not return the id once a confirmation was involved, so read it back."""
-        listings = await self.get_my_market_listings()
-        for key, order in (listings.get("buy_orders") or {}).items():
-            if order.get("item_name") == market_hash_name:
-                return str(order.get("order_id") or key)
-        raise BuyOrderFailed(f"The confirmed buy order for {market_hash_name} is not among the active orders.")
-
-    @requires_login
-    @throttled
-    async def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
-        logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
-        kopecks = int((price * 100).to_integral_value())
-        listing_url = f"{STEAM_COMMUNITY_URL}/market/listings/{game.app_id}/{quote(market_hash_name)}"
-
+    async def _post_buy_order(self, data: dict, listing_url: str) -> dict:
         resp = await to_thread.run_sync(
             partial(
                 self.client._session.post,
                 f"{STEAM_COMMUNITY_URL}/market/createbuyorder/",
-                data={
-                    "sessionid": self.client._get_session_id(),
-                    "currency": ACCOUNT_CURRENCY.value,
-                    "appid": game.app_id,
-                    "market_hash_name": market_hash_name,
-                    "price_total": str(kopecks * quantity),
-                    "quantity": quantity,
-                },
+                data=data,
                 headers={"Referer": listing_url},
                 timeout=ORDER_BOOK_TIMEOUT,
             )
         )
-        payload = resp.json()
+        return resp.json()
+
+    @requires_login
+    @throttled
+    async def create_buy_order(self, market_hash_name: str, price: Decimal, game: GameOptions, quantity: int) -> str:
+        """
+        Steam may hold the order for a mobile confirmation.
+
+        The confirmed order only comes into existence when the same request is sent again
+        carrying the confirmation id, so the first response never has the order id.
+        """
+        logger.debug(f"Creating a buy order for {quantity} {market_hash_name}.")
+        kopecks = int((price * 100).to_integral_value())
+        listing_url = f"{STEAM_COMMUNITY_URL}/market/listings/{game.app_id}/{quote(market_hash_name)}"
+        data = {
+            "sessionid": self.client._get_session_id(),
+            "currency": ACCOUNT_CURRENCY.value,
+            "appid": game.app_id,
+            "market_hash_name": market_hash_name,
+            "price_total": str(kopecks * quantity),
+            "tradefee_tax": 0,
+            "quantity": quantity,
+            "billing_state": "",
+            "save_my_address": 0,
+            "confirmation": 0,
+        }
+
+        payload = await self._post_buy_order(data, listing_url)
 
         if payload.get("need_confirmation"):
-            wanted = str((payload.get("confirmation") or {}).get("confirmation_id") or "")
+            confirmation_id = str((payload.get("confirmation") or {}).get("confirmation_id") or "")
             await self._confirm(
-                lambda c: str(c.get("creator_id")) == wanted,
+                lambda c: str(c.get("creator_id")) == confirmation_id,
                 f"a buy order for {market_hash_name}",
             )
-            return await self._placed_buy_order_id(market_hash_name)
+            data["confirmation"] = confirmation_id
+            payload = await self._post_buy_order(data, listing_url)
 
         if payload.get("success") != 1:
             logger.error(f"Failed to create a buy order for {quantity} {market_hash_name}. Response: {payload}")
