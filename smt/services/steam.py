@@ -84,6 +84,7 @@ STEAM_BUDGETS = {
     "mobileconf": 5,
     "orderbook": 20,
     "orders": 10,
+    "login": 4,
     "default": 15,
 }
 COOLDOWN_KEY = "smt:steam:cooldown:"
@@ -332,7 +333,7 @@ class SteamService:
             self.client.was_login_executed = True
             self.client.market._set_login_executed(self.client.steam_guard, self.client._get_session_id())
 
-            await self._take_a_slot("market")
+            await self._take_a_slot("login")
             steam_id = str(await to_thread.run_sync(self.client.get_steam_id))
 
             if steam_id == self._steam_id:
@@ -350,7 +351,7 @@ class SteamService:
     async def _log_in(self) -> None:
         """One attempt, no retry."""
         logger.info("Logging into Steam.")
-        await self._take_a_slot("market")
+        await self._take_a_slot("login")
         await to_thread.run_sync(
             self.client.login,
             self._username,
@@ -424,6 +425,8 @@ class SteamService:
 
             try:
                 await self._log_in()
+            except SteamThrottled:
+                raise
             except Exception as e:
                 cooldown = await self._start_login_cooldown()
                 logger.error(f"Steam login failed, backing off for {cooldown}: {e!r}")
