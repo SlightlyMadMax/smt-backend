@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from steampy.models import GameOptions
 
 from smt.db.models import Item, PoolItem
-from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SteamThrottled
+from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed, SteamThrottled
 from smt.logger import get_logger
 from smt.schemas.action_log import ActionKind, ActionLevel
 from smt.schemas.position import PositionCreate, PositionStatus
@@ -16,6 +16,7 @@ from smt.services.pool import PoolService
 from smt.services.position import PositionService
 from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
+from smt.utils.steam import minimum_listing_price
 
 
 logger = get_logger("services.trading")
@@ -63,10 +64,11 @@ class TradingService:
 
             await self._resolve_pending_listings(sell_listings, assets or {})
             await self._sync_listed_to_closed(sell_listings, assets or {})
-            if await self._list_bought_positions():
-                await self._attach_fresh_listings(assets)
-
-            if not settings.emergency_stop:
+            if settings.emergency_stop:
+                logger.info("Trading is stopped, so nothing gets listed or bought this cycle.")
+            else:
+                if await self._list_bought_positions():
+                    await self._attach_fresh_listings(assets or {})
                 await self._open_new_positions()
         except SteamThrottled as e:
             logger.info(f"Steam is pacing us, this cycle does nothing: {e}")
@@ -220,15 +222,44 @@ class TradingService:
     async def _list_bought_positions(self) -> int:
         """Place a sell order for each BOUGHT position."""
         bought_positions = await self.position_service.list_by_status(PositionStatus.BOUGHT)
+        floor = minimum_listing_price()
+        listed = 0
+
         for pos in bought_positions:
+            if pos.sell_price < floor:
+                logger.warning(
+                    f"Position {pos.id} asks {pos.sell_price} for {pos.pool_item_hash}, under the {floor} "
+                    f"Steam accepts, so it stays unlisted."
+                )
+                await self.action_log.record(
+                    ActionKind.SELL_ORDER_REFUSED,
+                    f"{pos.sell_price} is below the {floor} Steam accepts, so nothing was listed.",
+                    level=ActionLevel.WARNING,
+                    market_hash_name=pos.pool_item_hash,
+                    position_id=pos.id,
+                )
+                continue
+
             logger.info(
                 f"Placing a sell order for Position {pos.id}, market_hash_name: {pos.pool_item_hash}, price: {pos.sell_price} rub."
             )
-            await self.steam_service.create_sell_order(
-                asset_id=pos.asset_id,
-                game=GameOptions(pos.pool_item.app_id, pos.pool_item.context_id),
-                price=pos.sell_price,
-            )
+            try:
+                await self.steam_service.create_sell_order(
+                    asset_id=pos.asset_id,
+                    game=GameOptions(pos.pool_item.app_id, pos.pool_item.context_id),
+                    price=pos.sell_price,
+                )
+            except SellOrderFailed as e:
+                logger.warning(f"Steam would not list position {pos.id}: {e}")
+                await self.action_log.record(
+                    ActionKind.SELL_ORDER_REFUSED,
+                    f"Steam refused the listing at {pos.sell_price}: {e}",
+                    level=ActionLevel.WARNING,
+                    market_hash_name=pos.pool_item_hash,
+                    position_id=pos.id,
+                )
+                continue
+
             await self.position_service.mark_as_listing_pending(position_id=pos.id)
             await self.action_log.record(
                 ActionKind.SELL_ORDER_PLACED,
@@ -236,7 +267,9 @@ class TradingService:
                 market_hash_name=pos.pool_item_hash,
                 position_id=pos.id,
             )
-        return len(bought_positions)
+            listed += 1
+
+        return listed
 
     async def _attach_fresh_listings(self, assets: Dict) -> None:
         """A listing placed this cycle is missing from the snapshot taken before it."""

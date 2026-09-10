@@ -123,6 +123,17 @@ def calculate_fees(gross: int, schedule: Optional[FeeSchedule] = None) -> dict:
     }
 
 
+def minimum_listing_price(schedule: Optional[FeeSchedule] = None) -> Decimal:
+    """
+    The cheapest listing Steam accepts.
+
+    Both fees bottom out at the same minimum, and the seller cannot receive less than it
+    either, so the floor is three of them.
+    """
+    schedule = schedule or _schedule
+    return (Decimal(schedule.minimum * 3 + schedule.base) / 100).quantize(Decimal("0.01"))
+
+
 def net_received(gross: Decimal) -> Decimal:
     """What the seller receives after fees when the buyer pays `gross`."""
     kopecks = int((gross * 100).to_integral_value())

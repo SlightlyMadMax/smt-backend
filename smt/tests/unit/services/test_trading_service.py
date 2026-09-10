@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SteamThrottled
+from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SellOrderFailed, SteamThrottled
 from smt.schemas.action_log import ActionKind
 from smt.schemas.position import PositionStatus
 from smt.services.trading import CANCEL_GRACE_PERIOD, TradingService
+from smt.utils.steam import minimum_listing_price
 
 
 ITEM_HASH = "AK-47 | Redline (Field-Tested)"
@@ -962,6 +963,78 @@ class TestListingWithinTheCycle:
         await trading_service.run_cycle()
 
         assert trading_service.steam_service.get_my_market_listings.await_count == 1
+
+
+@pytest.mark.asyncio
+class TestListingWhatWeBought:
+    @staticmethod
+    def bought(trading_service, position_service, sell_price=Decimal("15.00")):
+        position = make_position(1, PositionStatus.BOUGHT, asset_id="ASSET-1")
+        position.sell_price = sell_price
+        position_service.list_by_status.return_value = [position]
+        return position
+
+    async def test_a_price_under_the_steam_floor_is_not_sent(self, trading_service, position_service, action_log):
+        """Steam refuses these outright, and the refusal used to abort the whole cycle."""
+        self.bought(trading_service, position_service, sell_price=Decimal("2.00"))
+
+        listed = await trading_service._list_bought_positions()
+
+        assert listed == 0
+        trading_service.steam_service.create_sell_order.assert_not_awaited()
+        position_service.mark_as_listing_pending.assert_not_awaited()
+        assert action_log.record.await_args.args[0] == ActionKind.SELL_ORDER_REFUSED
+
+    async def test_a_price_on_the_floor_is_sent(self, trading_service, position_service):
+        self.bought(trading_service, position_service, sell_price=minimum_listing_price())
+
+        assert await trading_service._list_bought_positions() == 1
+
+    async def test_a_refused_listing_does_not_stop_the_others(self, trading_service, position_service):
+        first = make_position(1, PositionStatus.BOUGHT, asset_id="ASSET-1")
+        second = make_position(2, PositionStatus.BOUGHT, asset_id="ASSET-2")
+        position_service.list_by_status.return_value = [first, second]
+        trading_service.steam_service.create_sell_order.side_effect = [SellOrderFailed("no"), None]
+
+        listed = await trading_service._list_bought_positions()
+
+        assert listed == 1
+        position_service.mark_as_listing_pending.assert_awaited_once_with(position_id=2)
+
+    async def test_a_refused_listing_is_journalled(self, trading_service, position_service, action_log):
+        self.bought(trading_service, position_service)
+        trading_service.steam_service.create_sell_order.side_effect = SellOrderFailed("item is not marketable")
+
+        await trading_service._list_bought_positions()
+
+        assert action_log.record.await_args.args[0] == ActionKind.SELL_ORDER_REFUSED
+
+
+@pytest.mark.asyncio
+class TestEmergencyStop:
+    @staticmethod
+    def stopped(trading_service, position_service):
+        position_service.list_active.return_value = []
+        position_service.list_by_status.return_value = [make_position(1, PositionStatus.BOUGHT, asset_id="ASSET-1")]
+        trading_service.pool_item_service.list.return_value = []
+        trading_service.settings_service.get_settings.return_value = make_settings()
+        trading_service.settings_service.get_settings.return_value.emergency_stop = True
+        trading_service.steam_service.get_my_market_listings.return_value = {"buy_orders": {}, "sell_listings": {}}
+
+    async def test_nothing_is_listed_again(self, trading_service, position_service):
+        """Otherwise the bot puts back every listing you cancel by hand."""
+        self.stopped(trading_service, position_service)
+
+        await trading_service.run_cycle()
+
+        trading_service.steam_service.create_sell_order.assert_not_awaited()
+
+    async def test_nothing_is_bought(self, trading_service, position_service):
+        self.stopped(trading_service, position_service)
+
+        await trading_service.run_cycle()
+
+        trading_service.steam_service.create_buy_order.assert_not_awaited()
 
 
 @pytest.mark.asyncio
