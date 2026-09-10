@@ -39,6 +39,24 @@ CONFIRMATION_ATTEMPTS = 4
 CONFIRMATION_DELAY = 3.0
 ORDER_PENDING_CONFIRMATION = 22
 LISTING_CONFIRMATION_TYPE = 3
+
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
+MOBILE_USER_AGENT = (
+    "Mozilla/5.0 (Linux; U; Android 9; en-us; Valve Steam App Version/3) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/44.0.2403.133 Mobile Safari/537.36"
+)
+WEB_HEADERS = {
+    "User-Agent": BROWSER_USER_AGENT,
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+}
+MOBILE_HEADERS = {
+    "User-Agent": MOBILE_USER_AGENT,
+    "Accept-Encoding": "gzip, deflate, br",
+    "X-Requested-With": "com.valvesoftware.android.steam.community",
+}
 ORDER_BOOK_TIMEOUT = 30
 ACCOUNT_CURRENCY = Currency.RUB
 SOLD_EVENT_TYPE = 3
@@ -113,6 +131,7 @@ class SteamService:
             username=settings.STEAM_USERNAME,
             password=settings.STEAM_PASSWORD,
         )
+        self.client._session.headers.update(WEB_HEADERS)
         self._username: str = settings.STEAM_USERNAME
         self._password: str = settings.STEAM_PASSWORD
         self._steam_id: str = settings.STEAMID
@@ -153,7 +172,7 @@ class SteamService:
                 self.client._session.get,
                 f"{CONFIRMATION_URL}/getlist",
                 params=self._confirmation_params("conf"),
-                headers={"X-Requested-With": "com.valvesoftware.android.steam.community"},
+                headers=MOBILE_HEADERS,
                 timeout=ORDER_BOOK_TIMEOUT,
             )
         )
@@ -173,7 +192,7 @@ class SteamService:
                 self.client._session.get,
                 f"{CONFIRMATION_URL}/ajaxop",
                 params=params,
-                headers={"X-Requested-With": "XMLHttpRequest"},
+                headers={**MOBILE_HEADERS, "X-Requested-With": "XMLHttpRequest"},
                 timeout=ORDER_BOOK_TIMEOUT,
             )
         )
@@ -406,7 +425,7 @@ class SteamService:
         cookies = self.client._session.cookies.get_dict(domain="steamcommunity.com")
 
         try:
-            async with httpx.AsyncClient(timeout=ORDER_BOOK_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=ORDER_BOOK_TIMEOUT, headers=WEB_HEADERS) as client:
                 resp = await client.get(f"{STEAM_COMMUNITY_URL}/market/orderbook", params=params, cookies=cookies)
             resp.raise_for_status()
             payload = resp.json().get("data") or {}
