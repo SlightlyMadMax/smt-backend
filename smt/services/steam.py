@@ -101,12 +101,16 @@ def _paid_from_purchases(purchases: list) -> Optional[Decimal]:
     total = 0
     seen = False
     for purchase in purchases:
-        amount = purchase.get("paid_amount") if isinstance(purchase, dict) else None
-        fee = purchase.get("paid_fee") if isinstance(purchase, dict) else None
-        if amount is None:
+        if not isinstance(purchase, dict):
             continue
+        amount = purchase.get("price_total")
+        if amount is None:
+            subtotal = purchase.get("price_subtotal")
+            if subtotal is None:
+                continue
+            amount = int(subtotal) + int(purchase.get("price_fee") or 0)
         seen = True
-        total += int(amount) + int(fee or 0)
+        total += int(amount)
     return _from_minor_units(total) if seen else None
 
 
