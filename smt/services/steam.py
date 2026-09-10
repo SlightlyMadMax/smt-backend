@@ -615,6 +615,7 @@ class SteamService:
             sold[str(event["listingid"])] = {
                 "sold_at": occurred,
                 "net_proceeds": _from_minor_units(received),
+                "asset_id": (purchase.get("asset") or {}).get("id"),
             }
 
         return {"sold": sold, "oldest_event_at": oldest}

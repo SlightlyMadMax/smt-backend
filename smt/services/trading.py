@@ -41,10 +41,12 @@ class TradingService:
         self.pool_item_service = pool_item_service
         self.settings_service = settings_service
         self.action_log = action_log
+        self._sold_cache: Optional[dict] = None
 
     async def run_cycle(self) -> None:
         logger.info("Starting trading cycle")
         start = time.monotonic()
+        self._sold_cache = None
         try:
             listings = await self.steam_service.get_my_market_listings()
             assets = await self._snapshot_all_items()
@@ -57,7 +59,8 @@ class TradingService:
             await self._sync_open_to_bought(assets, buy_orders)
             await self._resolve_pending_listings(sell_listings, assets)
             await self._sync_listed_to_closed(sell_listings, assets)
-            await self._list_bought_positions()
+            if await self._list_bought_positions():
+                await self._attach_fresh_listings(assets)
 
             if not settings.emergency_stop:
                 await self._open_new_positions()
@@ -201,7 +204,7 @@ class TradingService:
                 position_id=pos.id,
             )
 
-    async def _list_bought_positions(self) -> None:
+    async def _list_bought_positions(self) -> int:
         """Place a sell order for each BOUGHT position."""
         bought_positions = await self.position_service.list_by_status(PositionStatus.BOUGHT)
         for pos in bought_positions:
@@ -220,6 +223,13 @@ class TradingService:
                 market_hash_name=pos.pool_item_hash,
                 position_id=pos.id,
             )
+        return len(bought_positions)
+
+    async def _attach_fresh_listings(self, assets: Dict) -> None:
+        """A listing placed this cycle is missing from the snapshot taken before it."""
+        listings = await self.steam_service.get_my_market_listings()
+        sell_listings = list(listings.get("sell_listings", {}).values())
+        await self._resolve_pending_listings(sell_listings, assets, reconcile=False)
 
     @staticmethod
     def _listing_asset_id(listing: dict) -> Optional[str]:
@@ -280,7 +290,7 @@ class TradingService:
         )
         return True
 
-    async def _resolve_pending_listings(self, listings: List, assets: Dict) -> None:
+    async def _resolve_pending_listings(self, listings: List, assets: Dict, reconcile: bool = True) -> None:
         """Attach the Steam listing id to LISTING_PENDING positions by matching on asset_id."""
         pending_positions = await self.position_service.list_by_status(PositionStatus.LISTING_PENDING)
         if not pending_positions:
@@ -296,6 +306,10 @@ class TradingService:
         for pos in pending_positions:
             listing_id = asset_to_listing.get(pos.asset_id)
             if not listing_id:
+                if not reconcile:
+                    continue
+                if await self._close_sold_pending(pos):
+                    continue
                 if await self._recover_cancelled_listing(pos, assets, claimed):
                     continue
                 logger.warning(f"Position {pos.id}: no active listing found yet for asset {pos.asset_id}.")
@@ -309,6 +323,43 @@ class TradingService:
                 market_hash_name=pos.pool_item_hash,
                 position_id=pos.id,
             )
+
+    async def _close_sold_pending(self, position) -> bool:
+        """A listing can sell before we ever learn its id, stranding the position in LISTING_PENDING."""
+        history = await self._sold_listings()
+        match = next(
+            (
+                (listing_id, sale)
+                for listing_id, sale in history["sold"].items()
+                if sale.get("asset_id") and sale["asset_id"] == position.asset_id
+            ),
+            None,
+        )
+        if not match:
+            return False
+
+        listing_id, sale = match
+        logger.info(f"Position {position.id} sold as listing {listing_id} before its id reached us.")
+        await self.position_service.mark_as_listed(position_id=position.id, sell_order_id=listing_id)
+        closed = await self.position_service.close(
+            position_id=position.id,
+            sold_at=sale["sold_at"],
+            net_proceeds=sale["net_proceeds"],
+        )
+        await self.action_log.record(
+            ActionKind.POSITION_CLOSED,
+            f"Sold at {closed.sell_price} as listing {listing_id}, received {closed.net_proceeds}, "
+            f"profit {closed.realized_profit}.",
+            market_hash_name=position.pool_item_hash,
+            position_id=position.id,
+        )
+        return True
+
+    async def _sold_listings(self) -> dict:
+        """One market history read per cycle, shared by everything that needs it."""
+        if self._sold_cache is None:
+            self._sold_cache = await self.steam_service.get_sold_listings()
+        return self._sold_cache
 
     async def _sync_listed_to_closed(
         self,
@@ -325,7 +376,7 @@ class TradingService:
         if not listed_positions:
             return
 
-        history = await self.steam_service.get_sold_listings()
+        history = await self._sold_listings()
         sold = history["sold"]
         active_listing_ids = {li.get("listing_id") for li in listings}
         claimed = await self._claimed_asset_ids()

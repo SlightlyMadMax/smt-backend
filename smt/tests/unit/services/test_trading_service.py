@@ -129,6 +129,89 @@ class TestResolvePendingListings:
 
         position_service.mark_as_listed.assert_not_awaited()
 
+    @staticmethod
+    def pending(trading_service, position_service, sold=None):
+        position = make_position(1, PositionStatus.LISTING_PENDING, asset_id="ASSET-1")
+        position.listed_at = NOW - timedelta(minutes=5)
+        position_service.list_by_status.return_value = [position]
+        position_service.close.return_value = SimpleNamespace(
+            sell_price=Decimal("15.00"), net_proceeds=Decimal("12.85"), realized_profit=Decimal("2.85")
+        )
+        trading_service.steam_service.get_sold_listings.return_value = {
+            "sold": sold or {},
+            "oldest_event_at": NOW - timedelta(days=7),
+        }
+        return position
+
+    async def test_closes_a_position_sold_before_its_id_arrived(self, trading_service, position_service):
+        """The listing can sell inside the window where we still do not know its id."""
+        sold_at = NOW - timedelta(minutes=2)
+        self.pending(
+            trading_service,
+            position_service,
+            sold={"LISTING-9": {"sold_at": sold_at, "net_proceeds": Decimal("12.85"), "asset_id": "ASSET-1"}},
+        )
+
+        await trading_service._resolve_pending_listings([], {})
+
+        position_service.mark_as_listed.assert_awaited_once_with(position_id=1, sell_order_id="LISTING-9")
+        position_service.close.assert_awaited_once_with(position_id=1, sold_at=sold_at, net_proceeds=Decimal("12.85"))
+
+    async def test_a_sale_of_another_asset_closes_nothing(self, trading_service, position_service):
+        self.pending(
+            trading_service,
+            position_service,
+            sold={"LISTING-9": {"sold_at": NOW, "net_proceeds": Decimal("12.85"), "asset_id": "ASSET-2"}},
+        )
+
+        await trading_service._resolve_pending_listings([], {})
+
+        position_service.close.assert_not_awaited()
+
+    async def test_history_without_asset_ids_closes_nothing(self, trading_service, position_service):
+        self.pending(
+            trading_service,
+            position_service,
+            sold={"LISTING-9": {"sold_at": NOW, "net_proceeds": Decimal("12.85"), "asset_id": None}},
+        )
+
+        await trading_service._resolve_pending_listings([], {})
+
+        position_service.close.assert_not_awaited()
+
+    async def test_a_sale_beats_a_lookalike_left_in_the_inventory(self, trading_service, position_service):
+        """A second copy of the same item must not pass for a cancelled listing."""
+        position = self.pending(
+            trading_service,
+            position_service,
+            sold={"LISTING-9": {"sold_at": NOW, "net_proceeds": Decimal("12.85"), "asset_id": "ASSET-1"}},
+        )
+        assets = {GAME_KEY: {ITEM_HASH: [make_asset("ASSET-7", position.created_at + timedelta(minutes=1))]}}
+
+        await trading_service._resolve_pending_listings([], assets)
+
+        position_service.revert_to_bought.assert_not_awaited()
+        position_service.close.assert_awaited_once()
+
+    async def test_a_fresh_pass_only_attaches_ids(self, trading_service, position_service):
+        """Right after listing, the stale inventory snapshot still holds the item we just sold off."""
+        position = self.pending(trading_service, position_service)
+        assets = {GAME_KEY: {ITEM_HASH: [make_asset("ASSET-1", position.created_at + timedelta(minutes=1))]}}
+
+        await trading_service._resolve_pending_listings([], assets, reconcile=False)
+
+        position_service.revert_to_bought.assert_not_awaited()
+        position_service.close.assert_not_awaited()
+        trading_service.steam_service.get_sold_listings.assert_not_awaited()
+
+    async def test_one_history_read_serves_the_whole_cycle(self, trading_service, position_service):
+        self.pending(trading_service, position_service)
+
+        await trading_service._resolve_pending_listings([], {})
+        await trading_service._resolve_pending_listings([], {})
+
+        assert trading_service.steam_service.get_sold_listings.await_count == 1
+
 
 @pytest.mark.asyncio
 class TestSyncListedToClosed:
@@ -837,6 +920,48 @@ class TestBuyOrderStatus:
         await trading_service._sync_open_to_bought(assets, [])
 
         position_service.mark_as_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-1", buy_price=None)
+
+
+@pytest.mark.asyncio
+class TestListingWithinTheCycle:
+    @staticmethod
+    def setup(trading_service, position_service, second_listing):
+        bought = make_position(1, PositionStatus.BOUGHT, asset_id="ASSET-1")
+        pending = make_position(1, PositionStatus.LISTING_PENDING, asset_id="ASSET-1")
+        by_status = {PositionStatus.BOUGHT: [bought]}
+
+        async def by_status_lookup(status):
+            return by_status.get(status, [])
+
+        def listed_now(position_id):
+            by_status[PositionStatus.BOUGHT] = []
+            by_status[PositionStatus.LISTING_PENDING] = [pending]
+
+        position_service.list_by_status.side_effect = by_status_lookup
+        position_service.list_active.return_value = []
+        position_service.mark_as_listing_pending.side_effect = listed_now
+        trading_service.pool_item_service.list.return_value = []
+        trading_service.pool_item_service.list_marked_for_trading.return_value = []
+        trading_service.steam_service.get_my_market_listings.side_effect = [
+            {"buy_orders": {}, "sell_listings": {}},
+            {"buy_orders": {}, "sell_listings": {"L": second_listing}},
+        ]
+
+    async def test_a_new_listing_is_matched_without_waiting_a_cycle(self, trading_service, position_service):
+        self.setup(trading_service, position_service, make_listing("LISTING-9", "ASSET-1"))
+
+        await trading_service.run_cycle()
+
+        position_service.mark_as_listed.assert_awaited_once_with(position_id=1, sell_order_id="LISTING-9")
+
+    async def test_steam_is_not_asked_again_when_nothing_was_listed(self, trading_service, position_service):
+        self.setup(trading_service, position_service, make_listing("LISTING-9", "ASSET-1"))
+        position_service.list_by_status.side_effect = None
+        position_service.list_by_status.return_value = []
+
+        await trading_service.run_cycle()
+
+        assert trading_service.steam_service.get_my_market_listings.await_count == 1
 
 
 @pytest.mark.asyncio
