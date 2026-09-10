@@ -72,6 +72,7 @@ FEE_SCHEDULE_TTL = 60 * 60 * 24
 WALLET_INFO_PATTERN = re.compile(r"g_rgWalletInfo\s*=\s*(\{.*?\});", re.S)
 STEAM_RATE_LIMIT_PERIOD = 60.0
 
+# Steam meters each endpoint separately, and far from evenly.
 STEAM_BUDGETS = {
     "market": 10,
     "pricehistory": 18,
