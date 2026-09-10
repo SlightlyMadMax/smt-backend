@@ -13,6 +13,7 @@ from smt.api.v1.routes import (
     pool_router,
     positions_router,
     price_history_router,
+    scan_router,
     settings_router,
     statistics_router,
     steam_router,
@@ -54,6 +55,7 @@ api_router.include_router(action_log_router)
 api_router.include_router(inventory_router)
 api_router.include_router(pool_router)
 api_router.include_router(positions_router)
+api_router.include_router(scan_router)
 api_router.include_router(price_history_router)
 api_router.include_router(settings_router)
 api_router.include_router(statistics_router)

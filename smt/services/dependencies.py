@@ -12,6 +12,7 @@ from smt.repositories.dependencies import (
 from smt.services.action_log import ActionLogService
 from smt.services.inventory import InventoryService
 from smt.services.market_analytics import MarketAnalyticsService
+from smt.services.market_scan import MarketScanService
 from smt.services.pool import PoolService
 from smt.services.position import PositionService
 from smt.services.price_history import PriceHistoryService
@@ -35,6 +36,11 @@ def get_steam_service(settings: Settings = Depends(get_settings)) -> SteamServic
     if _steam_service is None:
         _steam_service = SteamService(settings)
     return _steam_service
+
+
+def get_market_scan_service(steam: SteamService = Depends(get_steam_service)) -> MarketScanService:
+    """The scan shares the Steam client's Redis connection; both live for the process."""
+    return MarketScanService(steam, steam._redis)
 
 
 def get_inventory_service(
