@@ -327,24 +327,36 @@ class TestOpenNewPositions:
         assert trading_service.steam_service.create_buy_order.await_args.kwargs["price"] == Decimal("6.00")
         position_service.add.assert_awaited_once()
 
-    async def test_skips_when_the_order_would_fill_at_market(self, trading_service, position_service):
+    async def test_buys_at_the_market_price_when_it_is_cheaper(self, trading_service, position_service):
+        """A market cheaper than our target is a better deal than the one we planned."""
         trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.91"))]
         position_service.list_active.return_value = []
         trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
 
         await trading_service._open_new_positions()
 
-        trading_service.steam_service.create_buy_order.assert_not_awaited()
-        position_service.add.assert_not_awaited()
+        assert trading_service.steam_service.create_buy_order.await_args.kwargs["price"] == Decimal("6.82")
 
-    async def test_skips_when_the_price_equals_the_cheapest_listing(self, trading_service, position_service):
-        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.82"))]
+    async def test_the_position_records_what_it_actually_cost(self, trading_service, position_service):
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.91"))]
         position_service.list_active.return_value = []
         trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
 
         await trading_service._open_new_positions()
 
-        trading_service.steam_service.create_buy_order.assert_not_awaited()
+        assert position_service.add.await_args.args[0].buy_price == Decimal("6.82")
+
+    async def test_our_own_price_is_kept_when_the_market_is_dearer(self, trading_service, position_service):
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item(buy=Decimal("6.00"))]
+        position_service.list_active.return_value = []
+        trading_service.steam_service.get_order_book.return_value = make_book(Decimal("6.82"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        assert trading_service.steam_service.create_buy_order.await_args.kwargs["price"] == Decimal("6.00")
 
     async def test_skips_when_the_order_book_is_unavailable(self, trading_service, position_service):
         trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item()]

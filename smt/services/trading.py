@@ -471,10 +471,10 @@ class TradingService:
 
             if buy_price >= lowest_ask:
                 logger.info(
-                    f"Skipping {item.market_hash_name}: buy price {buy_price} is not below the cheapest listing "
-                    f"{lowest_ask}, so the order would fill immediately at market instead of waiting for a dip."
+                    f"{item.market_hash_name} is already selling at {lowest_ask}, below the {buy_price} "
+                    f"we were ready to pay, so buying at that price instead."
                 )
-                continue
+                buy_price = lowest_ask
 
             if buy_price > balance:
                 logger.info(
