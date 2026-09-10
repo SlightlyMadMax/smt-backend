@@ -49,11 +49,10 @@ MOBILE_USER_AGENT = (
     "Mozilla/5.0 (Linux; U; Android 9; en-us; Valve Steam App Version/3) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/44.0.2403.133 Mobile Safari/537.36"
 )
-# Steam answers 429 to any request carrying Accept or Accept-Language, whatever their value,
-# and requests sets "Accept: */*" on every session, so they have to be removed rather than
-# merely left unset. Accept-Encoding is fine, but the http libraries advertise the codecs they
-# can actually decode, so that one is left to them as well.
-UNWELCOME_HEADERS = ("Accept", "Accept-Language")
+# Steam fingerprints the whole header set, not any single header: measured against /market,
+# a User-Agent alone passes, and so does it with either Accept-Encoding or Connection, but the
+# two together answer 429 every time. requests adds all of these itself, so they are removed.
+UNWELCOME_HEADERS = ("Accept", "Accept-Language", "Accept-Encoding", "Connection")
 WEB_HEADERS = {"User-Agent": BROWSER_USER_AGENT}
 MOBILE_HEADERS = {
     "User-Agent": MOBILE_USER_AGENT,
