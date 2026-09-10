@@ -50,7 +50,7 @@ MOBILE_USER_AGENT = (
 WEB_HEADERS = {
     "User-Agent": BROWSER_USER_AGENT,
     "Accept-Encoding": "gzip, deflate, br",
-    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 MOBILE_HEADERS = {
     "User-Agent": MOBILE_USER_AGENT,

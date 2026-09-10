@@ -81,3 +81,22 @@ class TestSteampyShortcuts:
 
         with pytest.raises(AttributeError):
             bare.is_session_alive()
+
+
+class TestSteampyParsesEnglishOnly:
+    """The listings page is scraped by its English labels, so the language must be pinned."""
+
+    def test_the_session_asks_steam_for_english(self, client):
+        from smt.services.steam import WEB_HEADERS
+
+        assert WEB_HEADERS["Accept-Language"].startswith("en")
+
+    def test_the_parser_looks_for_english_labels(self):
+        import inspect
+
+        from steampy import utils
+
+        source = inspect.getsource(utils.get_market_listings_from_html)
+
+        assert "My buy orders" in source
+        assert "My sell listings" in source
