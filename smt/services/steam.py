@@ -88,7 +88,9 @@ STEAM_BUDGETS = {
     "default": 15,
 }
 COOLDOWN_KEY = "smt:steam:cooldown:"
-COOLDOWN_AFTER_REFUSAL = 180
+REFUSAL_COUNT_KEY = "smt:steam:refusals:"
+COOLDOWN_BASE = 180
+COOLDOWN_MAX = 3600
 LOGIN_COOLDOWN_BASE = datetime.timedelta(minutes=5)
 LOGIN_COOLDOWN_MAX = datetime.timedelta(hours=1)
 
@@ -143,11 +145,14 @@ def throttled(bucket: str = "default"):
         async def wrapper(self, *args, **kwargs):
             await self._take_a_slot(bucket)
             try:
-                return await func(self, *args, **kwargs)
+                result = await func(self, *args, **kwargs)
             except Exception as e:
                 if _was_refused_for_frequency(e):
                     await self._stand_back(bucket)
                 raise
+
+            await self._worked_again(bucket)
+            return result
 
         return wrapper
 
@@ -266,8 +271,24 @@ class SteamService:
         await self._limiters.get(bucket, self._limiters["default"]).acquire()
 
     async def _stand_back(self, bucket: str) -> None:
-        logger.warning(f"Steam refused a {bucket} request for being too frequent, pausing that endpoint.")
-        await self._redis.set(f"{COOLDOWN_KEY}{bucket}", 1, ex=COOLDOWN_AFTER_REFUSAL)
+        """
+        Each refusal waits longer than the last.
+
+        Steam keeps its own timer, and probing while it is still counting appears to extend
+        it, so a fixed pause can hold us in the penalty box indefinitely.
+        """
+        refusals = await self._redis.incr(f"{REFUSAL_COUNT_KEY}{bucket}")
+        await self._redis.expire(f"{REFUSAL_COUNT_KEY}{bucket}", COOLDOWN_MAX * 2)
+
+        wait = min(COOLDOWN_BASE * 2 ** (refusals - 1), COOLDOWN_MAX)
+        await self._redis.set(f"{COOLDOWN_KEY}{bucket}", 1, ex=wait)
+        logger.warning(
+            f"Steam refused a {bucket} request for being too frequent "
+            f"({refusals} in a row), leaving it alone for {wait}s."
+        )
+
+    async def _worked_again(self, bucket: str) -> None:
+        await self._redis.delete(f"{REFUSAL_COUNT_KEY}{bucket}")
 
     def _should_check_login(self) -> bool:
         return not self._last_check or datetime.datetime.now(datetime.UTC) - self._last_check > self._check_interval

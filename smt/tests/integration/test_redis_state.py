@@ -11,7 +11,14 @@ from redis.asyncio import Redis
 
 from smt.core.config import get_settings
 from smt.exceptions import SteamLoginUnavailable, SteamThrottled
-from smt.services.steam import COOLDOWN_KEY, LOGIN_BLOCK_KEY, LOGIN_FAILURES_KEY, SteamService
+from smt.services.steam import (
+    COOLDOWN_BASE,
+    COOLDOWN_KEY,
+    LOGIN_BLOCK_KEY,
+    LOGIN_FAILURES_KEY,
+    REFUSAL_COUNT_KEY,
+    SteamService,
+)
 from smt.utils.rate_limit import RedisRateLimiter
 
 
@@ -185,3 +192,38 @@ class TestStandingBackFromSteam:
         finally:
             await redis.delete(f"{COOLDOWN_KEY}pricehistory")
             await restarted._redis.aclose()
+
+
+@pytest.mark.asyncio
+class TestBackingOffFurtherEachTime:
+    """Steam keeps its own timer, so probing at a fixed rate can hold us in the penalty box."""
+
+    async def clear(self, redis, bucket):
+        await redis.delete(f"{COOLDOWN_KEY}{bucket}", f"{REFUSAL_COUNT_KEY}{bucket}")
+
+    async def test_each_refusal_waits_longer(self, steam_service, redis):
+        await self.clear(redis, "market")
+        try:
+            await steam_service._stand_back("market")
+            first = await redis.ttl(f"{COOLDOWN_KEY}market")
+
+            await steam_service._stand_back("market")
+            second = await redis.ttl(f"{COOLDOWN_KEY}market")
+
+            assert second > first
+        finally:
+            await self.clear(redis, "market")
+
+    async def test_a_success_forgets_the_streak(self, steam_service, redis):
+        await self.clear(redis, "market")
+        try:
+            await steam_service._stand_back("market")
+            await steam_service._stand_back("market")
+            await steam_service._worked_again("market")
+            await redis.delete(f"{COOLDOWN_KEY}market")
+
+            await steam_service._stand_back("market")
+
+            assert await redis.ttl(f"{COOLDOWN_KEY}market") <= COOLDOWN_BASE
+        finally:
+            await self.clear(redis, "market")

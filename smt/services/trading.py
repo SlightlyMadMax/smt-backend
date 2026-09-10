@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from steampy.models import GameOptions
 
 from smt.db.models import Item, PoolItem
-from smt.exceptions import BuyOrderFailed, OrderBookUnavailable
+from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SteamThrottled
 from smt.logger import get_logger
 from smt.schemas.action_log import ActionKind, ActionLevel
 from smt.schemas.position import PositionCreate, PositionStatus
@@ -61,6 +61,8 @@ class TradingService:
 
             if not settings.emergency_stop:
                 await self._open_new_positions()
+        except SteamThrottled as e:
+            logger.info(f"Steam is pacing us, this cycle does nothing: {e}")
         except Exception as e:
             logger.exception("Error in trading cycle")
             await self.action_log.record(

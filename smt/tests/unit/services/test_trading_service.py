@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from smt.exceptions import BuyOrderFailed, OrderBookUnavailable
+from smt.exceptions import BuyOrderFailed, OrderBookUnavailable, SteamThrottled
 from smt.schemas.action_log import ActionKind
 from smt.schemas.position import PositionStatus
 from smt.services.trading import CANCEL_GRACE_PERIOD, TradingService
@@ -825,3 +825,14 @@ class TestBuyOrderStatus:
         await trading_service._sync_open_to_bought(assets, [])
 
         position_service.mark_as_bought.assert_awaited_once_with(position_id=1, asset_id="NEW-1", buy_price=None)
+
+
+@pytest.mark.asyncio
+class TestPacing:
+    async def test_being_paced_is_not_a_failure(self, trading_service, action_log):
+        """Waiting out a Steam limit should not fill the journal with errors."""
+        trading_service.steam_service.get_my_market_listings.side_effect = SteamThrottled("wait 90s")
+
+        await trading_service.run_cycle()
+
+        action_log.record.assert_not_awaited()

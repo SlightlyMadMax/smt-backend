@@ -69,6 +69,7 @@ def steam_service():
     service.client = SimpleNamespace(_session=SimpleNamespace(cookies=SimpleNamespace(get_dict=lambda domain: {})))
     service._ensure_login = AsyncMock()
     service._take_a_slot = AsyncMock()
+    service._worked_again = AsyncMock()
     return service
 
 
