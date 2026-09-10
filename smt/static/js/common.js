@@ -187,7 +187,7 @@
   }
 
 
-  const OUTLIER_FACTOR = 5;
+  const OUTLIER_FACTOR = 3;
   const CHART_W = 620;
   const CHART_H = 170;
   const CHART_PAD = 28;
