@@ -69,3 +69,6 @@ static_remote
 build
 **/__pycache__/**
 bd/
+
+# Database dumps
+backups/

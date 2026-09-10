@@ -54,6 +54,24 @@ services:
       start_period: 10s
     restart: no
 
+  db-backup:
+    image: postgres:16
+    container_name: ${PROJECT_NAME}-db-backup
+    env_file:
+      - .env.db
+    environment:
+      PGHOST: db
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup_db.sh:/usr/local/bin/backup_db.sh:ro
+    entrypoint: ["bash", "/usr/local/bin/backup_db.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: no
+
   redis:
     image: redis:alpine
     container_name: ${PROJECT_NAME}-redis
