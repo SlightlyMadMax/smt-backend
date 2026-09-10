@@ -55,7 +55,9 @@ def redis():
 
 @pytest.fixture
 def scan_service(redis):
-    return MarketScanService(AsyncMock(), redis)
+    service = MarketScanService(AsyncMock(), redis)
+    service.steam.get_order_book.return_value = {"sell_levels": []}
+    return service
 
 
 class TestReadingASearchRow:
@@ -109,6 +111,38 @@ class TestMeasuring:
         assert measured.sell_target > measured.buy_target
         assert measured.tradable is True
         assert measured.round_trips > 0
+
+    async def test_the_queue_cuts_the_trips_the_history_promised(self, scan_service):
+        """Sixty listings under ours at four sales a day is a fifteen day wait, so two trips a month."""
+        scan_service.steam.get_order_book.return_value = {"sell_levels": [{"price": Decimal("9.00"), "quantity": 240}]}
+        points = history(["8.00", "12.00"] * 8, volume=20)
+
+        measured = await self.measure(scan_service, points)
+
+        assert measured.queue_ahead == 240
+        assert measured.round_trips == 8
+        assert measured.days_to_clear == Decimal("22.5")
+        assert measured.feasible_round_trips == 1
+        assert measured.profit_per_window == measured.profit_per_trade
+
+    async def test_being_the_cheapest_leaves_the_history_alone(self, scan_service):
+        scan_service.steam.get_order_book.return_value = {"sell_levels": [{"price": Decimal("99.00"), "quantity": 5}]}
+        points = history(["8.00", "12.00", "8.20", "12.40"])
+
+        measured = await self.measure(scan_service, points)
+
+        assert measured.queue_ahead == 0
+        assert measured.feasible_round_trips == measured.round_trips
+
+    async def test_an_unreadable_book_does_not_sink_the_item(self, scan_service):
+        scan_service.steam.get_order_book.side_effect = RuntimeError("429")
+        points = history(["8.00", "12.00", "8.20", "12.40"])
+
+        measured = await self.measure(scan_service, points)
+
+        assert measured.queue_ahead is None
+        assert measured.feasible_round_trips == measured.round_trips
+        assert measured.note == ""
 
     async def test_a_spread_the_fee_eats_is_not_tradable(self, scan_service):
         points = history(["9.50", "9.60", "9.55", "9.62", "9.51", "9.58"])

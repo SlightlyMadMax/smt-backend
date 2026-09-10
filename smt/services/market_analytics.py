@@ -142,6 +142,46 @@ class MarketAnalyticsService:
         return trips, Decimal(str(round(statistics.median(holds), 1)))
 
     @staticmethod
+    def queue_ahead(sell_levels: List[dict], price: Optional[Decimal]) -> Optional[int]:
+        """
+        How many listings would be bought before ours.
+
+        Steam serves the cheapest listing first, so everything priced at or below ours
+        stands in front of it. The history says whether the price ever reaches our target;
+        this says whether we would be the one who sells when it does.
+        """
+        if price is None or not sell_levels:
+            return None
+        return sum(
+            level["quantity"] for level in sell_levels if level.get("price") is not None and level["price"] <= price
+        )
+
+    @staticmethod
+    def days_to_clear(queue_ahead: Optional[int], daily_volume: Optional[Decimal]) -> Optional[Decimal]:
+        """
+        How long the queue in front of us takes to drain, at the recent rate of sales.
+
+        A lower bound on the wait, and a loose one: cheaper listings keep arriving and
+        push in front of us, while some of the volume is taken by buy orders that never
+        touch the queue at all.
+        """
+        if queue_ahead is None or not daily_volume or daily_volume <= 0:
+            return None
+        return (Decimal(queue_ahead) / Decimal(daily_volume)).quantize(Decimal("0.1"))
+
+    @staticmethod
+    def feasible_round_trips(round_trips: int, days_to_clear: Optional[Decimal], window_days: int) -> int:
+        """
+        Trips the history allows, capped by how many the queue leaves time for.
+
+        The simulation assumes a fill every time the price touches the target, which is
+        the assumption that cost us money the one time we traded for real.
+        """
+        if days_to_clear is None or days_to_clear <= 0 or window_days <= 0:
+            return round_trips
+        return min(round_trips, int(Decimal(window_days) / days_to_clear))
+
+    @staticmethod
     def project_return_on_capital(
         profit_per_trade: Decimal, round_trips: int, buy_target: Decimal, window_days: int
     ) -> Optional[Decimal]:

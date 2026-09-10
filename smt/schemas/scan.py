@@ -40,6 +40,9 @@ class ScanCandidate(BaseModel):
     required_pct: Optional[Decimal] = None
     profit_per_trade: Optional[Decimal] = None
     round_trips: int = 0
+    queue_ahead: Optional[int] = None
+    days_to_clear: Optional[Decimal] = None
+    feasible_round_trips: int = 0
     median_hold_hours: Optional[Decimal] = None
     profit_per_window: Optional[Decimal] = None
     return_on_capital_pct: Optional[Decimal] = None

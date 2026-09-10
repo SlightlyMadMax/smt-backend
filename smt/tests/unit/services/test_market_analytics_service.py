@@ -498,3 +498,43 @@ class TestMarginAndWeeklyVolumeGates:
         flag, reason = await market_analytics_service.decide_trade_flag(make_indicators(volume7d=None))
 
         assert flag is False
+
+
+class TestTheQueueInFrontOfUs:
+    @staticmethod
+    def levels(*pairs):
+        return [{"price": Decimal(p), "quantity": q} for p, q in pairs]
+
+    def test_only_listings_at_or_under_our_price_count(self):
+        book = self.levels(("10.00", 5), ("11.00", 3), ("12.00", 7))
+
+        assert MarketAnalyticsService.queue_ahead(book, Decimal("11.00")) == 8
+
+    def test_being_the_cheapest_means_an_empty_queue(self):
+        book = self.levels(("10.00", 5), ("11.00", 3))
+
+        assert MarketAnalyticsService.queue_ahead(book, Decimal("9.00")) == 0
+
+    def test_an_unreadable_book_is_not_an_empty_one(self):
+        assert MarketAnalyticsService.queue_ahead([], Decimal("11.00")) is None
+        assert MarketAnalyticsService.queue_ahead(self.levels(("10.00", 5)), None) is None
+
+    def test_the_wait_is_the_queue_over_the_daily_rate(self):
+        assert MarketAnalyticsService.days_to_clear(600, Decimal("200")) == Decimal("3.0")
+
+    def test_a_dead_market_gives_no_answer(self):
+        assert MarketAnalyticsService.days_to_clear(600, Decimal("0")) is None
+        assert MarketAnalyticsService.days_to_clear(None, Decimal("200")) is None
+
+    def test_a_long_queue_caps_the_trips_the_history_promised(self):
+        """A week of queue leaves room for four trips a month, whatever the price did."""
+        assert MarketAnalyticsService.feasible_round_trips(19, Decimal("7"), 30) == 4
+
+    def test_a_short_queue_leaves_the_history_alone(self):
+        assert MarketAnalyticsService.feasible_round_trips(19, Decimal("0.5"), 30) == 19
+
+    def test_an_unknown_queue_changes_nothing(self):
+        assert MarketAnalyticsService.feasible_round_trips(19, None, 30) == 19
+
+    def test_a_queue_longer_than_the_window_rules_the_item_out(self):
+        assert MarketAnalyticsService.feasible_round_trips(19, Decimal("45"), 30) == 0

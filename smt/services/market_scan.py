@@ -75,6 +75,9 @@ class Candidate:
     required_pct: Optional[Decimal] = None
     profit_per_trade: Optional[Decimal] = None
     round_trips: int = 0
+    queue_ahead: Optional[int] = None
+    days_to_clear: Optional[Decimal] = None
+    feasible_round_trips: int = 0
     median_hold_hours: Optional[Decimal] = None
     profit_per_window: Optional[Decimal] = None
     return_on_capital_pct: Optional[Decimal] = None
@@ -292,8 +295,37 @@ class MarketScanService:
         candidate.round_trips, candidate.median_hold_hours = MarketAnalyticsService.simulate_round_trips(
             points, candidate.buy_target, candidate.sell_target
         )
-        candidate.profit_per_window = (candidate.profit_per_trade * candidate.round_trips).quantize(Decimal("0.01"))
+
+        await self._measure_the_queue(candidate, params)
+
+        candidate.profit_per_window = (candidate.profit_per_trade * candidate.feasible_round_trips).quantize(
+            Decimal("0.01")
+        )
         candidate.return_on_capital_pct = (candidate.profit_per_window / candidate.buy_target * 100).quantize(
             Decimal("0.1")
         )
         return candidate
+
+    async def _measure_the_queue(self, candidate: Candidate, params: ScanParams) -> None:
+        """
+        Ask the order book how many sellers stand in front of us at our own price.
+
+        Without this the history alone decides, and the history has no idea whether the
+        buyer who pushed the price up would have bought from us or from the 800 cheaper
+        listings underneath.
+        """
+        candidate.feasible_round_trips = candidate.round_trips
+
+        try:
+            book = await self.steam.get_order_book(market_hash_name=candidate.market_hash_name, app_id=candidate.app_id)
+        except Exception as e:
+            logger.warning(f"No order book for {candidate.market_hash_name}, the queue is unknown: {e!r}")
+            return
+
+        candidate.queue_ahead = MarketAnalyticsService.queue_ahead(book.get("sell_levels") or [], candidate.sell_target)
+        candidate.days_to_clear = MarketAnalyticsService.days_to_clear(
+            candidate.queue_ahead, Decimal(candidate.volume_30d) / params.days
+        )
+        candidate.feasible_round_trips = MarketAnalyticsService.feasible_round_trips(
+            candidate.round_trips, candidate.days_to_clear, params.days
+        )
