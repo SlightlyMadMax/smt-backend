@@ -13,174 +13,14 @@ Run it with, for example:
 import argparse
 import asyncio
 import csv
-import statistics
 import sys
-from dataclasses import dataclass, fields
+from dataclasses import fields
 from decimal import Decimal
 from typing import List, Optional
 
-from steampy.models import GameOptions
-
 from smt.core.config import get_settings
-from smt.services.market_analytics import OUTLIER_PRICE_FACTOR
+from smt.services.market_scan import Candidate, MarketScanService, ScanParams
 from smt.services.steam import SteamService
-from smt.utils.math import weighted_percentile
-from smt.utils.steam import net_received
-
-
-PAGE_SIZE = 100
-
-
-@dataclass
-class Candidate:
-    market_hash_name: str
-    listings: int
-    current_price: Decimal
-    volume_30d: int = 0
-    buy_target: Optional[Decimal] = None
-    sell_target: Optional[Decimal] = None
-    spread_pct: Optional[Decimal] = None
-    required_pct: Optional[Decimal] = None
-    profit_per_trade: Optional[Decimal] = None
-    round_trips: int = 0
-    median_hold_hours: Optional[Decimal] = None
-    profit_per_window: Optional[Decimal] = None
-    return_on_capital_pct: Optional[Decimal] = None
-    median_price: Optional[Decimal] = None
-    price_drift: Optional[Decimal] = None
-    tradable: bool = False
-    note: str = ""
-
-
-def required_spread_pct(buy: Decimal) -> Decimal:
-    """How far above `buy` the sell price must sit for the round trip to break even."""
-    sell = buy
-    step = Decimal("0.01")
-    while net_received(sell) < buy:
-        sell += step
-    return ((sell / buy - 1) * 100).quantize(Decimal("0.01"))
-
-
-def drop_outliers(points: List[tuple]) -> List[tuple]:
-    if not points:
-        return []
-    median = statistics.median(price for _, price, _ in points)
-    if median <= 0:
-        return points
-    low, high = median / OUTLIER_PRICE_FACTOR, median * OUTLIER_PRICE_FACTOR
-    return [p for p in points if low <= p[1] <= high]
-
-
-async def collect_candidates(
-    steam: SteamService, app_id: str, wanted: int, min_price: Decimal, max_price: Decimal
-) -> List[Candidate]:
-    candidates: List[Candidate] = []
-    start = 0
-
-    while len(candidates) < wanted:
-        page = await steam.search_market(app_id=app_id, start=start, count=PAGE_SIZE)
-        results = page.get("results") or []
-        if not results:
-            break
-
-        for row in results:
-            price = Decimal(row.get("sell_price", 0)) / 100
-            if not (min_price <= price <= max_price):
-                continue
-            candidates.append(
-                Candidate(
-                    market_hash_name=row["hash_name"],
-                    listings=int(row.get("sell_listings") or 0),
-                    current_price=price,
-                )
-            )
-            if len(candidates) >= wanted:
-                break
-
-        start += PAGE_SIZE
-        print(f"  scanned {start} listings, {len(candidates)} candidates in the price band", file=sys.stderr)
-        if start >= int(page.get("total_count") or 0):
-            break
-
-    return candidates
-
-
-def simulate_round_trips(points: List[tuple], buy_target: Decimal, sell_target: Decimal) -> tuple:
-    """
-    Walk the history the way the bot would trade it.
-
-    Fills are assumed at the targets themselves, because that is where the limit orders
-    sit; entering at the bottom of a dip would flatter the result. Returns the number of
-    completed round trips and the median hours a position stayed open, which is what
-    decides how often the same capital can be reused.
-    """
-    holding = False
-    entered_at = None
-    trips = 0
-    holds: List[float] = []
-
-    for timestamp, price, _ in points:
-        if not holding and price <= buy_target:
-            holding, entered_at = True, timestamp
-        elif holding and price >= sell_target:
-            holding = False
-            trips += 1
-            holds.append((timestamp - entered_at).total_seconds() / 3600)
-
-    median_hold = Decimal(str(round(statistics.median(holds), 1))) if holds else None
-    return trips, median_hold
-
-
-async def measure(
-    steam: SteamService,
-    candidate: Candidate,
-    app_id: str,
-    days: int,
-    buy_pct: int,
-    sell_pct: int,
-    max_drift: Decimal,
-) -> Candidate:
-    history = await steam.get_price_history(
-        market_hash_name=candidate.market_hash_name,
-        game=GameOptions(app_id, "2"),
-        days=days,
-    )
-    points = drop_outliers(history)
-    if len(points) < 2:
-        candidate.note = "not enough history"
-        return candidate
-
-    candidate.volume_30d = sum(volume for _, _, volume in points)
-    candidate.median_price = statistics.median(price for _, price, _ in points)
-
-    if candidate.current_price > 0:
-        candidate.price_drift = (candidate.median_price / candidate.current_price).quantize(Decimal("0.01"))
-        if not (1 / max_drift <= candidate.price_drift <= max_drift):
-            candidate.note = f"history is {candidate.price_drift}x the current price"
-            return candidate
-
-    prices = [price for _, price, _ in points]
-    volumes = [volume for _, _, volume in points]
-    candidate.buy_target = weighted_percentile(prices, volumes, buy_pct)
-    candidate.sell_target = weighted_percentile(prices, volumes, sell_pct)
-
-    if candidate.buy_target <= 0:
-        candidate.note = "no usable buy target"
-        return candidate
-
-    candidate.spread_pct = ((candidate.sell_target / candidate.buy_target - 1) * 100).quantize(Decimal("0.01"))
-    candidate.required_pct = required_spread_pct(candidate.buy_target)
-    candidate.profit_per_trade = (net_received(candidate.sell_target) - candidate.buy_target).quantize(Decimal("0.01"))
-    candidate.tradable = candidate.profit_per_trade > 0
-
-    candidate.round_trips, candidate.median_hold_hours = simulate_round_trips(
-        points, candidate.buy_target, candidate.sell_target
-    )
-    candidate.profit_per_window = (candidate.profit_per_trade * candidate.round_trips).quantize(Decimal("0.01"))
-    candidate.return_on_capital_pct = (candidate.profit_per_window / candidate.buy_target * 100).quantize(
-        Decimal("0.1")
-    )
-    return candidate
 
 
 def report(candidates: List[Candidate], out_path: Optional[str]) -> None:
@@ -226,6 +66,7 @@ def report(candidates: List[Candidate], out_path: Optional[str]) -> None:
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--app-id", default="440", help="Steam app id, 440 is TF2")
+    parser.add_argument("--context-id", default="2")
     parser.add_argument("--limit", type=int, default=50, help="how many items to measure")
     parser.add_argument("--days", type=int, default=30, help="price history window")
     parser.add_argument("--buy-pct", type=int, default=10, help="percentile used as the buy target")
@@ -243,25 +84,55 @@ async def main() -> None:
     args = parser.parse_args()
 
     steam = SteamService(get_settings())
+    service = MarketScanService(steam, steam._redis)
+    params = ScanParams(
+        app_id=args.app_id,
+        context_id=args.context_id,
+        limit=args.limit,
+        days=args.days,
+        buy_percentile=args.buy_pct,
+        sell_percentile=args.sell_pct,
+        min_price=args.min_price,
+        max_price=args.max_price,
+        min_volume=args.min_volume,
+        max_drift=args.max_drift,
+    )
 
-    print(f"collecting candidates for app {args.app_id} " f"priced {args.min_price}..{args.max_price}", file=sys.stderr)
-    candidates = await collect_candidates(steam, args.app_id, args.limit, args.min_price, args.max_price)
-    print(f"measuring {len(candidates)} items (rate limited, expect a few minutes)", file=sys.stderr)
+    scan_id = service.new_id()
+    print(f"scan {scan_id} for app {args.app_id} priced {args.min_price}..{args.max_price}", file=sys.stderr)
+    await service.run(scan_id, params)
 
-    measured = []
-    for index, candidate in enumerate(candidates, start=1):
-        try:
-            measured.append(
-                await measure(steam, candidate, args.app_id, args.days, args.buy_pct, args.sell_pct, args.max_drift)
-            )
-        except Exception as e:
-            print(
-                f"  [{index}/{len(candidates)}] {candidate.market_hash_name}: {type(e).__name__}: {e}", file=sys.stderr
-            )
-            continue
-        print(f"  [{index}/{len(candidates)}] {candidate.market_hash_name}", file=sys.stderr)
+    state = await service.get(scan_id)
+    if state and state["status"] == "failed":
+        print(f"scan failed: {state['error']}", file=sys.stderr)
 
-    report([c for c in measured if c.volume_30d >= args.min_volume or c.note], args.out)
+    report([c for c in (await _candidates(service, scan_id))], args.out)
+    await steam._redis.aclose()
+
+
+async def _candidates(service: MarketScanService, scan_id: str) -> List[Candidate]:
+    state = await service.get(scan_id)
+    if not state:
+        return []
+    return [_from_row(row) for row in state["candidates"]]
+
+
+def _from_row(row: dict) -> Candidate:
+    decimals = {
+        "current_price",
+        "buy_target",
+        "sell_target",
+        "spread_pct",
+        "required_pct",
+        "profit_per_trade",
+        "median_hold_hours",
+        "profit_per_window",
+        "return_on_capital_pct",
+        "median_price",
+        "price_drift",
+    }
+    values = {k: (Decimal(v) if k in decimals and v is not None else v) for k, v in row.items()}
+    return Candidate(**values)
 
 
 if __name__ == "__main__":
