@@ -49,9 +49,6 @@ MOBILE_USER_AGENT = (
     "Mozilla/5.0 (Linux; U; Android 9; en-us; Valve Steam App Version/3) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/44.0.2403.133 Mobile Safari/537.36"
 )
-# Steam fingerprints the whole header set, not any single header: measured against /market,
-# a User-Agent alone passes, and so does it with either Accept-Encoding or Connection, but the
-# two together answer 429 every time. requests adds all of these itself, so they are removed.
 UNWELCOME_HEADERS = ("Accept", "Accept-Language", "Accept-Encoding", "Connection")
 WEB_HEADERS = {"User-Agent": BROWSER_USER_AGENT}
 MOBILE_HEADERS = {
@@ -75,7 +72,6 @@ FEE_SCHEDULE_TTL = 60 * 60 * 24
 WALLET_INFO_PATTERN = re.compile(r"g_rgWalletInfo\s*=\s*(\{.*?\});", re.S)
 STEAM_RATE_LIMIT_PERIOD = 60.0
 
-# Steam meters each endpoint separately, and far from evenly.
 STEAM_BUDGETS = {
     "market": 10,
     "pricehistory": 18,
