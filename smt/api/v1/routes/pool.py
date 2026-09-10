@@ -9,6 +9,7 @@ from smt.schemas.pool import (
     PoolItemBulkCreateResponse,
     PoolItemBulkRefreshRequest,
     PoolItemCreateRequest,
+    PoolItemScanAddRequest,
     PoolItemStatus,
     PoolItemUpdate,
     PoolSummary,
@@ -117,6 +118,19 @@ async def add_multiple_to_pool(
     pool_items = await pool_service.add_many(payload.asset_ids)
     names = [i.market_hash_name for i in pool_items]
     await arq_service.enqueue("refresh_task", names)
+    return PoolItemBulkCreateResponse(count=len(pool_items))
+
+
+@router.post("/add-scanned", response_model=PoolItemBulkCreateResponse)
+async def add_scanned_to_pool(
+    payload: PoolItemScanAddRequest,
+    pool_service: PoolService = Depends(get_pool_service),
+    arq_service: ARQService = Depends(get_arq_service),
+):
+    pool_items = await pool_service.add_unowned(payload.items)
+    names = [i.market_hash_name for i in pool_items]
+    if names:
+        await arq_service.enqueue("refresh_task", names)
     return PoolItemBulkCreateResponse(count=len(pool_items))
 
 

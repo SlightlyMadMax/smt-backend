@@ -53,6 +53,19 @@ class PoolService:
             )
         return created
 
+    async def add_unowned(self, items: List[PoolItemCreate]) -> List[PoolItem]:
+        """
+        Put items in the pool straight from a market scan.
+
+        Everything else here starts from the inventory, which means an item has to be
+        bought by hand before the bot may trade it. A scan knows nothing about ownership.
+        """
+        if not items:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "No items provided")
+
+        unique = {item.market_hash_name: item for item in items}
+        return await self.pool_repo.add_many(list(unique.values()))
+
     async def add_many(self, asset_ids: List[str]) -> List[PoolItem]:
         if not asset_ids:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "No asset IDs provided")

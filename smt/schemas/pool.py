@@ -127,6 +127,10 @@ class PoolItemCreateRequest(BaseModel):
     asset_id: str
 
 
+class PoolItemScanAddRequest(BaseModel):
+    items: list[PoolItemCreate]
+
+
 class RemoveManyRequest(BaseModel):
     market_hash_names: list[str]
 
