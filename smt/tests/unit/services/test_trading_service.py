@@ -965,6 +965,42 @@ class TestListingWithinTheCycle:
 
 
 @pytest.mark.asyncio
+class TestInventoryUnavailable:
+    @staticmethod
+    def setup(trading_service, position_service):
+        position_service.list_active.return_value = []
+        position_service.list_by_status.return_value = []
+        trading_service.pool_item_service.list.return_value = [
+            SimpleNamespace(app_id="730", context_id="2", market_hash_name=ITEM_HASH)
+        ]
+        trading_service.pool_item_service.list_marked_for_trading.return_value = []
+        trading_service.steam_service.get_my_market_listings.return_value = {"buy_orders": {}, "sell_listings": {}}
+        trading_service.inventory_service.sync_snapshot.side_effect = SteamThrottled("wait 300s")
+
+    async def test_an_unknown_inventory_is_not_an_empty_one(self, trading_service, position_service):
+        """Feeding an empty snapshot in would book every filled buy order as cancelled."""
+        self.setup(trading_service, position_service)
+
+        assert await trading_service._snapshot_all_items() is None
+
+    async def test_open_positions_are_left_alone(self, trading_service, position_service):
+        self.setup(trading_service, position_service)
+
+        await trading_service.run_cycle()
+
+        position_service.mark_as_cancelled.assert_not_awaited()
+        position_service.mark_as_bought.assert_not_awaited()
+
+    async def test_the_rest_of_the_cycle_still_runs(self, trading_service, position_service, action_log):
+        self.setup(trading_service, position_service)
+
+        await trading_service.run_cycle()
+
+        action_log.record.assert_not_awaited()
+        trading_service.settings_service.get_settings.assert_awaited()
+
+
+@pytest.mark.asyncio
 class TestPacing:
     async def test_being_paced_is_not_a_failure(self, trading_service, action_log):
         """Waiting out a Steam limit should not fill the journal with errors."""

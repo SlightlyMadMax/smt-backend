@@ -56,9 +56,13 @@ class TradingService:
             settings = await self.settings_service.get_settings()
             await self._reconcile_orders(buy_orders, sell_listings, settings.cancel_untracked_orders)
 
-            await self._sync_open_to_bought(assets, buy_orders)
-            await self._resolve_pending_listings(sell_listings, assets)
-            await self._sync_listed_to_closed(sell_listings, assets)
+            if assets is None:
+                logger.warning("The inventory is unavailable, so this cycle leaves open buy orders alone.")
+            else:
+                await self._sync_open_to_bought(assets, buy_orders)
+
+            await self._resolve_pending_listings(sell_listings, assets or {})
+            await self._sync_listed_to_closed(sell_listings, assets or {})
             if await self._list_bought_positions():
                 await self._attach_fresh_listings(assets)
 
@@ -78,8 +82,13 @@ class TradingService:
 
     async def _snapshot_all_items(
         self,
-    ) -> Dict[Tuple[str, str], Dict[str, List[Item]]]:
-        """Refresh the stored inventory for every game in the pool."""
+    ) -> Optional[Dict[Tuple[str, str], Dict[str, List[Item]]]]:
+        """
+        Refresh the stored inventory for every game in the pool.
+
+        None means Steam would not tell us what we own. That is not the same as owning
+        nothing, and the difference decides whether a filled buy order looks cancelled.
+        """
         pool_items: Sequence[PoolItem] = await self.pool_item_service.list()
         games: Dict[Tuple[str, str], List[PoolItem]] = {}
         for item in pool_items:
@@ -87,7 +96,11 @@ class TradingService:
 
         all_assets: Dict[Tuple[str, str], Dict[str, List[Item]]] = {}
         for app_id, ctx_id in games:
-            all_assets[(app_id, ctx_id)] = await self.inventory_service.sync_snapshot(GameOptions(app_id, ctx_id))
+            try:
+                all_assets[(app_id, ctx_id)] = await self.inventory_service.sync_snapshot(GameOptions(app_id, ctx_id))
+            except Exception as e:
+                logger.warning(f"Could not read the inventory for app {app_id}: {e!r}")
+                return None
         return all_assets
 
     async def _reconcile_orders(self, buy_orders: list, sell_listings: list, cancel: bool) -> None:
