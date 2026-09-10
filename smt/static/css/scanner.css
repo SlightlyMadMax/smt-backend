@@ -1,0 +1,21 @@
+.scan-page-name {
+  margin-bottom: 2rem;
+}
+
+.scan-form {
+  max-width: 900px;
+  margin: 0 auto 2rem;
+  padding: 1.5rem;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.scan-form .form-actions {
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.scan-form .form-row:last-of-type .form-group {
+  margin-bottom: 0;
+}

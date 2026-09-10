@@ -2,14 +2,15 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ static_url('css/pool_items.css') }}">
+<link rel="stylesheet" href="{{ static_url('css/scanner.css') }}">
 {% endblock %}
 
 {% block title %}Market Scanner — Steam Market Trader{% endblock %}
 
 {% block content %}
-<h1 class="page-name">Market Scanner</h1>
+<h1 class="page-name scan-page-name">Market Scanner</h1>
 
-<form id="scan-form" class="settings-section">
+<form id="scan-form" class="scan-form">
     <div class="form-row">
         <div class="form-group">
             <label for="app_id">Game</label>
