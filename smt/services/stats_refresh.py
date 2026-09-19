@@ -1,5 +1,4 @@
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy.exc import NoResultFound
@@ -12,7 +11,7 @@ from smt.schemas.action_log import ActionKind, ActionLevel
 from smt.schemas.pool import PoolItemUpdate
 from smt.schemas.price_history import PriceHistoryRecordCreate
 from smt.services.action_log import ActionLogService
-from smt.services.market_analytics import ItemIndicators, MarketAnalyticsService
+from smt.services.market_analytics import MarketAnalyticsService
 from smt.services.pool import PoolService
 from smt.services.price_history import PriceHistoryService
 from smt.services.settings import SettingsService
@@ -22,7 +21,6 @@ from smt.services.steam import SteamService
 logger = get_logger("services.stats_refresh")
 
 RECENT_STATS_LOOKBACK = timedelta(days=2)
-WEEKLY_WINDOW = timedelta(days=7)
 
 
 class StatsRefreshService:
@@ -109,30 +107,14 @@ class StatsRefreshService:
 
         await self.pool_service.update(market_hash_name, PoolItemUpdate(**values))
 
-    async def _choose_sell_price(self, item, records, buy_target: Decimal, days: int):
-        """
-        Let the order book decide how dear we may ask.
-
-        A price the history reaches often is worthless if hundreds of cheaper listings
-        would be served first, so the search weighs the margin against the queue.
-        """
-        settings = await self.settings_service.get_settings()
-        levels: List[dict] = []
+    async def _sell_levels(self, item) -> List[dict]:
+        """Without the book the asking price ignores the queue, which is worse but not fatal."""
         try:
             book = await self.steam.get_order_book(market_hash_name=item.market_hash_name, app_id=item.app_id)
-            levels = book.get("sell_levels") or []
         except Exception as e:
             logger.warning(f"No order book for {item.market_hash_name}, asking price ignores the queue: {e!r}")
-
-        daily_volume = Decimal(sum(record.volume for record in records)) / days if days else None
-        return self.analytics_service.choose_sell_price(
-            records=records,
-            buy_target=buy_target,
-            sell_levels=levels,
-            daily_volume=daily_volume,
-            window_days=days,
-            ceiling=settings.sell_percentile,
-        )
+            return []
+        return book.get("sell_levels") or []
 
     async def refresh_indicators(self, names: List[str]) -> None:
         settings = await self.settings_service.get_settings()
@@ -142,65 +124,43 @@ class StatsRefreshService:
 
         for item in items:
             records = list(await self.price_history_service.list(item.market_hash_name, since=since))
-            clean = self.analytics_service.filter_price_outliers(records)
-            dropped = len(records) - len(clean)
-            if dropped:
-                logger.info(f"Ignoring {dropped} outlier price records for {item.market_hash_name}.")
-            if len(clean) < 2:
-                continue
-
-            opt_buy = await self.analytics_service.compute_buy_target(clean)
-            if opt_buy <= 0:
-                continue
-
-            choice = await self._choose_sell_price(item, clean, opt_buy, days)
-            if choice is None:
-                logger.info(f"{item.market_hash_name} has no asking price Steam would accept.")
-                continue
-
-            opt_sell = choice.price
-            profit = choice.profit
-            round_trips, median_hold = choice.round_trips, choice.median_hold_hours
-            sigma = await self.analytics_service.compute_volume_weighted_volatility(clean)
-            return_on_capital = self.analytics_service.project_return_on_capital(
-                profit, choice.feasible_round_trips, opt_buy, days
+            evaluation = await self.analytics_service.evaluate(
+                records=records,
+                current_price=item.current_lowest_price,
+                volume24h=item.current_volume24h,
+                sell_levels=await self._sell_levels(item),
+                window_days=days,
             )
-            _, volume7d = await self.analytics_service.compute_recent_stats(clean, WEEKLY_WINDOW)
 
-            flag, reason = await self.analytics_service.decide_trade_flag(
-                ItemIndicators(
-                    profit=profit,
-                    volume24h=item.current_volume24h,
-                    volume7d=volume7d,
-                    volatility=sigma,
-                    round_trips=round_trips,
-                    median_hold_hours=median_hold,
-                    return_on_capital_30d=return_on_capital,
+            if evaluation.outliers_dropped:
+                logger.info(
+                    f"Ignoring {evaluation.outliers_dropped} outlier price records for {item.market_hash_name}."
                 )
-            )
 
-            if flag and not self.analytics_service.history_describes_current_market(clean, item.current_lowest_price):
-                flag, reason = False, "the price history is centred far from the current price"
+            choice = evaluation.choice
+            if choice is None:
+                logger.info(f"{item.market_hash_name} keeps its previous indicators: {evaluation.reason}.")
+                continue
 
-            if not flag:
-                logger.info(f"{item.market_hash_name} is not traded: {reason}.")
+            if not evaluation.tradable:
+                logger.info(f"{item.market_hash_name} is not traded: {evaluation.reason}.")
 
             await self.pool_service.update(
                 item.market_hash_name,
                 PoolItemUpdate(
-                    optimal_buy_price=opt_buy,
-                    optimal_sell_price=opt_sell,
-                    volatility=sigma,
-                    potential_profit=profit,
-                    current_volume7d=volume7d,
-                    round_trips=round_trips,
+                    optimal_buy_price=evaluation.buy_target,
+                    optimal_sell_price=choice.price,
+                    volatility=evaluation.volatility,
+                    potential_profit=choice.profit,
+                    current_volume7d=evaluation.volume7d,
+                    round_trips=choice.round_trips,
                     feasible_round_trips=choice.feasible_round_trips,
                     sell_percentile_used=choice.percentile,
                     queue_ahead=choice.queue_ahead,
                     days_to_clear=choice.days_to_clear,
-                    median_hold_hours=median_hold,
-                    return_on_capital_30d=return_on_capital,
-                    use_for_trading=flag,
+                    median_hold_hours=choice.median_hold_hours,
+                    return_on_capital_30d=evaluation.return_on_capital_30d,
+                    use_for_trading=evaluation.tradable,
                 ),
             )
 

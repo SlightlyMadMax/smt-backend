@@ -27,6 +27,7 @@ class ItemIndicators:
 
 PRICE_DRIFT_FACTOR = Decimal("2")
 SELL_SEARCH_FLOOR = 50
+WEEKLY_WINDOW = timedelta(days=7)
 
 
 @dataclass
@@ -45,6 +46,20 @@ class SellChoice:
     @property
     def profit_per_window(self) -> Decimal:
         return (self.profit * self.feasible_round_trips).quantize(Decimal("0.01"))
+
+
+@dataclass
+class Evaluation:
+    """Everything the bot concludes about an item from its history and its order book."""
+
+    tradable: bool
+    reason: str
+    outliers_dropped: int = 0
+    buy_target: Optional[Decimal] = None
+    choice: Optional[SellChoice] = None
+    volatility: Optional[Decimal] = None
+    volume7d: Optional[int] = None
+    return_on_capital_30d: Optional[Decimal] = None
 
 
 class MarketAnalyticsService:
@@ -79,12 +94,6 @@ class MarketAnalyticsService:
         median = statistics.median(r.price for r in records)
         drift = median / current_price
         return 1 / factor <= drift <= factor
-
-    async def compute_buy_target(self, records: List[PriceHistoryRecord]) -> Decimal:
-        settings = await self.settings_service.get_settings()
-        prices = [record.price for record in records]
-        volumes = [record.volume for record in records]
-        return weighted_percentile(prices, volumes, settings.buy_percentile)
 
     async def compute_weighted_percentile_targets(self, records: List[PriceHistoryRecord]) -> Tuple[Decimal, Decimal]:
         settings = await self.settings_service.get_settings()
@@ -265,6 +274,71 @@ class MarketAnalyticsService:
 
         over_window = profit_per_trade * round_trips / buy_target * 100
         return (over_window * Decimal(30) / Decimal(window_days)).quantize(Decimal("0.1"))
+
+    async def evaluate(
+        self,
+        records: List[PriceHistoryRecord],
+        current_price: Optional[Decimal],
+        volume24h: Optional[int],
+        sell_levels: List[dict],
+        window_days: int,
+    ) -> Evaluation:
+        """
+        The one judgement of an item, shared by the market scan and the pool.
+
+        Two separate code paths would drift apart, and then the scan would recommend
+        items the pool turns down for reasons nobody can see.
+        """
+        clean = self.filter_price_outliers(records)
+        dropped = len(records) - len(clean)
+        if len(clean) < 2:
+            return Evaluation(False, "not enough price history", dropped)
+
+        settings = await self.settings_service.get_settings()
+        prices = [record.price for record in clean]
+        volumes = [record.volume for record in clean]
+
+        buy_target = weighted_percentile(prices, volumes, settings.buy_percentile)
+        if buy_target <= 0:
+            return Evaluation(False, "no usable buy target", dropped)
+
+        daily_volume = Decimal(sum(volumes)) / window_days if window_days else None
+        choice = self.choose_sell_price(
+            clean, buy_target, sell_levels, daily_volume, window_days, settings.sell_percentile
+        )
+        if choice is None:
+            return Evaluation(False, "no asking price Steam would accept", dropped, buy_target)
+
+        volatility = await self.compute_volume_weighted_volatility(clean)
+        _, volume7d = await self.compute_recent_stats(clean, WEEKLY_WINDOW)
+        return_on_capital = self.project_return_on_capital(
+            choice.profit, choice.feasible_round_trips, buy_target, window_days
+        )
+
+        tradable, reason = await self.decide_trade_flag(
+            ItemIndicators(
+                profit=choice.profit,
+                volume24h=volume24h,
+                volume7d=volume7d,
+                volatility=volatility,
+                round_trips=choice.round_trips,
+                median_hold_hours=choice.median_hold_hours,
+                return_on_capital_30d=return_on_capital,
+            )
+        )
+        if tradable and not self.history_describes_current_market(clean, current_price):
+            tradable, reason = False, "the price history is centred far from the current price"
+
+        return Evaluation(
+            tradable=tradable,
+            reason=reason,
+            outliers_dropped=dropped,
+            buy_target=buy_target,
+            choice=choice,
+            volatility=volatility,
+            volume7d=volume7d,
+            return_on_capital_30d=return_on_capital,
+        )
 
     async def decide_trade_flag(self, indicators: ItemIndicators) -> Tuple[bool, str]:
         """Whether the bot should trade this item, and why not when it should not."""

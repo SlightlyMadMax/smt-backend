@@ -9,7 +9,7 @@ from steampy.exceptions import TooManyRequests
 from smt.exceptions import OrderBookUnavailable
 from smt.schemas.action_log import ActionKind
 from smt.services import steam as steam_module
-from smt.services.market_analytics import SellChoice
+from smt.services.market_analytics import Evaluation, SellChoice
 from smt.services.stats_refresh import StatsRefreshService
 from smt.services.steam import ACCOUNT_CURRENCY, SteamService
 
@@ -182,100 +182,90 @@ def history_record(price: str, volume: int = 10):
     return SimpleNamespace(price=Decimal(price), volume=volume, recorded_at=None)
 
 
+def evaluation(tradable=True, reason="", choice=True):
+    return Evaluation(
+        tradable=tradable,
+        reason=reason,
+        buy_target=Decimal("6.21"),
+        choice=(
+            SellChoice(
+                percentile=82,
+                price=Decimal("8.01"),
+                profit=Decimal("0.77"),
+                round_trips=8,
+                median_hold_hours=Decimal("12.0"),
+                queue_ahead=14,
+                days_to_clear=Decimal("0.5"),
+                feasible_round_trips=6,
+            )
+            if choice
+            else None
+        ),
+        volatility=Decimal("0.095"),
+        volume7d=640,
+        return_on_capital_30d=Decimal("120.0"),
+    )
+
+
+def pool_item():
+    return SimpleNamespace(
+        market_hash_name="item", app_id="440", current_volume24h=1000, current_lowest_price=Decimal("6.82")
+    )
+
+
 @pytest.fixture
 def indicator_service(refresh_service):
-    refresh_service.settings_service.get_settings.return_value = SimpleNamespace(
-        analysis_window_days=7, sell_percentile=90
-    )
-    refresh_service.analytics_service.filter_price_outliers = lambda records: records
-    refresh_service.analytics_service.compute_buy_target.return_value = Decimal("6.21")
-    refresh_service.analytics_service.choose_sell_price = lambda **kwargs: SellChoice(
-        percentile=82,
-        price=Decimal("8.01"),
-        profit=Decimal("0.77"),
-        round_trips=8,
-        median_hold_hours=Decimal("12.0"),
-        queue_ahead=14,
-        days_to_clear=Decimal("0.5"),
-        feasible_round_trips=6,
-    )
-    refresh_service.analytics_service.compute_volume_weighted_volatility.return_value = Decimal("0.095")
-    refresh_service.analytics_service.decide_trade_flag.return_value = (True, "")
-    refresh_service.analytics_service.project_return_on_capital = lambda profit, trips, buy, days: Decimal("120.0")
+    refresh_service.settings_service.get_settings.return_value = SimpleNamespace(analysis_window_days=14)
     refresh_service.price_history_service.list.return_value = [history_record("6.90"), history_record("6.95")]
-    refresh_service.steam.get_order_book.return_value = {"sell_levels": [], "buy_levels": []}
+    refresh_service.steam.get_order_book.return_value = {"sell_levels": [{"price": Decimal("8.00"), "quantity": 3}]}
+    refresh_service.pool_service.get_many.return_value = [pool_item()]
+    refresh_service.analytics_service.evaluate.return_value = evaluation()
     return refresh_service
 
 
 @pytest.mark.asyncio
-class TestIndicatorDriftGuard:
-    async def test_keeps_the_flag_when_history_matches_the_market(self, indicator_service):
-        indicator_service.pool_service.get_many.return_value = [
-            SimpleNamespace(market_hash_name="item", current_volume24h=1000, current_lowest_price=Decimal("6.82"))
-        ]
-        indicator_service.analytics_service.history_describes_current_market = lambda records, price: True
+class TestThePoolAsksTheSharedJudgement:
+    async def test_it_hands_over_what_only_the_pool_knows(self, indicator_service):
+        await indicator_service.refresh_indicators(["item"])
 
+        kwargs = indicator_service.analytics_service.evaluate.await_args.kwargs
+        assert kwargs["current_price"] == Decimal("6.82")
+        assert kwargs["volume24h"] == 1000
+        assert kwargs["sell_levels"] == [{"price": Decimal("8.00"), "quantity": 3}]
+        assert kwargs["window_days"] == 14
+
+    async def test_the_verdict_and_its_reasoning_are_stored(self, indicator_service):
         await indicator_service.refresh_indicators(["item"])
 
         payload = indicator_service.pool_service.update.await_args.args[1]
         assert payload.use_for_trading is True
-
-    async def test_clears_the_flag_when_history_is_far_from_the_market(self, indicator_service):
-        indicator_service.pool_service.get_many.return_value = [
-            SimpleNamespace(market_hash_name="item", current_volume24h=1000, current_lowest_price=Decimal("5.18"))
-        ]
-        indicator_service.analytics_service.history_describes_current_market = lambda records, price: False
-
-        await indicator_service.refresh_indicators(["item"])
-
-        payload = indicator_service.pool_service.update.await_args.args[1]
-        assert payload.use_for_trading is False
-
-
-@pytest.mark.asyncio
-class TestTheAskingPriceThePoolStores:
-    @staticmethod
-    def item():
-        return SimpleNamespace(
-            market_hash_name="item", app_id="440", current_volume24h=1000, current_lowest_price=Decimal("6.82")
-        )
-
-    async def test_the_chosen_price_and_its_reasoning_are_kept(self, indicator_service):
-        indicator_service.pool_service.get_many.return_value = [self.item()]
-        indicator_service.analytics_service.history_describes_current_market = lambda records, price: True
-
-        await indicator_service.refresh_indicators(["item"])
-
-        payload = indicator_service.pool_service.update.await_args.args[1]
+        assert payload.optimal_buy_price == Decimal("6.21")
         assert payload.optimal_sell_price == Decimal("8.01")
         assert payload.sell_percentile_used == 82
         assert payload.queue_ahead == 14
-        assert payload.days_to_clear == Decimal("0.5")
         assert payload.feasible_round_trips == 6
+        assert payload.return_on_capital_30d == Decimal("120.0")
 
-    async def test_the_return_is_computed_from_the_trips_the_queue_allows(self, indicator_service):
-        """Eight trips in the history, six the queue leaves room for; the return follows the six."""
-        seen = {}
-
-        def remember(profit, trips, buy, days):
-            seen["trips"] = trips
-            return Decimal("120.0")
-
-        indicator_service.analytics_service.project_return_on_capital = remember
-        indicator_service.pool_service.get_many.return_value = [self.item()]
-        indicator_service.analytics_service.history_describes_current_market = lambda records, price: True
+    async def test_a_rejection_is_stored_too(self, indicator_service):
+        indicator_service.analytics_service.evaluate.return_value = evaluation(False, "volume over 7d 40 is below 50")
 
         await indicator_service.refresh_indicators(["item"])
 
-        assert seen["trips"] == 6
+        assert indicator_service.pool_service.update.await_args.args[1].use_for_trading is False
 
-    async def test_an_unreadable_book_does_not_stop_the_refresh(self, indicator_service):
+    async def test_an_item_with_nothing_to_judge_keeps_what_it_had(self, indicator_service):
+        indicator_service.analytics_service.evaluate.return_value = evaluation(False, "not enough price history", False)
+
+        await indicator_service.refresh_indicators(["item"])
+
+        indicator_service.pool_service.update.assert_not_awaited()
+
+    async def test_an_unreadable_book_still_gets_judged(self, indicator_service):
         indicator_service.steam.get_order_book.side_effect = RuntimeError("429")
-        indicator_service.pool_service.get_many.return_value = [self.item()]
-        indicator_service.analytics_service.history_describes_current_market = lambda records, price: True
 
         await indicator_service.refresh_indicators(["item"])
 
+        assert indicator_service.analytics_service.evaluate.await_args.kwargs["sell_levels"] == []
         indicator_service.pool_service.update.assert_awaited()
 
 

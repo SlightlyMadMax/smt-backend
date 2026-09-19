@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -525,3 +526,69 @@ class TestTheQueueInFrontOfUs:
 
     def test_a_queue_longer_than_the_window_rules_the_item_out(self):
         assert MarketAnalyticsService.feasible_round_trips(19, Decimal("45"), 30) == 0
+
+
+def oscillating(low="8.00", high="12.00", cycles=8, volume=40):
+    start = datetime.datetime(2026, 9, 1, tzinfo=datetime.timezone.utc)
+    points = []
+    for i, price in enumerate([low, high] * cycles):
+        points.append(
+            SimpleNamespace(recorded_at=start + datetime.timedelta(hours=6 * i), price=Decimal(price), volume=volume)
+        )
+    return points
+
+
+@pytest.mark.asyncio
+class TestTheSharedJudgement:
+    @pytest_asyncio.fixture(autouse=True)
+    def rules(self, mock_settings_service):
+        settings = mock_settings_service.get_settings.return_value
+        settings.buy_percentile = 10
+        settings.sell_percentile = 90
+        settings.min_profit_threshold = Decimal("0.30")
+        settings.min_volume_24h = 10
+        settings.min_volume_7d = 50
+        settings.max_volatility_threshold = Decimal("5")
+        settings.max_hold_hours = 48
+        settings.min_return_on_capital_30d = Decimal("20")
+
+    async def evaluate(self, service, records, current_price=Decimal("10.00"), levels=None, window=14):
+        return await service.evaluate(records, current_price, 500, levels or [], window)
+
+    async def test_a_healthy_item_is_approved(self, market_analytics_service):
+        verdict = await self.evaluate(market_analytics_service, oscillating())
+
+        assert verdict.tradable is True
+        assert verdict.reason == ""
+        assert verdict.choice.price > verdict.buy_target
+
+    async def test_a_thin_history_is_left_undecided(self, market_analytics_service):
+        verdict = await self.evaluate(market_analytics_service, oscillating(cycles=1)[:1])
+
+        assert verdict.tradable is False
+        assert verdict.choice is None
+        assert verdict.reason == "not enough price history"
+
+    async def test_history_from_another_price_era_is_refused(self, market_analytics_service):
+        verdict = await self.evaluate(market_analytics_service, oscillating(), current_price=Decimal("40.00"))
+
+        assert verdict.tradable is False
+        assert "centred far from the current price" in verdict.reason
+
+    async def test_the_return_follows_the_trips_the_queue_allows(self, market_analytics_service):
+        """With a wall in front of every price, the history's trips are not the ones we would get."""
+        open_book = await self.evaluate(market_analytics_service, oscillating())
+        walled = await self.evaluate(
+            market_analytics_service, oscillating(), levels=[{"price": Decimal("7.00"), "quantity": 5000}]
+        )
+
+        assert walled.choice.feasible_round_trips < open_book.choice.feasible_round_trips
+        assert walled.return_on_capital_30d < open_book.return_on_capital_30d
+
+    async def test_a_razor_thin_margin_is_refused(self, market_analytics_service, mock_settings_service):
+        mock_settings_service.get_settings.return_value.min_profit_threshold = Decimal("50.00")
+
+        verdict = await self.evaluate(market_analytics_service, oscillating())
+
+        assert verdict.tradable is False
+        assert verdict.reason.startswith("profit")
