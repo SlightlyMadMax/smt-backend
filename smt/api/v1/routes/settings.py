@@ -53,7 +53,7 @@ async def update_settings(
 @router.post("/reset", response_model=SettingsResponse)
 async def reset_to_defaults(service: SettingsService = Depends(get_settings_service)):
     default_update = SettingsUpdate(
-        min_profit_threshold=Decimal("0.10"),
+        min_profit_threshold=Decimal("0.30"),
         min_profit_percentage=Decimal("5.00"),
         max_investment_per_item=Decimal("50.00"),
         buy_percentile=10,
@@ -63,7 +63,7 @@ async def reset_to_defaults(service: SettingsService = Depends(get_settings_serv
         max_volatility_threshold=Decimal("0.5000"),
         min_volatility_threshold=Decimal("0.0100"),
         price_history_days=30,
-        analysis_window_days=7,
+        analysis_window_days=14,
         max_concurrent_trades=10,
         cooldown_after_loss_hours=24,
         price_refresh_interval_minutes=30,
