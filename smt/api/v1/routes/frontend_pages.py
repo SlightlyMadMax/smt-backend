@@ -106,8 +106,8 @@ async def action_history_page(request: Request):
 
 
 @router.get("/scanner", response_class=HTMLResponse, include_in_schema=False)
-async def scanner_page(request: Request, service: SettingsService = Depends(get_settings_service)):
-    return templates.TemplateResponse("scanner.html", {"request": request, "settings": await service.get_settings()})
+async def scanner_page(request: Request):
+    return templates.TemplateResponse("scanner.html", {"request": request})
 
 
 @router.get("/statistics", response_class=HTMLResponse, include_in_schema=False)

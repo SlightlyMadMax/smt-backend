@@ -62,7 +62,7 @@ function buildRow(row, index) {
     '<td>' + money(row.sell_target) + '</td>' +
     '<td>' + money(row.profit_per_trade) + '</td>' +
     '<td>' + row.feasible_round_trips + '</td>' +
-    '<td>' + money(row.days_to_clear) + '</td>' +
+    '<td>' + SMT.duration(row.days_to_clear) + '</td>' +
     '<td>' + money(row.return_on_capital_pct) + '</td>' +
     '<td>' + row.volume_window + '</td>' +
     '<td class="chevron-cell" title="Show price history and order book">' +
@@ -226,11 +226,11 @@ function detailStats(row) {
     ['Asking percentile chosen', row.sell_percentile_used],
     ['Round trips in the history', row.round_trips],
     ['Listings ahead of ours', row.queue_ahead],
-    ['Days to clear that queue', row.days_to_clear],
+    ['Time to clear that queue', SMT.duration(row.days_to_clear)],
     ['Trips the queue allows', row.feasible_round_trips],
     ['Median hold, h', row.median_hold_hours],
     ['Return, % / 30d', row.return_on_capital_pct],
-    ['Verdict', row.tradable ? 'the pool would trade it' : row.note],
+    ['Verdict', row.tradable ? 'meets every rule in Settings' : row.note],
   ]);
 }
 

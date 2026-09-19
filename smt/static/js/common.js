@@ -272,6 +272,13 @@
       '<ul class="depth-list">' + side(buys, 'depth-buy') + '</ul></div></div>';
   }
 
+  function duration(days) {
+    if (days == null || days === '') return '-';
+    const value = Number(days);
+    if (value < 1) return Math.round(value * 24) + ' h';
+    return value.toFixed(1).replace(/\.0$/, '') + ' d';
+  }
+
   function statsList(rows) {
     return '<dl class="details-stats">' + rows.map(pair =>
       '<div><dt>' + pair[0] + '</dt><dd>' +
@@ -293,6 +300,7 @@
     priceChart,
     depthLists,
     statsList,
+    duration,
   };
 })(window);
 

@@ -27,7 +27,7 @@ function buildStats(status) {
     ['Computed sell', status.optimal_sell_price],
     ['Asking percentile chosen', status.sell_percentile_used],
     ['Listings ahead of ours', status.queue_ahead],
-    ['Days to clear that queue', status.days_to_clear],
+    ['Time to clear that queue', SMT.duration(status.days_to_clear)],
     ['Round trips in the history', status.round_trips],
     ['Trips the queue allows', status.feasible_round_trips],
     ['Median hold, h', status.median_hold_hours],
