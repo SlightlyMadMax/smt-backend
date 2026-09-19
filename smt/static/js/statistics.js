@@ -70,7 +70,7 @@ function returnHint(item) {
 
 function renderItems(items) {
   if (items.length === 0) {
-    itemsBody.innerHTML = '<tr><td colspan="9" class="empty">Nothing has been sold yet.</td></tr>';
+    itemsBody.innerHTML = '<tr><td colspan="12" class="empty">Nothing has been sold yet.</td></tr>';
     return;
   }
 
@@ -85,6 +85,9 @@ function renderItems(items) {
     <td class="forecast">${num(item.forecast_profit)}</td>
     <td class="group-start">${num(item.median_hold_hours)}</td>
     <td class="forecast">${num(item.forecast_hold_hours)}</td>
+    <td class="group-start">${num(item.sell_wait_hours)}</td>
+    <td class="forecast">${num(item.forecast_sell_wait_hours)}</td>
+    <td class="group-start">${num(item.buy_wait_hours)}</td>
     <td class="group-start"${returnHint(item)}>${signed(item.actual_return_30d)}</td>
     <td class="forecast">${num(item.forecast_return_30d)}</td>
   </tr>`).join('');

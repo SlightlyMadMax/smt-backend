@@ -22,7 +22,7 @@
 <section class="stats-section">
   <h2 class="section-name">
     What each item earned
-    <span class="section-hint">Every item that has closed a trade, best first. Forecast is what the pool predicted beforehand.</span>
+    <span class="section-hint">Every item that has closed a trade, best first. Forecast is what the pool expected when each trade was opened.</span>
   </h2>
   <div class="table-scroll">
     <table class="stats-table">
@@ -32,7 +32,9 @@
           <th rowspan="2" data-sort="trades" title="Closed trades">Trades</th>
           <th rowspan="2" data-sort="profit" title="Realised profit added up">Profit</th>
           <th colspan="2" class="group-start">Profit per trade</th>
-          <th colspan="2" class="group-start">Hold, h</th>
+          <th colspan="2" class="group-start" title="From the purchase to the sale">Hold, h</th>
+          <th colspan="2" class="group-start" title="From putting the item up for sale to selling it">Listed, h</th>
+          <th rowspan="2" class="group-start" data-sort="buy_wait_hours" title="From placing the buy order to it filling. Nothing forecasts this: the model assumes the order fills">Buy wait, h</th>
           <th colspan="2" class="group-start">Return, % / 30d</th>
         </tr>
         <tr>
@@ -40,12 +42,14 @@
           <th class="sub" data-sort="forecast_profit">forecast</th>
           <th class="sub group-start" data-sort="median_hold_hours">actual</th>
           <th class="sub" data-sort="forecast_hold_hours">forecast</th>
+          <th class="sub group-start" data-sort="sell_wait_hours">actual</th>
+          <th class="sub" data-sort="forecast_sell_wait_hours">forecast</th>
           <th class="sub group-start" data-sort="actual_return_30d">actual</th>
           <th class="sub" data-sort="forecast_return_30d">forecast</th>
         </tr>
       </thead>
       <tbody id="items-body">
-        <tr><td colspan="9" class="empty">Loading…</td></tr>
+        <tr><td colspan="12" class="empty">Loading…</td></tr>
       </tbody>
     </table>
   </div>

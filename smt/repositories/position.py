@@ -125,6 +125,10 @@ class PositionRepo:
             buy_order_id=data.buy_order_id,
             buy_price=data.buy_price,
             sell_price=data.sell_price,
+            forecast_profit=data.forecast_profit,
+            forecast_hold_hours=data.forecast_hold_hours,
+            forecast_days_to_clear=data.forecast_days_to_clear,
+            forecast_return_30d=data.forecast_return_30d,
             status=PositionStatus.OPEN,
         )
         self.session.add(pos)

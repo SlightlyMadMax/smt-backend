@@ -654,6 +654,10 @@ class TradingService:
                 buy_order_id=buy_id,
                 buy_price=buy_price,
                 sell_price=item.effective_sell_price,
+                forecast_profit=item.potential_profit,
+                forecast_hold_hours=item.median_hold_hours,
+                forecast_days_to_clear=item.days_to_clear,
+                forecast_return_30d=item.return_on_capital_30d,
             )
             position = await self.position_service.add(create)
             await self.action_log.record(

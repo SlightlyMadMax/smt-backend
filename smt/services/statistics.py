@@ -21,11 +21,23 @@ def _percent(part: int, whole: int) -> Optional[Decimal]:
     return (Decimal(part) / Decimal(whole) * 100).quantize(Decimal("0.1"))
 
 
-def _median_hold_hours(positions: Sequence[Position]) -> Optional[Decimal]:
-    holds = [(p.sold_at - p.bought_at).total_seconds() / 3600 for p in positions if p.sold_at and p.bought_at]
-    if not holds:
+def _median_hours(positions: Sequence[Position], start: str, end: str) -> Optional[Decimal]:
+    spans = [
+        max(0.0, (getattr(p, end) - getattr(p, start)).total_seconds() / 3600)
+        for p in positions
+        if getattr(p, start) and getattr(p, end)
+    ]
+    if not spans:
         return None
-    return Decimal(str(round(stats.median(holds), 1)))
+    return Decimal(str(round(stats.median(spans), 1)))
+
+
+def _forecast(values, how, places: str) -> Optional[Decimal]:
+    """Forecasts recorded on the positions; trades opened before they were recorded have none."""
+    present = [Decimal(value) for value in values if value is not None]
+    if not present:
+        return None
+    return Decimal(how(present)).quantize(Decimal(places))
 
 
 def _observed_days(positions: Sequence[Position]) -> Optional[Decimal]:
@@ -106,12 +118,22 @@ class StatisticsService:
                     "profit": profit.quantize(Decimal("0.01")),
                     "avg_profit": (profit / len(group)).quantize(Decimal("0.01")),
                     "capital": capital.quantize(Decimal("0.01")),
-                    "median_hold_hours": _median_hold_hours(group),
+                    "median_hold_hours": _median_hours(group, "bought_at", "sold_at"),
+                    "sell_wait_hours": _median_hours(group, "listed_at", "sold_at"),
+                    "buy_wait_hours": _median_hours(group, "created_at", "bought_at"),
                     "observed_days": observed_days,
                     "actual_return_30d": _return_30d(profit, capital, len(group), observed_days),
-                    "forecast_profit": item.potential_profit if item else None,
-                    "forecast_hold_hours": item.median_hold_hours if item else None,
-                    "forecast_return_30d": item.return_on_capital_30d if item else None,
+                    "forecast_profit": _forecast((p.forecast_profit for p in group), stats.mean, "0.01"),
+                    "forecast_hold_hours": _forecast((p.forecast_hold_hours for p in group), stats.median, "0.1"),
+                    "forecast_sell_wait_hours": _forecast(
+                        (
+                            p.forecast_days_to_clear * 24 if p.forecast_days_to_clear is not None else None
+                            for p in group
+                        ),
+                        stats.median,
+                        "0.1",
+                    ),
+                    "forecast_return_30d": _forecast((p.forecast_return_30d for p in group), stats.mean, "0.1"),
                 }
             )
 

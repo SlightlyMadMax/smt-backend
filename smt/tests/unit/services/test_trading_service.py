@@ -371,6 +371,10 @@ def make_pool_item(buy=Decimal("6.00"), sell=Decimal("7.77"), max_listed=1, name
         max_listed=max_listed,
         effective_buy_price=buy,
         effective_sell_price=sell,
+        potential_profit=Decimal("0.80"),
+        median_hold_hours=Decimal("12.0"),
+        days_to_clear=Decimal("0.5"),
+        return_on_capital_30d=Decimal("95.0"),
     )
 
 
@@ -1037,6 +1041,24 @@ class TestEmergencyStop:
         await trading_service.run_cycle()
 
         trading_service.steam_service.create_buy_order.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestTheForecastTravelsWithThePosition:
+    async def test_the_pool_estimate_is_recorded_when_the_order_goes_in(self, trading_service, position_service):
+        """Later the pool re-estimates or the item leaves it; the trade must keep what it was opened on."""
+        position_service.list_active.return_value = []
+        trading_service.pool_item_service.list_marked_for_trading.return_value = [make_pool_item()]
+        trading_service.steam_service.get_order_book.return_value = make_book(lowest_ask=Decimal("9.00"))
+        trading_service.steam_service.create_buy_order.return_value = "BUY-9"
+
+        await trading_service._open_new_positions()
+
+        created = position_service.add.await_args.args[0]
+        assert created.forecast_profit == Decimal("0.80")
+        assert created.forecast_hold_hours == Decimal("12.0")
+        assert created.forecast_days_to_clear == Decimal("0.5")
+        assert created.forecast_return_30d == Decimal("95.0")
 
 
 @pytest.mark.asyncio

@@ -50,20 +50,33 @@ async def pool(db_session):
     yield
 
 
-def closed(hash_name: str, buy: str, profit: str, sold_days_ago: float, hold_hours: float = 4.0) -> Position:
+def closed(
+    hash_name: str,
+    buy: str,
+    profit: str,
+    sold_days_ago: float,
+    hold_hours: float = 4.0,
+    listed_hours: float = 1.0,
+    buy_wait_hours: float = 2.0,
+    **forecast,
+) -> Position:
     sold_at = NOW - timedelta(days=sold_days_ago)
+    bought_at = sold_at - timedelta(hours=hold_hours)
     return Position(
         pool_item_hash=hash_name,
         app_id="440",
         context_id="2",
-        buy_order_id=f"buy-{hash_name}-{sold_days_ago}-{profit}",
+        buy_order_id=f"buy-{hash_name}-{sold_days_ago}-{profit}-{hold_hours}",
         buy_price=Decimal(buy),
         sell_price=Decimal(buy) * Decimal("1.2"),
         net_proceeds=Decimal(buy) + Decimal(profit),
         realized_profit=Decimal(profit),
         status=PositionStatus.CLOSED,
-        bought_at=sold_at - timedelta(hours=hold_hours),
+        created_at=bought_at - timedelta(hours=buy_wait_hours),
+        bought_at=bought_at,
+        listed_at=sold_at - timedelta(hours=listed_hours),
         sold_at=sold_at,
+        **forecast,
     )
 
 
@@ -171,22 +184,69 @@ class TestItems:
 
         assert (await statistics_service.overview())["items"][0]["median_hold_hours"] == Decimal("5.0")
 
-    async def test_the_forecast_is_read_from_the_pool_item(self, db_session, statistics_service):
-        await add(db_session, closed(FAST, "10", "1.00", sold_days_ago=2))
+    async def test_the_forecast_is_the_one_each_trade_was_opened_on(self, db_session, statistics_service):
+        """The pool re-estimates every hour; comparing today's estimate with last week's trade says nothing."""
+        await add(
+            db_session,
+            closed(
+                FAST,
+                "10",
+                "1.00",
+                sold_days_ago=2,
+                forecast_profit=Decimal("0.80"),
+                forecast_hold_hours=Decimal("6.0"),
+                forecast_days_to_clear=Decimal("0.5"),
+                forecast_return_30d=Decimal("90.0"),
+            ),
+        )
 
         item = (await statistics_service.overview())["items"][0]
 
-        assert item["forecast_profit"] == Decimal("2.25")
-        assert item["forecast_hold_hours"] == Decimal("2.0")
-        assert item["forecast_return_30d"] == Decimal("262.5")
+        assert item["forecast_profit"] == Decimal("0.80")
+        assert item["forecast_hold_hours"] == Decimal("6.0")
+        assert item["forecast_sell_wait_hours"] == Decimal("12.0")
+        assert item["forecast_return_30d"] == Decimal("90.0")
 
-    async def test_a_pool_item_without_a_forecast_leaves_it_empty(self, db_session, statistics_service):
-        await add(db_session, closed(SLOW, "10", "1.00", sold_days_ago=2))
+    async def test_several_trades_are_summarised_like_the_actuals(self, db_session, statistics_service):
+        await add(
+            db_session,
+            closed(FAST, "10", "1.00", 1, forecast_profit=Decimal("0.60"), forecast_hold_hours=Decimal("4.0")),
+            closed(FAST, "10", "1.00", 2, forecast_profit=Decimal("0.80"), forecast_hold_hours=Decimal("6.0")),
+            closed(FAST, "10", "1.00", 3, forecast_profit=Decimal("1.30"), forecast_hold_hours=Decimal("30.0")),
+        )
+
+        item = (await statistics_service.overview())["items"][0]
+
+        assert item["forecast_profit"] == Decimal("0.90")
+        assert item["forecast_hold_hours"] == Decimal("6.0")
+
+    async def test_the_forecast_outlives_the_item_leaving_the_pool(self, db_session, statistics_service):
+        await add(db_session, closed(FAST, "10", "1.00", 2, forecast_profit=Decimal("0.80")))
+        await db_session.execute(delete(PoolItem).where(PoolItem.market_hash_name == FAST))
+        await db_session.commit()
+        db_session.expunge_all()
+
+        item = (await statistics_service.overview())["items"][0]
+
+        assert item["forecast_profit"] == Decimal("0.80")
+
+    async def test_a_trade_opened_before_forecasts_were_kept_shows_none(self, db_session, statistics_service):
+        """Falling back on the pool's current estimate would quietly bring the old mistake back."""
+        await add(db_session, closed(FAST, "10", "1.00", sold_days_ago=2))
 
         item = (await statistics_service.overview())["items"][0]
 
         assert item["forecast_profit"] is None
         assert item["forecast_return_30d"] is None
+
+    async def test_the_waits_on_both_sides_are_measured(self, db_session, statistics_service):
+        """Nothing forecasts the buy wait; the model assumes the order fills. This is where that gets checked."""
+        await add(db_session, closed(FAST, "10", "1.00", 2, listed_hours=5, buy_wait_hours=30))
+
+        item = (await statistics_service.overview())["items"][0]
+
+        assert item["sell_wait_hours"] == Decimal("5.0")
+        assert item["buy_wait_hours"] == Decimal("30.0")
 
     async def test_return_is_scaled_to_thirty_days(self, db_session, statistics_service):
         """Ten percent earned over fifteen days is twenty percent over thirty.
@@ -270,3 +330,14 @@ class TestDailyProfit:
         daily = (await statistics_service.overview(days=30))["daily_profit"]
 
         assert [entry["profit"] for entry in daily] == [Decimal("1.00")]
+
+
+@pytest.mark.asyncio
+class TestClocksThatDisagree:
+    async def test_a_sale_stamped_before_the_listing_counts_as_instant(self, db_session, statistics_service):
+        """Steam's clock ran ten seconds behind ours on the one real sale; a negative wait is that, not time travel."""
+        await add(db_session, closed(FAST, "10", "1.00", 2, listed_hours=-9 / 3600))
+
+        item = (await statistics_service.overview())["items"][0]
+
+        assert item["sell_wait_hours"] == Decimal("0.0")

@@ -33,6 +33,14 @@ class PositionCreate(PositionBase):
     buy_order_id: str
     buy_price: Decimal
     sell_price: Decimal
+    forecast_profit: Optional[Decimal] = Field(
+        None, description="Profit per trip the pool expected when the order went in"
+    )
+    forecast_hold_hours: Optional[Decimal] = Field(None, description="Hours from purchase to sale the pool expected")
+    forecast_days_to_clear: Optional[Decimal] = Field(
+        None, description="Days the listings ahead of ours were expected to take"
+    )
+    forecast_return_30d: Optional[Decimal] = Field(None, description="Return per 30 days the pool expected")
 
 
 class PositionUpdate(BaseModel):

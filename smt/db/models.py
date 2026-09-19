@@ -161,6 +161,10 @@ class Position(TimeStampedModel, Base):
     sold_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
     net_proceeds: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
     realized_profit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
+    forecast_profit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=True)
+    forecast_hold_hours: Mapped[Decimal] = mapped_column(Numeric(10, 1), nullable=True)
+    forecast_days_to_clear: Mapped[Decimal] = mapped_column(Numeric(10, 1), nullable=True)
+    forecast_return_30d: Mapped[Decimal] = mapped_column(Numeric(10, 1), nullable=True)
     status: Mapped[PositionStatus] = mapped_column(
         Enum(PositionStatus, name="position_status"), default=PositionStatus.OPEN, nullable=False
     )
