@@ -4,6 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from smt.schemas.settings import SettingsResponse, SettingsUpdate
 from smt.services.dependencies import get_pool_service, get_settings_service, get_stats_refresh_service
+from smt.services.market_analytics import JUDGEMENT_SETTINGS
 from smt.services.pool import PoolService
 from smt.services.settings import SettingsService
 from smt.services.stats_refresh import StatsRefreshService
@@ -25,27 +26,17 @@ async def update_settings(
     pool_service: PoolService = Depends(get_pool_service),
     refresh_service: StatsRefreshService = Depends(get_stats_refresh_service),
 ):
+    current = await service.get_settings()
+    before = {name: getattr(current, name) for name in JUDGEMENT_SETTINGS}
+
     try:
         updated_settings = await service.update_settings(update)
     except ValueError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
-    # Trigger recalculation of all pool items if analytical settings changed
-    analytical_fields = {
-        "buy_percentile",
-        "sell_percentile",
-        "min_profit_threshold",
-        "min_volume_24h",
-        "max_volatility_threshold",
-        "analysis_window_days",
-    }
-
-    if any(field in update.model_dump(exclude_unset=True) for field in analytical_fields):
+    if any(getattr(updated_settings, name) != value for name, value in before.items()):
         pool_items = await pool_service.list()
-        item_names = [item.market_hash_name for item in pool_items]
-
-        # Recalculate indicators for all items
-        background_tasks.add_task(refresh_service.refresh_indicators, item_names)
+        background_tasks.add_task(refresh_service.refresh_indicators, [item.market_hash_name for item in pool_items])
 
     return updated_settings
 

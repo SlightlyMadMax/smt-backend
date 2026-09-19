@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 
 from smt.schemas.price_history import PriceHistoryRecord
-from smt.services.market_analytics import ItemIndicators, MarketAnalyticsService
+from smt.services.market_analytics import JUDGEMENT_SETTINGS, ItemIndicators, MarketAnalyticsService
 
 
 def make_indicators(
@@ -592,3 +592,40 @@ class TestTheSharedJudgement:
 
         assert verdict.tradable is False
         assert verdict.reason.startswith("profit")
+
+
+class RecordingSettings:
+    """Settings that remember which of them were read."""
+
+    def __init__(self, values):
+        object.__setattr__(self, "_values", values)
+        object.__setattr__(self, "read", set())
+
+    def __getattr__(self, name):
+        self.read.add(name)
+        return self._values[name]
+
+
+@pytest.mark.asyncio
+class TestTheJudgementSettingsList:
+    async def test_every_setting_the_judgement_reads_is_on_the_list(self):
+        """The list decides when the pool is rejudged; a rule missing from it goes stale unnoticed."""
+        settings = RecordingSettings(
+            {
+                "buy_percentile": 10,
+                "sell_percentile": 90,
+                "min_profit_threshold": Decimal("0.30"),
+                "min_volume_24h": 0,
+                "min_volume_7d": 0,
+                "max_volatility_threshold": Decimal("5"),
+                "max_hold_hours": 48,
+                "min_return_on_capital_30d": Decimal("0"),
+            }
+        )
+        settings_service = AsyncMock()
+        settings_service.get_settings.return_value = settings
+
+        verdict = await MarketAnalyticsService(settings_service).evaluate(oscillating(), Decimal("10.00"), 500, [], 14)
+
+        assert verdict.tradable is True
+        assert settings.read <= set(JUDGEMENT_SETTINGS)

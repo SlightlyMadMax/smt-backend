@@ -28,6 +28,17 @@ class ItemIndicators:
 PRICE_DRIFT_FACTOR = Decimal("2")
 SELL_SEARCH_FLOOR = 50
 WEEKLY_WINDOW = timedelta(days=7)
+JUDGEMENT_SETTINGS = (
+    "analysis_window_days",
+    "buy_percentile",
+    "sell_percentile",
+    "min_profit_threshold",
+    "min_volume_24h",
+    "min_volume_7d",
+    "max_volatility_threshold",
+    "max_hold_hours",
+    "min_return_on_capital_30d",
+)
 
 
 @dataclass

@@ -11,7 +11,7 @@ from redis.asyncio import Redis
 from steampy.models import GameOptions
 
 from smt.logger import get_logger
-from smt.services.market_analytics import Evaluation, MarketAnalyticsService
+from smt.services.market_analytics import JUDGEMENT_SETTINGS, Evaluation, MarketAnalyticsService
 from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
 from smt.utils.steam import net_received
@@ -213,18 +213,7 @@ class MarketScanService:
     async def _rules(self) -> dict:
         """The settings a scan was judged by, so a result can be seen to predate a change in them."""
         settings = await self.settings_service.get_settings()
-        fields = (
-            "analysis_window_days",
-            "buy_percentile",
-            "sell_percentile",
-            "min_profit_threshold",
-            "min_volume_24h",
-            "min_volume_7d",
-            "max_volatility_threshold",
-            "max_hold_hours",
-            "min_return_on_capital_30d",
-        )
-        return {name: str(getattr(settings, name)) for name in fields}
+        return {name: str(getattr(settings, name)) for name in JUDGEMENT_SETTINGS}
 
     async def _finish(self, state: ScanState) -> None:
         state.finished_at = datetime.now(timezone.utc).isoformat()
