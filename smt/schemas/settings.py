@@ -8,14 +8,12 @@ from pydantic import BaseModel, Field
 class SettingsResponse(BaseModel):
     id: int
     min_profit_threshold: Decimal
-    min_profit_percentage: Decimal
     max_investment_per_item: Decimal
     buy_percentile: int
     sell_percentile: int
     min_volume_24h: int
     min_volume_7d: int
     max_volatility_threshold: Decimal
-    min_volatility_threshold: Decimal
     max_hold_hours: int
     min_return_on_capital_30d: Decimal
     price_history_days: int
@@ -32,14 +30,12 @@ class SettingsResponse(BaseModel):
 
 class SettingsUpdate(BaseModel):
     min_profit_threshold: Optional[Decimal] = None
-    min_profit_percentage: Optional[Decimal] = None
     max_investment_per_item: Optional[Decimal] = None
     buy_percentile: Optional[int] = Field(None, ge=1, le=99)
     sell_percentile: Optional[int] = Field(None, ge=1, le=99)
     min_volume_24h: Optional[int] = Field(None, ge=0)
     min_volume_7d: Optional[int] = Field(None, ge=0)
     max_volatility_threshold: Optional[Decimal] = Field(None, ge=0)
-    min_volatility_threshold: Optional[Decimal] = Field(None, ge=0)
     max_hold_hours: Optional[int] = Field(None, ge=1)
     min_return_on_capital_30d: Optional[Decimal] = Field(None, ge=0)
     price_history_days: Optional[int] = Field(None, ge=1, le=365)

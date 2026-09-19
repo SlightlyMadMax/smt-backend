@@ -166,12 +166,10 @@ class StatsRefreshService:
                 profit, choice.feasible_round_trips, opt_buy, days
             )
             _, volume7d = await self.analytics_service.compute_recent_stats(clean, WEEKLY_WINDOW)
-            profit_pct = (profit / opt_buy * 100).quantize(Decimal("0.01")) if opt_buy > 0 else None
 
             flag, reason = await self.analytics_service.decide_trade_flag(
                 ItemIndicators(
                     profit=profit,
-                    profit_pct=profit_pct,
                     volume24h=item.current_volume24h,
                     volume7d=volume7d,
                     volatility=sigma,

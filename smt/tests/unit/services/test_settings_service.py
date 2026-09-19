@@ -1,4 +1,3 @@
-from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -8,13 +7,8 @@ from smt.schemas.settings import SettingsUpdate
 from smt.services.settings import SettingsService
 
 
-def stored(buy_percentile=20, sell_percentile=80, min_vol="0.010", max_vol="0.500"):
-    return SimpleNamespace(
-        buy_percentile=buy_percentile,
-        sell_percentile=sell_percentile,
-        min_volatility_threshold=Decimal(min_vol),
-        max_volatility_threshold=Decimal(max_vol),
-    )
+def stored(buy_percentile=20, sell_percentile=80):
+    return SimpleNamespace(buy_percentile=buy_percentile, sell_percentile=sell_percentile)
 
 
 @pytest.fixture
@@ -39,10 +33,6 @@ class TestSettingsValidation:
         # stored sell percentile is 80, so raising buy alone must not slip through
         with pytest.raises(ValueError, match="percentile"):
             await service.update_settings(SettingsUpdate(buy_percentile=85))
-
-    async def test_rejects_a_single_volatility_bound_that_crosses(self, service):
-        with pytest.raises(ValueError, match="volatility"):
-            await service.update_settings(SettingsUpdate(min_volatility_threshold=Decimal("0.900")))
 
     async def test_allows_a_single_field_that_stays_consistent(self, service):
         await service.update_settings(SettingsUpdate(buy_percentile=15))

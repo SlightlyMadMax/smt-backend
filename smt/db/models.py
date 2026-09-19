@@ -116,7 +116,6 @@ class TradingSettings(TimeStampedModel, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     min_profit_threshold: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.30"))
-    min_profit_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("5.00"))
     max_investment_per_item: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("50.00"))
     buy_percentile: Mapped[int] = mapped_column(Integer, default=10)
     sell_percentile: Mapped[int] = mapped_column(Integer, default=90)
@@ -125,7 +124,6 @@ class TradingSettings(TimeStampedModel, Base):
     max_volatility_threshold: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=Decimal("0.500"))
     max_hold_hours: Mapped[int] = mapped_column(Integer, default=48)
     min_return_on_capital_30d: Mapped[Decimal] = mapped_column(Numeric(10, 1), default=Decimal("20.0"))
-    min_volatility_threshold: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=Decimal("0.010"))
     price_history_days: Mapped[int] = mapped_column(Integer, default=30)
     analysis_window_days: Mapped[int] = mapped_column(Integer, default=14)
     max_concurrent_trades: Mapped[int] = mapped_column(Integer, default=10)

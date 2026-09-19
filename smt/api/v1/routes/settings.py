@@ -54,14 +54,12 @@ async def update_settings(
 async def reset_to_defaults(service: SettingsService = Depends(get_settings_service)):
     default_update = SettingsUpdate(
         min_profit_threshold=Decimal("0.30"),
-        min_profit_percentage=Decimal("5.00"),
         max_investment_per_item=Decimal("50.00"),
         buy_percentile=10,
         sell_percentile=90,
         min_volume_24h=10,
         min_volume_7d=50,
         max_volatility_threshold=Decimal("0.5000"),
-        min_volatility_threshold=Decimal("0.0100"),
         price_history_days=30,
         analysis_window_days=14,
         max_concurrent_trades=10,

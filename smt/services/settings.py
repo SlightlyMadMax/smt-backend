@@ -24,6 +24,3 @@ class SettingsService:
 
         if value("buy_percentile") >= value("sell_percentile"):
             raise ValueError("Buy percentile must be less than sell percentile")
-
-        if value("min_volatility_threshold") >= value("max_volatility_threshold"):
-            raise ValueError("Min volatility must be less than max volatility")
