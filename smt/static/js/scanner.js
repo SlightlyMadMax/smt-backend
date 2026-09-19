@@ -220,6 +220,7 @@ function detailStats(row) {
     ['Spread, %', row.spread_pct],
     ['Needed to break even, %', row.required_pct],
     ['Profit per trip', row.profit_per_trade],
+    ['Asking percentile chosen', row.sell_percentile_used],
     ['Round trips in the history', row.round_trips],
     ['Listings ahead of ours', row.queue_ahead],
     ['Days to clear that queue', row.days_to_clear],

@@ -14,7 +14,7 @@ from smt.logger import get_logger
 from smt.services.market_analytics import MarketAnalyticsService
 from smt.services.steam import SteamService
 from smt.utils.math import weighted_percentile
-from smt.utils.steam import net_received
+from smt.utils.steam import minimum_listing_price, net_received
 
 
 logger = get_logger("services.market_scan")
@@ -24,6 +24,7 @@ ICON_BASE = "https://steamcommunity-a.akamaihd.net/economy/image/"
 SCAN_KEY = "smt:scan:"
 LATEST_KEY = "smt:scan:latest"
 SCAN_TTL = 7 * 24 * 3600
+SELL_SEARCH_FLOOR = 50
 
 
 @dataclass
@@ -75,6 +76,7 @@ class Candidate:
     required_pct: Optional[Decimal] = None
     profit_per_trade: Optional[Decimal] = None
     round_trips: int = 0
+    sell_percentile_used: Optional[int] = None
     queue_ahead: Optional[int] = None
     days_to_clear: Optional[Decimal] = None
     feasible_round_trips: int = 0
@@ -88,6 +90,24 @@ class Candidate:
 
     def as_dict(self) -> dict:
         return {k: str(v) if isinstance(v, Decimal) else v for k, v in asdict(self).items()}
+
+
+@dataclass
+class SellOption:
+    """One candidate asking price, and what the history and the order book say it would do."""
+
+    percentile: int
+    price: Decimal
+    profit: Decimal
+    round_trips: int
+    median_hold_hours: Optional[Decimal]
+    queue_ahead: Optional[int]
+    days_to_clear: Optional[Decimal]
+    feasible_round_trips: int
+
+    @property
+    def profit_per_window(self) -> Decimal:
+        return (self.profit * self.feasible_round_trips).quantize(Decimal("0.01"))
 
 
 @dataclass
@@ -279,53 +299,83 @@ class MarketScanService:
         prices = [point.price for point in points]
         volumes = [point.volume for point in points]
         candidate.buy_target = weighted_percentile(prices, volumes, params.buy_percentile)
-        candidate.sell_target = weighted_percentile(prices, volumes, params.sell_percentile)
 
         if candidate.buy_target <= 0:
             candidate.note = "no usable buy target"
             return candidate
 
-        candidate.spread_pct = ((candidate.sell_target / candidate.buy_target - 1) * 100).quantize(Decimal("0.01"))
         candidate.required_pct = required_spread_pct(candidate.buy_target)
-        candidate.profit_per_trade = (net_received(candidate.sell_target) - candidate.buy_target).quantize(
-            Decimal("0.01")
-        )
-        candidate.tradable = candidate.profit_per_trade > 0
 
-        candidate.round_trips, candidate.median_hold_hours = MarketAnalyticsService.simulate_round_trips(
-            points, candidate.buy_target, candidate.sell_target
+        levels = await self._sell_levels(candidate)
+        options = self._sell_options(
+            points, prices, volumes, candidate.buy_target, levels, Decimal(candidate.volume_30d) / params.days, params
         )
+        if not options:
+            candidate.note = "no asking price clears Steam's floor"
+            return candidate
 
-        await self._measure_the_queue(candidate, params)
-
-        candidate.profit_per_window = (candidate.profit_per_trade * candidate.feasible_round_trips).quantize(
-            Decimal("0.01")
-        )
-        candidate.return_on_capital_pct = (candidate.profit_per_window / candidate.buy_target * 100).quantize(
-            Decimal("0.1")
-        )
+        best = max(options, key=lambda option: (option.profit_per_window, option.profit))
+        self._apply(candidate, best)
         return candidate
 
-    async def _measure_the_queue(self, candidate: Candidate, params: ScanParams) -> None:
-        """
-        Ask the order book how many sellers stand in front of us at our own price.
-
-        Without this the history alone decides, and the history has no idea whether the
-        buyer who pushed the price up would have bought from us or from the 800 cheaper
-        listings underneath.
-        """
-        candidate.feasible_round_trips = candidate.round_trips
-
+    async def _sell_levels(self, candidate: Candidate) -> List[dict]:
+        """The order book decides how long a queue our asking price would put us behind."""
         try:
             book = await self.steam.get_order_book(market_hash_name=candidate.market_hash_name, app_id=candidate.app_id)
         except Exception as e:
             logger.warning(f"No order book for {candidate.market_hash_name}, the queue is unknown: {e!r}")
-            return
+            return []
+        return book.get("sell_levels") or []
 
-        candidate.queue_ahead = MarketAnalyticsService.queue_ahead(book.get("sell_levels") or [], candidate.sell_target)
-        candidate.days_to_clear = MarketAnalyticsService.days_to_clear(
-            candidate.queue_ahead, Decimal(candidate.volume_30d) / params.days
-        )
-        candidate.feasible_round_trips = MarketAnalyticsService.feasible_round_trips(
-            candidate.round_trips, candidate.days_to_clear, params.days
-        )
+    @staticmethod
+    def _sell_options(points, prices, volumes, buy, levels, daily_volume, params: ScanParams) -> List[SellOption]:
+        """
+        Price the item at every level it actually trades at, and see which pays best.
+
+        Asking more earns more per sale but puts more sellers in front of us, and the two
+        pull against each other. Where the balance falls depends on where the walls of
+        listings sit in this item's own book, which is why one percentile cannot serve
+        every item.
+        """
+        floor = minimum_listing_price()
+        options: List[SellOption] = []
+        seen = set()
+
+        for percentile in range(SELL_SEARCH_FLOOR, params.sell_percentile + 1):
+            price = weighted_percentile(prices, volumes, percentile)
+            if price < floor or price in seen:
+                continue
+            seen.add(price)
+
+            trips, hold = MarketAnalyticsService.simulate_round_trips(points, buy, price)
+            queue = MarketAnalyticsService.queue_ahead(levels, price)
+            wait = MarketAnalyticsService.days_to_clear(queue, daily_volume)
+            options.append(
+                SellOption(
+                    percentile=percentile,
+                    price=price,
+                    profit=(net_received(price) - buy).quantize(Decimal("0.01")),
+                    round_trips=trips,
+                    median_hold_hours=hold,
+                    queue_ahead=queue,
+                    days_to_clear=wait,
+                    feasible_round_trips=MarketAnalyticsService.feasible_round_trips(trips, wait, params.days),
+                )
+            )
+
+        return options
+
+    @staticmethod
+    def _apply(candidate: Candidate, best: SellOption) -> None:
+        candidate.sell_target = best.price
+        candidate.sell_percentile_used = best.percentile
+        candidate.profit_per_trade = best.profit
+        candidate.tradable = best.profit > 0
+        candidate.round_trips = best.round_trips
+        candidate.median_hold_hours = best.median_hold_hours
+        candidate.queue_ahead = best.queue_ahead
+        candidate.days_to_clear = best.days_to_clear
+        candidate.feasible_round_trips = best.feasible_round_trips
+        candidate.spread_pct = ((best.price / candidate.buy_target - 1) * 100).quantize(Decimal("0.01"))
+        candidate.profit_per_window = best.profit_per_window
+        candidate.return_on_capital_pct = (best.profit_per_window / candidate.buy_target * 100).quantize(Decimal("0.1"))

@@ -64,9 +64,9 @@
         </div>
 
         <div class="form-group">
-            <label for="sell_percentile">Sell Percentile</label>
-            <input type="number" name="sell_percentile" id="sell_percentile" min="1" max="99" value="90" required>
-            <small>Where the listing sits; further out means a longer wait</small>
+            <label for="sell_percentile">Sell Ceiling</label>
+            <input type="number" name="sell_percentile" id="sell_percentile" min="51" max="99" value="90" required>
+            <small>The dearest the search may ask. It tries every price from the 50th percentile up to this one and keeps whichever earns most over the window</small>
         </div>
 
         <div class="form-group">
@@ -118,7 +118,7 @@
             <th data-sort="name" data-sort-default="ascending" title="The link opens the item page on the Steam Market">Name</th>
             <th data-sort="current_price" title="Cheapest listing right now">Now</th>
             <th data-sort="buy_target" title="Price the bot would bid, at the chosen percentile of the history">Buy</th>
-            <th data-sort="sell_target" title="Price the bot would ask, at the chosen percentile of the history">Sell</th>
+            <th data-sort="sell_target" title="The asking price that earns most over the window, weighing margin against the queue it puts us behind">Sell</th>
             <th data-sort="profit_per_trade" title="What one round trip leaves after Steam and publisher fees">Per trip</th>
             <th data-sort="feasible_round_trips" title="Round trips the history allows, capped by how many the queue in front of our listing leaves time for. The return is computed from this">Trips</th>
             <th data-sort="days_to_clear" title="Days the listings priced under ours take to sell off, at the recent rate. Open a row for the queue itself">Wait d</th>

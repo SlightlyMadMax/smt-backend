@@ -144,6 +144,48 @@ class TestMeasuring:
         assert measured.feasible_round_trips == measured.round_trips
         assert measured.note == ""
 
+    async def test_a_wall_of_listings_pushes_the_asking_price_under_it(self, scan_service):
+        """Asking above the wall earns more per sale and never sells; the search should see that."""
+        scan_service.steam.get_order_book.return_value = {
+            "sell_levels": [
+                {"price": Decimal("11.00"), "quantity": 2},
+                {"price": Decimal("11.50"), "quantity": 900},
+            ]
+        }
+        points = history(["9.00", "11.20", "9.10", "11.90", "9.05", "12.40"] * 3, volume=20)
+
+        measured = await self.measure(scan_service, points)
+
+        assert measured.sell_target <= Decimal("11.50")
+        assert measured.queue_ahead <= 2
+
+    async def test_the_ceiling_is_never_crossed(self, scan_service):
+        points = history(["8.00", "12.00"] * 6)
+
+        measured = await self.measure(scan_service, points, sell_percentile=60)
+
+        assert measured.sell_percentile_used <= 60
+
+    async def test_the_asking_price_is_the_one_that_earns_most(self, scan_service):
+        points = history(["8.00", "12.00"] * 6)
+
+        measured = await self.measure(scan_service, points)
+
+        assert measured.profit_per_window == measured.profit_per_trade * measured.feasible_round_trips
+        assert measured.return_on_capital_pct == (measured.profit_per_window / measured.buy_target * 100).quantize(
+            Decimal("0.1")
+        )
+
+    async def test_a_missing_book_still_yields_a_price(self, scan_service):
+        scan_service.steam.get_order_book.side_effect = RuntimeError("429")
+        points = history(["8.00", "12.00"] * 6)
+
+        measured = await self.measure(scan_service, points)
+
+        assert measured.sell_target is not None
+        assert measured.queue_ahead is None
+        assert measured.feasible_round_trips == measured.round_trips
+
     async def test_a_spread_the_fee_eats_is_not_tradable(self, scan_service):
         points = history(["9.50", "9.60", "9.55", "9.62", "9.51", "9.58"])
 

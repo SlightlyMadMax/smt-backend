@@ -10,7 +10,9 @@ class ScanRequest(BaseModel):
     limit: int = Field(default=50, ge=1, le=500, description="How many items to measure")
     days: int = Field(default=14, ge=1, le=365, description="How far back to read price history")
     buy_percentile: int = Field(default=10, ge=1, le=99, description="Percentile used as the buy target")
-    sell_percentile: int = Field(default=90, ge=1, le=99, description="Percentile used as the sell target")
+    sell_percentile: int = Field(
+        default=90, ge=1, le=99, description="Highest percentile the search may ask; it picks the best at or below"
+    )
     min_price: Decimal = Field(default=Decimal("1.00"), ge=0, description="Ignore items cheaper than this")
     max_price: Decimal = Field(default=Decimal("100.00"), gt=0, description="Ignore items dearer than this")
     min_volume: int = Field(default=100, ge=0, description="Minimum volume traded over the window")
@@ -40,6 +42,7 @@ class ScanCandidate(BaseModel):
     required_pct: Optional[Decimal] = None
     profit_per_trade: Optional[Decimal] = None
     round_trips: int = 0
+    sell_percentile_used: Optional[int] = None
     queue_ahead: Optional[int] = None
     days_to_clear: Optional[Decimal] = None
     feasible_round_trips: int = 0
