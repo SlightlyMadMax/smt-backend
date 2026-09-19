@@ -43,9 +43,9 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="sell_percentile">Sell Percentile</label>
+                    <label for="sell_percentile">Sell Ceiling</label>
                     <input type="number" min="1" max="99" name="sell_percentile" value="{{ settings.sell_percentile }}" required>
-                    <small>Percentile for sell price calculation</small>
+                    <small>The dearest percentile the asking price may reach. Every price from the 50th up to this one is tried against the order book, and the one that earns most is kept</small>
                 </div>
             </div>
 

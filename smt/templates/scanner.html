@@ -26,13 +26,7 @@
         <div class="form-group">
             <label for="limit">Items to measure</label>
             <input type="number" name="limit" id="limit" min="1" max="500" value="50" required>
-            <small>Each one costs a request to Steam, so a large scan takes minutes</small>
-        </div>
-
-        <div class="form-group">
-            <label for="days">Price History, days</label>
-            <input type="number" name="days" id="days" min="1" max="365" value="14" required>
-            <small>How far back to read before judging an item</small>
+            <small>Each one costs two requests to Steam, so a large scan takes minutes</small>
         </div>
     </div>
 
@@ -49,32 +43,14 @@
             <small>The dearest item worth tying capital up in</small>
         </div>
 
-        <div class="form-group">
-            <label for="min_volume">Min Volume</label>
-            <input type="number" name="min_volume" id="min_volume" min="0" value="100" required>
-            <small>Sales over the whole window; thin items cannot be traded out of</small>
-        </div>
     </div>
 
-    <div class="form-row">
-        <div class="form-group">
-            <label for="buy_percentile">Buy Percentile</label>
-            <input type="number" name="buy_percentile" id="buy_percentile" min="1" max="99" value="10" required>
-            <small>Where in the price distribution the buy order sits</small>
-        </div>
-
-        <div class="form-group">
-            <label for="sell_percentile">Sell Ceiling</label>
-            <input type="number" name="sell_percentile" id="sell_percentile" min="51" max="99" value="90" required>
-            <small>The dearest the search may ask. It tries every price from the 50th percentile up to this one and keeps whichever earns most over the window</small>
-        </div>
-
-        <div class="form-group">
-            <label for="max_drift">Max Price Drift</label>
-            <input type="number" name="max_drift" id="max_drift" step="0.1" min="1.1" value="2" required>
-            <small>Reject an item whose history describes a different price era</small>
-        </div>
-    </div>
+    <p class="scan-rules">
+        Found items are judged by the same rules as the pool, set in <a href="/settings">Settings</a>:
+        {{ settings.analysis_window_days }} days of history, buy at the {{ settings.buy_percentile }}th percentile,
+        asking price searched up to the {{ settings.sell_percentile }}th, at least {{ settings.min_profit_threshold }}
+        per trip and {{ settings.min_return_on_capital_30d }}% per 30 days.
+    </p>
 
     <div class="form-actions">
         <button type="submit" class="btn" id="scan-start">Start scan</button>
@@ -86,7 +62,8 @@
         <span>Status: <strong id="scan-state">-</strong></span>
         <span>Found: <strong id="scan-collected">0</strong></span>
         <span>Measured: <strong id="scan-measured">0</strong></span>
-        <span class="count-ready">Clear the fee hurdle: <strong id="scan-tradable">0</strong></span>
+        <span class="count-ready">The pool would trade: <strong id="scan-tradable">0</strong></span>
+        <span id="scan-window"></span>
         <span id="scan-when"></span>
     </div>
 </section>
@@ -98,7 +75,7 @@
         <label class="checkbox-label">
             <input type="checkbox" id="only-tradable" checked>
             <span class="checkbox-custom"></span>
-            <span>Only show items that clear the fee hurdle</span>
+            <span>Only show items the pool would trade</span>
         </label>
         <button type="submit" class="btn" id="add-selected" disabled>Add selected to pool</button>
     </div>
@@ -122,8 +99,8 @@
             <th data-sort="profit_per_trade" title="What one round trip leaves after Steam and publisher fees">Per trip</th>
             <th data-sort="feasible_round_trips" title="Round trips the history allows, capped by how many the queue in front of our listing leaves time for. The return is computed from this">Trips</th>
             <th data-sort="days_to_clear" title="Days the listings priced under ours take to sell off, at the recent rate. Open a row for the queue itself">Wait d</th>
-            <th data-sort="return_on_capital_pct" title="Profit per trip times trips, over the money tied up">ROI %</th>
-            <th data-sort="volume_30d" title="Items sold over the whole window">Volume</th>
+            <th data-sort="return_on_capital_pct" title="Profit per trip times trips, over the money tied up, scaled to 30 days like the pool">ROI %</th>
+            <th data-sort="volume_window" title="Items sold over the analysis window">Volume</th>
             <th></th>
         </tr>
         </thead>

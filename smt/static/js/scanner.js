@@ -13,7 +13,7 @@ const bulkForm = document.getElementById('scan-bulk-form');
 const addButton = document.getElementById('add-selected');
 
 let scanId = null;
-let scanParams = {};
+let scanRules = {};
 let candidates = [];
 let pollTimer = null;
 const selected = new Set();
@@ -64,7 +64,7 @@ function buildRow(row, index) {
     '<td>' + row.feasible_round_trips + '</td>' +
     '<td>' + money(row.days_to_clear) + '</td>' +
     '<td>' + money(row.return_on_capital_pct) + '</td>' +
-    '<td>' + row.volume_30d + '</td>' +
+    '<td>' + row.volume_window + '</td>' +
     '<td class="chevron-cell" title="Show price history and order book">' +
     '<span class="row-chevron" aria-hidden="true"></span></td></tr>' +
     '<tr class="details-row" id="scan-details-' + index + '" data-details-for="' + SMT.escapeHtml(hash) +
@@ -94,7 +94,7 @@ function render() {
 
 function applyState(state) {
   scanId = state.id;
-  scanParams = state.params || {};
+  scanRules = state.rules || {};
   candidates = state.candidates || [];
 
   statusBox.hidden = false;
@@ -102,6 +102,9 @@ function applyState(state) {
   document.getElementById('scan-collected').textContent = state.collected;
   document.getElementById('scan-measured').textContent = state.measured;
   document.getElementById('scan-tradable').textContent = candidates.filter(c => c.tradable).length;
+  document.getElementById('scan-window').textContent = scanRules.analysis_window_days
+    ? 'Judged over ' + scanRules.analysis_window_days + ' days'
+    : '';
   document.getElementById('scan-when').textContent = state.finished_at
     ? 'Finished ' + new Date(state.finished_at).toLocaleString()
     : '';
@@ -214,7 +217,7 @@ function detailStats(row) {
     ['Median price', row.median_price],
     ['Drift vs today', row.price_drift],
     ['Listings', row.listings],
-    ['Volume over window', row.volume_30d],
+    ['Volume over the window', row.volume_window],
     ['Buy target', row.buy_target],
     ['Sell target', row.sell_target],
     ['Spread, %', row.spread_pct],
@@ -226,8 +229,8 @@ function detailStats(row) {
     ['Days to clear that queue', row.days_to_clear],
     ['Trips the queue allows', row.feasible_round_trips],
     ['Median hold, h', row.median_hold_hours],
-    ['Return, % / window', row.return_on_capital_pct],
-    ['Verdict', row.note || (row.tradable ? 'clears the fee hurdle' : 'the fee eats the spread')],
+    ['Return, % / 30d', row.return_on_capital_pct],
+    ['Verdict', row.tradable ? 'the pool would trade it' : row.note],
   ]);
 }
 
@@ -236,7 +239,7 @@ async function loadDetails(hash, panel) {
   panel.innerHTML = '<p class="details-empty">Loading…</p>';
 
   const details = await SMT.get('/api/v1/scan/' + scanId + '/candidate/' + encodeURIComponent(hash));
-  const days = Number(scanParams.days) || 30;
+  const days = Number(scanRules.analysis_window_days) || 14;
 
   panel.innerHTML =
     '<div class="details-grid">' +
