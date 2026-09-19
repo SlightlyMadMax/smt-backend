@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 from smt.db.models import PriceHistoryRecord
 from smt.services.settings import SettingsService
 from smt.utils.math import weighted_percentile
-from smt.utils.steam import calculate_fees
+from smt.utils.steam import calculate_fees, minimum_listing_price, net_received
 
 
 OUTLIER_PRICE_FACTOR = Decimal("5")
@@ -27,6 +27,25 @@ class ItemIndicators:
 
 
 PRICE_DRIFT_FACTOR = Decimal("2")
+SELL_SEARCH_FLOOR = 50
+
+
+@dataclass
+class SellChoice:
+    """One candidate asking price, and what the history and the order book say it would do."""
+
+    percentile: int
+    price: Decimal
+    profit: Decimal
+    round_trips: int
+    median_hold_hours: Optional[Decimal]
+    queue_ahead: Optional[int]
+    days_to_clear: Optional[Decimal]
+    feasible_round_trips: int
+
+    @property
+    def profit_per_window(self) -> Decimal:
+        return (self.profit * self.feasible_round_trips).quantize(Decimal("0.01"))
 
 
 class MarketAnalyticsService:
@@ -61,6 +80,12 @@ class MarketAnalyticsService:
         median = statistics.median(r.price for r in records)
         drift = median / current_price
         return 1 / factor <= drift <= factor
+
+    async def compute_buy_target(self, records: List[PriceHistoryRecord]) -> Decimal:
+        settings = await self.settings_service.get_settings()
+        prices = [record.price for record in records]
+        volumes = [record.volume for record in records]
+        return weighted_percentile(prices, volumes, settings.buy_percentile)
 
     async def compute_weighted_percentile_targets(self, records: List[PriceHistoryRecord]) -> Tuple[Decimal, Decimal]:
         settings = await self.settings_service.get_settings()
@@ -180,6 +205,56 @@ class MarketAnalyticsService:
         if days_to_clear is None or days_to_clear <= 0 or window_days <= 0:
             return round_trips
         return min(round_trips, int(Decimal(window_days) / days_to_clear))
+
+    @classmethod
+    def choose_sell_price(
+        cls,
+        records: List[PriceHistoryRecord],
+        buy_target: Decimal,
+        sell_levels: List[dict],
+        daily_volume: Optional[Decimal],
+        window_days: int,
+        ceiling: int,
+    ) -> Optional[SellChoice]:
+        """
+        Price the item at every level it actually trades at, and keep whichever pays best.
+
+        Asking more earns more per sale but puts more sellers in front of us, and the two
+        pull against each other. Where the balance falls depends on where the walls of
+        listings sit in this item's own book, which is why one percentile cannot serve
+        every item.
+        """
+        prices = [record.price for record in records]
+        volumes = [record.volume for record in records]
+        floor = minimum_listing_price()
+        options: List[SellChoice] = []
+        seen = set()
+
+        for percentile in range(SELL_SEARCH_FLOOR, ceiling + 1):
+            price = weighted_percentile(prices, volumes, percentile)
+            if price < floor or price in seen:
+                continue
+            seen.add(price)
+
+            trips, hold = cls.simulate_round_trips(records, buy_target, price)
+            queue = cls.queue_ahead(sell_levels, price)
+            wait = cls.days_to_clear(queue, daily_volume)
+            options.append(
+                SellChoice(
+                    percentile=percentile,
+                    price=price,
+                    profit=(net_received(price) - buy_target).quantize(Decimal("0.01")),
+                    round_trips=trips,
+                    median_hold_hours=hold,
+                    queue_ahead=queue,
+                    days_to_clear=wait,
+                    feasible_round_trips=cls.feasible_round_trips(trips, wait, window_days),
+                )
+            )
+
+        if not options:
+            return None
+        return max(options, key=lambda option: (option.profit_per_window, option.profit))
 
     @staticmethod
     def project_return_on_capital(

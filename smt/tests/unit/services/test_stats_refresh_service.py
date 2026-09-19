@@ -9,6 +9,7 @@ from steampy.exceptions import TooManyRequests
 from smt.exceptions import OrderBookUnavailable
 from smt.schemas.action_log import ActionKind
 from smt.services import steam as steam_module
+from smt.services.market_analytics import SellChoice
 from smt.services.stats_refresh import StatsRefreshService
 from smt.services.steam import ACCOUNT_CURRENCY, SteamService
 
@@ -183,18 +184,26 @@ def history_record(price: str, volume: int = 10):
 
 @pytest.fixture
 def indicator_service(refresh_service):
-    refresh_service.settings_service.get_settings.return_value = SimpleNamespace(analysis_window_days=7)
+    refresh_service.settings_service.get_settings.return_value = SimpleNamespace(
+        analysis_window_days=7, sell_percentile=90
+    )
     refresh_service.analytics_service.filter_price_outliers = lambda records: records
-    refresh_service.analytics_service.compute_weighted_percentile_targets.return_value = (
-        Decimal("6.21"),
-        Decimal("8.01"),
+    refresh_service.analytics_service.compute_buy_target.return_value = Decimal("6.21")
+    refresh_service.analytics_service.choose_sell_price = lambda **kwargs: SellChoice(
+        percentile=82,
+        price=Decimal("8.01"),
+        profit=Decimal("0.77"),
+        round_trips=8,
+        median_hold_hours=Decimal("12.0"),
+        queue_ahead=14,
+        days_to_clear=Decimal("0.5"),
+        feasible_round_trips=6,
     )
     refresh_service.analytics_service.compute_volume_weighted_volatility.return_value = Decimal("0.095")
-    refresh_service.analytics_service.compute_net_and_profit.return_value = (Decimal("6.98"), Decimal("0.77"))
     refresh_service.analytics_service.decide_trade_flag.return_value = (True, "")
-    refresh_service.analytics_service.simulate_round_trips = lambda records, buy, sell: (8, Decimal("12.0"))
     refresh_service.analytics_service.project_return_on_capital = lambda profit, trips, buy, days: Decimal("120.0")
     refresh_service.price_history_service.list.return_value = [history_record("6.90"), history_record("6.95")]
+    refresh_service.steam.get_order_book.return_value = {"sell_levels": [], "buy_levels": []}
     return refresh_service
 
 
@@ -221,6 +230,53 @@ class TestIndicatorDriftGuard:
 
         payload = indicator_service.pool_service.update.await_args.args[1]
         assert payload.use_for_trading is False
+
+
+@pytest.mark.asyncio
+class TestTheAskingPriceThePoolStores:
+    @staticmethod
+    def item():
+        return SimpleNamespace(
+            market_hash_name="item", app_id="440", current_volume24h=1000, current_lowest_price=Decimal("6.82")
+        )
+
+    async def test_the_chosen_price_and_its_reasoning_are_kept(self, indicator_service):
+        indicator_service.pool_service.get_many.return_value = [self.item()]
+        indicator_service.analytics_service.history_describes_current_market = lambda records, price: True
+
+        await indicator_service.refresh_indicators(["item"])
+
+        payload = indicator_service.pool_service.update.await_args.args[1]
+        assert payload.optimal_sell_price == Decimal("8.01")
+        assert payload.sell_percentile_used == 82
+        assert payload.queue_ahead == 14
+        assert payload.days_to_clear == Decimal("0.5")
+        assert payload.feasible_round_trips == 6
+
+    async def test_the_return_is_computed_from_the_trips_the_queue_allows(self, indicator_service):
+        """Eight trips in the history, six the queue leaves room for; the return follows the six."""
+        seen = {}
+
+        def remember(profit, trips, buy, days):
+            seen["trips"] = trips
+            return Decimal("120.0")
+
+        indicator_service.analytics_service.project_return_on_capital = remember
+        indicator_service.pool_service.get_many.return_value = [self.item()]
+        indicator_service.analytics_service.history_describes_current_market = lambda records, price: True
+
+        await indicator_service.refresh_indicators(["item"])
+
+        assert seen["trips"] == 6
+
+    async def test_an_unreadable_book_does_not_stop_the_refresh(self, indicator_service):
+        indicator_service.steam.get_order_book.side_effect = RuntimeError("429")
+        indicator_service.pool_service.get_many.return_value = [self.item()]
+        indicator_service.analytics_service.history_describes_current_market = lambda records, price: True
+
+        await indicator_service.refresh_indicators(["item"])
+
+        indicator_service.pool_service.update.assert_awaited()
 
 
 @pytest.mark.asyncio

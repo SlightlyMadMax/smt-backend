@@ -109,6 +109,31 @@ class StatsRefreshService:
 
         await self.pool_service.update(market_hash_name, PoolItemUpdate(**values))
 
+    async def _choose_sell_price(self, item, records, buy_target: Decimal, days: int):
+        """
+        Let the order book decide how dear we may ask.
+
+        A price the history reaches often is worthless if hundreds of cheaper listings
+        would be served first, so the search weighs the margin against the queue.
+        """
+        settings = await self.settings_service.get_settings()
+        levels: List[dict] = []
+        try:
+            book = await self.steam.get_order_book(market_hash_name=item.market_hash_name, app_id=item.app_id)
+            levels = book.get("sell_levels") or []
+        except Exception as e:
+            logger.warning(f"No order book for {item.market_hash_name}, asking price ignores the queue: {e!r}")
+
+        daily_volume = Decimal(sum(record.volume for record in records)) / days if days else None
+        return self.analytics_service.choose_sell_price(
+            records=records,
+            buy_target=buy_target,
+            sell_levels=levels,
+            daily_volume=daily_volume,
+            window_days=days,
+            ceiling=settings.sell_percentile,
+        )
+
     async def refresh_indicators(self, names: List[str]) -> None:
         settings = await self.settings_service.get_settings()
         days = settings.analysis_window_days
@@ -124,12 +149,22 @@ class StatsRefreshService:
             if len(clean) < 2:
                 continue
 
-            opt_buy, opt_sell = await self.analytics_service.compute_weighted_percentile_targets(clean)
-            sigma = await self.analytics_service.compute_volume_weighted_volatility(clean)
-            net_sell, profit = await self.analytics_service.compute_net_and_profit(opt_sell, opt_buy)
+            opt_buy = await self.analytics_service.compute_buy_target(clean)
+            if opt_buy <= 0:
+                continue
 
-            round_trips, median_hold = self.analytics_service.simulate_round_trips(clean, opt_buy, opt_sell)
-            return_on_capital = self.analytics_service.project_return_on_capital(profit, round_trips, opt_buy, days)
+            choice = await self._choose_sell_price(item, clean, opt_buy, days)
+            if choice is None:
+                logger.info(f"{item.market_hash_name} has no asking price Steam would accept.")
+                continue
+
+            opt_sell = choice.price
+            profit = choice.profit
+            round_trips, median_hold = choice.round_trips, choice.median_hold_hours
+            sigma = await self.analytics_service.compute_volume_weighted_volatility(clean)
+            return_on_capital = self.analytics_service.project_return_on_capital(
+                profit, choice.feasible_round_trips, opt_buy, days
+            )
             _, volume7d = await self.analytics_service.compute_recent_stats(clean, WEEKLY_WINDOW)
             profit_pct = (profit / opt_buy * 100).quantize(Decimal("0.01")) if opt_buy > 0 else None
 
@@ -161,6 +196,10 @@ class StatsRefreshService:
                     potential_profit=profit,
                     current_volume7d=volume7d,
                     round_trips=round_trips,
+                    feasible_round_trips=choice.feasible_round_trips,
+                    sell_percentile_used=choice.percentile,
+                    queue_ahead=choice.queue_ahead,
+                    days_to_clear=choice.days_to_clear,
                     median_hold_hours=median_hold,
                     return_on_capital_30d=return_on_capital,
                     use_for_trading=flag,

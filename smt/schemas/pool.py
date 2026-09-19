@@ -33,6 +33,10 @@ class PoolItemUpdate(BaseModel):
     use_for_trading: Optional[bool] = None
     max_listed: Optional[int] = None
     round_trips: Optional[int] = None
+    feasible_round_trips: Optional[int] = None
+    sell_percentile_used: Optional[int] = None
+    queue_ahead: Optional[int] = None
+    days_to_clear: Optional[Decimal] = None
     median_hold_hours: Optional[Decimal] = None
     return_on_capital_30d: Optional[Decimal] = None
 
@@ -86,6 +90,10 @@ class PoolItem(PoolItemBase):
     created_at: datetime
     updated_at: datetime
     round_trips: Optional[int] = None
+    feasible_round_trips: Optional[int] = None
+    sell_percentile_used: Optional[int] = None
+    queue_ahead: Optional[int] = None
+    days_to_clear: Optional[Decimal] = None
     median_hold_hours: Optional[Decimal] = None
     return_on_capital_30d: Optional[Decimal] = None
 
@@ -110,6 +118,10 @@ class PoolItemStatus(BaseModel):
     use_for_trading: bool = False
     updated_at: Optional[datetime] = None
     round_trips: Optional[int] = None
+    feasible_round_trips: Optional[int] = None
+    sell_percentile_used: Optional[int] = None
+    queue_ahead: Optional[int] = None
+    days_to_clear: Optional[Decimal] = None
     median_hold_hours: Optional[Decimal] = None
     return_on_capital_30d: Optional[Decimal] = None
 
