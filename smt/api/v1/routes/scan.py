@@ -60,7 +60,7 @@ async def read_candidate(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"{market_hash_name} is not in scan {scan_id}")
 
     app_id, context_id = candidate["app_id"], candidate["context_id"]
-    days = int(state["params"].get("days") or 30)
+    days = int((state.get("rules") or {}).get("analysis_window_days") or 14)
 
     try:
         history = await steam.get_price_history(

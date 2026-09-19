@@ -11,9 +11,9 @@ from redis.asyncio import Redis
 from steampy.models import GameOptions
 
 from smt.logger import get_logger
-from smt.services.market_analytics import MarketAnalyticsService, SellChoice
+from smt.services.market_analytics import Evaluation, MarketAnalyticsService
+from smt.services.settings import SettingsService
 from smt.services.steam import SteamService
-from smt.utils.math import weighted_percentile
 from smt.utils.steam import net_received
 
 
@@ -28,16 +28,13 @@ SCAN_TTL = 7 * 24 * 3600
 
 @dataclass
 class ScanParams:
+    """Where to look. How to judge what is found comes from the trading settings, as it does for the pool."""
+
     app_id: str = "440"
     context_id: str = "2"
     limit: int = 50
-    days: int = 14
-    buy_percentile: int = 10
-    sell_percentile: int = 90
     min_price: Decimal = Decimal("1.00")
     max_price: Decimal = Decimal("100.00")
-    min_volume: int = 100
-    max_drift: Decimal = Decimal("2")
 
     @classmethod
     def from_dict(cls, raw: dict) -> "ScanParams":
@@ -46,13 +43,8 @@ class ScanParams:
             app_id=str(raw.get("app_id") or defaults.app_id),
             context_id=str(raw.get("context_id") or defaults.context_id),
             limit=int(raw.get("limit") or defaults.limit),
-            days=int(raw.get("days") or defaults.days),
-            buy_percentile=int(raw.get("buy_percentile") or defaults.buy_percentile),
-            sell_percentile=int(raw.get("sell_percentile") or defaults.sell_percentile),
             min_price=Decimal(str(raw.get("min_price", defaults.min_price))),
             max_price=Decimal(str(raw.get("max_price", defaults.max_price))),
-            min_volume=int(raw.get("min_volume", defaults.min_volume)),
-            max_drift=Decimal(str(raw.get("max_drift", defaults.max_drift))),
         )
 
     def as_dict(self) -> dict:
@@ -68,7 +60,7 @@ class Candidate:
     context_id: str
     listings: int
     current_price: Decimal
-    volume_30d: int = 0
+    volume_window: int = 0
     buy_target: Optional[Decimal] = None
     sell_target: Optional[Decimal] = None
     spread_pct: Optional[Decimal] = None
@@ -96,6 +88,7 @@ class ScanState:
     id: str
     params: ScanParams
     status: str = "running"
+    rules: dict = field(default_factory=dict)
     collected: int = 0
     measured: int = 0
     error: str = ""
@@ -113,6 +106,7 @@ class ScanState:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "params": self.params.as_dict(),
+            "rules": self.rules,
             "candidates": [c.as_dict() for c in self.candidates],
         }
 
@@ -162,9 +156,17 @@ class MarketScanService:
     rather than consult an old one, so they expire instead of living in the database.
     """
 
-    def __init__(self, steam_service: SteamService, redis: Redis):
+    def __init__(
+        self,
+        steam_service: SteamService,
+        redis: Redis,
+        analytics_service: MarketAnalyticsService,
+        settings_service: SettingsService,
+    ):
         self.steam = steam_service
         self.redis = redis
+        self.analytics = analytics_service
+        self.settings_service = settings_service
 
     @staticmethod
     def new_id() -> str:
@@ -186,6 +188,7 @@ class MarketScanService:
 
     async def run(self, scan_id: str, params: ScanParams) -> None:
         state = ScanState(id=scan_id, params=params, started_at=datetime.now(timezone.utc).isoformat())
+        state.rules = await self._rules()
         await self._save(state)
 
         try:
@@ -206,6 +209,22 @@ class MarketScanService:
             state.error = f"{type(e).__name__}: {e}"
 
         await self._finish(state)
+
+    async def _rules(self) -> dict:
+        """The settings a scan was judged by, so a result can be seen to predate a change in them."""
+        settings = await self.settings_service.get_settings()
+        fields = (
+            "analysis_window_days",
+            "buy_percentile",
+            "sell_percentile",
+            "min_profit_threshold",
+            "min_volume_24h",
+            "min_volume_7d",
+            "max_volatility_threshold",
+            "max_hold_hours",
+            "min_return_on_capital_30d",
+        )
+        return {name: str(getattr(settings, name)) for name in fields}
 
     async def _finish(self, state: ScanState) -> None:
         state.finished_at = datetime.now(timezone.utc).isoformat()
@@ -242,7 +261,7 @@ class MarketScanService:
     async def _measure(self, state: ScanState, candidates: List[Candidate]) -> None:
         for candidate in candidates:
             try:
-                await self.measure(candidate, state.params)
+                await self.measure(candidate, int(state.rules["analysis_window_days"]))
             except Exception as e:
                 candidate.note = f"{type(e).__name__}: {e}"
                 logger.warning(f"Could not measure {candidate.market_hash_name}: {e!r}")
@@ -251,58 +270,42 @@ class MarketScanService:
             state.candidates.append(candidate)
             await self._save(state)
 
-    async def measure(self, candidate: Candidate, params: ScanParams) -> Candidate:
+    async def measure(self, candidate: Candidate, window_days: int) -> Candidate:
         history = await self.steam.get_price_history(
             market_hash_name=candidate.market_hash_name,
-            game=GameOptions(params.app_id, params.context_id),
-            days=params.days,
+            game=GameOptions(candidate.app_id, candidate.context_id),
+            days=window_days,
         )
-        points = MarketAnalyticsService.filter_price_outliers(to_points(history))
-        if len(points) < 2:
-            candidate.note = "not enough history"
-            return candidate
+        points = to_points(history)
+        self._describe(candidate, points)
 
-        candidate.volume_30d = sum(point.volume for point in points)
-        candidate.median_price = statistics.median(point.price for point in points)
+        _, volume24h = await self.analytics.compute_recent_stats(points)
+        evaluation = await self.analytics.evaluate(
+            records=points,
+            current_price=candidate.current_price,
+            volume24h=volume24h,
+            sell_levels=await self._sell_levels(candidate),
+            window_days=window_days,
+        )
 
+        candidate.tradable = evaluation.tradable
+        candidate.note = evaluation.reason
+        if evaluation.buy_target is not None:
+            candidate.buy_target = evaluation.buy_target
+            candidate.required_pct = required_spread_pct(evaluation.buy_target)
+        if evaluation.choice is not None:
+            self._apply(candidate, evaluation)
+        return candidate
+
+    @staticmethod
+    def _describe(candidate: Candidate, points: List[Point]) -> None:
+        clean = MarketAnalyticsService.filter_price_outliers(points)
+        if not clean:
+            return
+        candidate.volume_window = sum(point.volume for point in clean)
+        candidate.median_price = statistics.median(point.price for point in clean)
         if candidate.current_price > 0:
             candidate.price_drift = (candidate.median_price / candidate.current_price).quantize(Decimal("0.01"))
-            if not MarketAnalyticsService.history_describes_current_market(
-                points, candidate.current_price, params.max_drift
-            ):
-                candidate.note = f"history is {candidate.price_drift}x the current price"
-                return candidate
-
-        if candidate.volume_30d < params.min_volume:
-            candidate.note = f"only {candidate.volume_30d} sold over the window"
-            return candidate
-
-        prices = [point.price for point in points]
-        volumes = [point.volume for point in points]
-        candidate.buy_target = weighted_percentile(prices, volumes, params.buy_percentile)
-
-        if candidate.buy_target <= 0:
-            candidate.note = "no usable buy target"
-            return candidate
-
-        candidate.required_pct = required_spread_pct(candidate.buy_target)
-
-        best = MarketAnalyticsService.choose_sell_price(
-            records=points,
-            buy_target=candidate.buy_target,
-            sell_levels=await self._sell_levels(candidate),
-            daily_volume=Decimal(candidate.volume_30d) / params.days,
-            window_days=params.days,
-            ceiling=params.sell_percentile,
-        )
-        if best is None:
-            candidate.note = "no asking price clears Steam's floor"
-            return candidate
-
-        self._apply(candidate, best)
-        if not candidate.tradable:
-            candidate.note = "the fee eats the spread at every price"
-        return candidate
 
     async def _sell_levels(self, candidate: Candidate) -> List[dict]:
         """The order book decides how long a queue our asking price would put us behind."""
@@ -314,11 +317,11 @@ class MarketScanService:
         return book.get("sell_levels") or []
 
     @staticmethod
-    def _apply(candidate: Candidate, best: SellChoice) -> None:
+    def _apply(candidate: Candidate, evaluation: Evaluation) -> None:
+        best = evaluation.choice
         candidate.sell_target = best.price
         candidate.sell_percentile_used = best.percentile
         candidate.profit_per_trade = best.profit
-        candidate.tradable = best.profit > 0
         candidate.round_trips = best.round_trips
         candidate.median_hold_hours = best.median_hold_hours
         candidate.queue_ahead = best.queue_ahead
@@ -326,4 +329,4 @@ class MarketScanService:
         candidate.feasible_round_trips = best.feasible_round_trips
         candidate.spread_pct = ((best.price / candidate.buy_target - 1) * 100).quantize(Decimal("0.01"))
         candidate.profit_per_window = best.profit_per_window
-        candidate.return_on_capital_pct = (best.profit_per_window / candidate.buy_target * 100).quantize(Decimal("0.1"))
+        candidate.return_on_capital_pct = evaluation.return_on_capital_30d

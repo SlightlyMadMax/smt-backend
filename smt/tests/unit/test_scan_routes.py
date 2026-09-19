@@ -67,7 +67,7 @@ class TestStartingAScan:
         assert (await client.post("/api/v1/scan/", json={})).status_code == 200
 
     async def test_nonsense_parameters_are_refused(self, client, scan_service, arq):
-        response = await client.post("/api/v1/scan/", json={"buy_percentile": 0})
+        response = await client.post("/api/v1/scan/", json={"limit": 0})
 
         assert response.status_code == 422
         arq.enqueue.assert_not_awaited()

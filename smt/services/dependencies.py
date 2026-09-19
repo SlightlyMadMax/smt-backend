@@ -38,11 +38,6 @@ def get_steam_service(settings: Settings = Depends(get_settings)) -> SteamServic
     return _steam_service
 
 
-def get_market_scan_service(steam: SteamService = Depends(get_steam_service)) -> MarketScanService:
-    """The scan shares the Steam client's Redis connection; both live for the process."""
-    return MarketScanService(steam, steam._redis)
-
-
 def get_inventory_service(
     steam=Depends(get_steam_service),
     item_repo=Depends(get_item_repo),
@@ -69,6 +64,14 @@ def get_settings_service(settings_repo=Depends(get_settings_repo)) -> SettingsSe
 
 def get_market_analytics_service(settings_service=Depends(get_settings_service)) -> MarketAnalyticsService:
     return MarketAnalyticsService(settings_service)
+
+
+def get_market_scan_service(
+    steam: SteamService = Depends(get_steam_service),
+    settings_service: SettingsService = Depends(get_settings_service),
+) -> MarketScanService:
+    """The scan shares the Steam client's Redis connection; both live for the process."""
+    return MarketScanService(steam, steam._redis, MarketAnalyticsService(settings_service), settings_service)
 
 
 def get_stats_refresh_service(
