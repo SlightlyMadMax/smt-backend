@@ -193,6 +193,7 @@ class TestMeasuring:
 
         assert measured.profit_per_trade <= 0
         assert measured.tradable is False
+        assert measured.note == "the fee eats the spread at every price"
 
 
 @pytest.mark.asyncio

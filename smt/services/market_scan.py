@@ -316,6 +316,8 @@ class MarketScanService:
 
         best = max(options, key=lambda option: (option.profit_per_window, option.profit))
         self._apply(candidate, best)
+        if not candidate.tradable:
+            candidate.note = "the fee eats the spread at every price"
         return candidate
 
     async def _sell_levels(self, candidate: Candidate) -> List[dict]:
