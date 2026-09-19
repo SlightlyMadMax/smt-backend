@@ -1040,6 +1040,76 @@ class TestEmergencyStop:
 
 
 @pytest.mark.asyncio
+class TestTheStopWithdrawsBuyOrders:
+    @staticmethod
+    def stopped(trading_service, position_service, *open_positions):
+        async def by_status(status):
+            return list(open_positions) if status == PositionStatus.OPEN else []
+
+        position_service.list_by_status.side_effect = by_status
+        position_service.list_active.return_value = list(open_positions)
+        trading_service.pool_item_service.list.return_value = []
+        trading_service.settings_service.get_settings.return_value = make_settings()
+        trading_service.settings_service.get_settings.return_value.emergency_stop = True
+        trading_service.steam_service.get_my_market_listings.return_value = {
+            "buy_orders": {p.buy_order_id: {"order_id": p.buy_order_id} for p in open_positions},
+            "sell_listings": {},
+        }
+
+    async def test_an_untouched_order_is_withdrawn_and_written_off(self, trading_service, position_service, action_log):
+        """A live order keeps spending money on items a stopped bot will never list."""
+        self.stopped(trading_service, position_service, make_position(1, PositionStatus.OPEN))
+        trading_service.steam_service.get_buy_order_status.return_value = make_order_status(active=False, purchased=0)
+
+        await trading_service.run_cycle()
+
+        trading_service.steam_service.cancel_buy_order.assert_awaited_once_with("BUY-1")
+        position_service.mark_as_cancelled.assert_awaited_once_with(position_id=1)
+        assert action_log.record.await_args.args[0] == ActionKind.POSITION_CANCELLED
+
+    async def test_an_order_that_filled_first_is_not_written_off(self, trading_service, position_service):
+        """The item is already ours; the next cycle has to find it and record it as bought."""
+        self.stopped(trading_service, position_service, make_position(1, PositionStatus.OPEN))
+        trading_service.steam_service.get_buy_order_status.return_value = make_order_status(active=False, purchased=1)
+
+        await trading_service.run_cycle()
+
+        trading_service.steam_service.cancel_buy_order.assert_awaited_once()
+        position_service.mark_as_cancelled.assert_not_awaited()
+
+    async def test_an_unconfirmed_withdrawal_is_left_for_the_next_cycle(self, trading_service, position_service):
+        self.stopped(trading_service, position_service, make_position(1, PositionStatus.OPEN))
+        trading_service.steam_service.get_buy_order_status.side_effect = RuntimeError("429")
+
+        await trading_service.run_cycle()
+
+        position_service.mark_as_cancelled.assert_not_awaited()
+
+    async def test_one_refused_cancellation_does_not_stop_the_rest(self, trading_service, position_service):
+        self.stopped(
+            trading_service,
+            position_service,
+            make_position(1, PositionStatus.OPEN),
+            make_position(2, PositionStatus.OPEN),
+        )
+        trading_service.steam_service.cancel_buy_order.side_effect = [RuntimeError("refused"), None]
+        trading_service.steam_service.get_buy_order_status.return_value = make_order_status(active=False, purchased=0)
+
+        await trading_service.run_cycle()
+
+        position_service.mark_as_cancelled.assert_awaited_once_with(position_id=2)
+
+    async def test_nothing_is_withdrawn_while_trading_runs(self, trading_service, position_service):
+        self.stopped(trading_service, position_service, make_position(1, PositionStatus.OPEN))
+        trading_service.settings_service.get_settings.return_value.emergency_stop = False
+        trading_service.pool_item_service.list_marked_for_trading.return_value = []
+
+        await trading_service.run_cycle()
+
+        trading_service.steam_service.cancel_buy_order.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 class TestInventoryUnavailable:
     @staticmethod
     def setup(trading_service, position_service):

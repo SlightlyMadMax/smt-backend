@@ -66,6 +66,7 @@ class TradingService:
             await self._sync_listed_to_closed(sell_listings, assets or {})
             if settings.emergency_stop:
                 logger.info("Trading is stopped, so nothing gets listed or bought this cycle.")
+                await self._withdraw_buy_orders()
             else:
                 if await self._list_bought_positions():
                     await self._attach_fresh_listings(assets or {})
@@ -311,6 +312,37 @@ class TradingService:
         except Exception as e:
             logger.warning(f"Could not read the status of buy order {position.buy_order_id}: {e!r}")
             return None
+
+    async def _withdraw_buy_orders(self) -> None:
+        """
+        Take our buy orders off the market while trading is stopped.
+
+        Left in place they keep filling, and what they buy is never listed, so the money
+        turns into items that just sit there. An order can fill in the moment before it is
+        cancelled, so a position is only written off once Steam confirms nothing was bought;
+        otherwise the next cycle finds the item and records it as bought.
+        """
+        for pos in await self.position_service.list_by_status(PositionStatus.OPEN):
+            try:
+                await self.steam_service.cancel_buy_order(pos.buy_order_id)
+            except Exception as e:
+                logger.warning(f"Could not withdraw buy order {pos.buy_order_id} for position {pos.id}: {e!r}")
+                continue
+
+            status = await self._buy_order_status(pos)
+            if status is None or status["active"] or status["purchased"]:
+                logger.info(
+                    f"Buy order {pos.buy_order_id} was withdrawn, but Steam has not confirmed it bought nothing."
+                )
+                continue
+
+            await self.position_service.mark_as_cancelled(position_id=pos.id)
+            await self.action_log.record(
+                ActionKind.POSITION_CANCELLED,
+                f"Buy order {pos.buy_order_id} withdrawn because trading is stopped.",
+                market_hash_name=pos.pool_item_hash,
+                position_id=pos.id,
+            )
 
     async def _claimed_asset_ids(self) -> set:
         return {pos.asset_id for pos in await self.position_service.list() if pos.asset_id}
